@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 
 const AuthContext = createContext({})
@@ -7,23 +7,29 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+  const currentUserIdRef = useRef(null)
 
   // Listen to auth state changes (keep callback synchronous — no await)
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
-      if (!session?.user) setLoading(false)
+      const sessionUser = session?.user ?? null
+      currentUserIdRef.current = sessionUser?.id ?? null
+      setUser(sessionUser)
+      if (!sessionUser) setLoading(false)
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      (_event, session) => {
         const newUser = session?.user ?? null
+        const newId = newUser?.id ?? null
+        const changed = newId !== currentUserIdRef.current
+        currentUserIdRef.current = newId
         setUser(newUser)
         if (!newUser) {
           setProfile(null)
           setLoading(false)
-        } else if (event === 'SIGNED_IN') {
-          // Only show loading on actual sign-in, not token refreshes
+        } else if (changed) {
+          // Only show loading when user actually changes (real sign-in)
           setLoading(true)
         }
       }
