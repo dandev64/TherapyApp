@@ -188,17 +188,17 @@ export default function PatientCarryoverPage() {
         ) : (
           filtered.map((patient) => (
             <div key={patient.id} className="flex items-center gap-2">
+              {!patient.hasTasksThisWeek && (
+                <span className="p-2 rounded-xl text-amber-500 shrink-0" title="No tasks assigned this week">
+                  <AlertTriangle size={16} />
+                </span>
+              )}
               <div className="flex-1">
                 <PatientCard
                   patient={patient}
                   onClick={() => navigate(`/therapist/patients/${patient.id}`)}
                 />
               </div>
-              {!patient.hasTasksThisWeek && (
-                <span className="p-2 rounded-xl text-amber-500 shrink-0" title="No tasks assigned this week">
-                  <AlertTriangle size={16} />
-                </span>
-              )}
               <button
                 onClick={() => setRemovePatient(patient)}
                 className="p-2.5 rounded-xl text-text-muted hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer shrink-0"
