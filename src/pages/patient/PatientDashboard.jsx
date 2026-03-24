@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { useCachedState, hasCache } from '../../hooks/useCachedState'
 import Card from '../../components/ui/Card'
 import Badge from '../../components/ui/Badge'
 import Button from '../../components/ui/Button'
@@ -29,8 +30,8 @@ const statusConfig = {
 
 export default function PatientDashboard() {
   const { profile } = useAuth()
-  const [tasks, setTasks] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [tasks, setTasks] = useCachedState('patient-tasks', [])
+  const [loading, setLoading] = useState(() => !hasCache('patient-tasks'))
 
   useEffect(() => {
     if (profile) loadTasks()

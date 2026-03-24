@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { useCachedState, hasCache } from '../../hooks/useCachedState'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Badge from '../../components/ui/Badge'
@@ -8,8 +9,8 @@ import { MessageSquare, Send, ChevronDown, ChevronUp } from 'lucide-react'
 
 export default function TherapistNotesPage() {
   const { profile } = useAuth()
-  const [notes, setNotes] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [notes, setNotes] = useCachedState('therapist-notes', [])
+  const [loading, setLoading] = useState(() => !hasCache('therapist-notes'))
   const [expandedNote, setExpandedNote] = useState(null)
   const [replies, setReplies] = useState({})
   const [replyText, setReplyText] = useState('')

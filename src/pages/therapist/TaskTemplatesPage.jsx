@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { useCachedState, hasCache } from '../../hooks/useCachedState'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
@@ -23,12 +24,12 @@ const timeSlots = [
 
 export default function TaskTemplatesPage() {
   const { profile } = useAuth()
-  const [templates, setTemplates] = useState([])
-  const [pageLoading, setPageLoading] = useState(true)
+  const [templates, setTemplates] = useCachedState('therapist-templates', [])
+  const [pageLoading, setPageLoading] = useState(() => !hasCache('therapist-templates'))
   const [showCreate, setShowCreate] = useState(false)
   const [showAssign, setShowAssign] = useState(false)
   const [selectedTemplate, setSelectedTemplate] = useState(null)
-  const [patients, setPatients] = useState([])
+  const [patients, setPatients] = useCachedState('therapist-tmpl-patients', [])
   const [form, setForm] = useState({
     title: '',
     description: '',

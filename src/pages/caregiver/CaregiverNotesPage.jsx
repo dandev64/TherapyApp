@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { useCachedState, hasCache } from '../../hooks/useCachedState'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Select from '../../components/ui/Select'
@@ -16,9 +17,9 @@ import {
 
 export default function CaregiverNotesPage() {
   const { profile } = useAuth()
-  const [notes, setNotes] = useState([])
-  const [patients, setPatients] = useState([])
-  const [pageLoading, setPageLoading] = useState(true)
+  const [notes, setNotes] = useCachedState('caregiver-notes', [])
+  const [patients, setPatients] = useCachedState('caregiver-note-patients', [])
+  const [pageLoading, setPageLoading] = useState(() => !hasCache('caregiver-notes'))
   const [showCreate, setShowCreate] = useState(false)
   const [form, setForm] = useState({ patient_id: '', content: '' })
   const [loading, setLoading] = useState(false)

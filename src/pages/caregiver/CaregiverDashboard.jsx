@@ -2,15 +2,16 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { useCachedState, hasCache } from '../../hooks/useCachedState'
 import Card from '../../components/ui/Card'
 import Badge from '../../components/ui/Badge'
 import { Users, FileText, CheckCircle, Clock } from 'lucide-react'
 
 export default function CaregiverDashboard() {
   const { profile } = useAuth()
-  const [patients, setPatients] = useState([])
-  const [noteCount, setNoteCount] = useState(0)
-  const [loading, setLoading] = useState(true)
+  const [patients, setPatients] = useCachedState('caregiver-patients', [])
+  const [noteCount, setNoteCount] = useCachedState('caregiver-notecount', 0)
+  const [loading, setLoading] = useState(() => !hasCache('caregiver-patients'))
 
   useEffect(() => {
     if (profile) loadData()

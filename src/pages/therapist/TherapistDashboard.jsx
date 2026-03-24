@@ -2,14 +2,15 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { useCachedState, hasCache } from '../../hooks/useCachedState'
 import Card from '../../components/ui/Card'
 import { Users, ClipboardCheck, FileText, TrendingUp } from 'lucide-react'
 
 export default function TherapistDashboard() {
   const { profile } = useAuth()
-  const [stats, setStats] = useState({ patients: 0, todayTasks: 0, completedToday: 0, notes: 0 })
-  const [recentPatients, setRecentPatients] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [stats, setStats] = useCachedState('therapist-dash-stats', { patients: 0, todayTasks: 0, completedToday: 0, notes: 0 })
+  const [recentPatients, setRecentPatients] = useCachedState('therapist-dash-patients', [])
+  const [loading, setLoading] = useState(() => !hasCache('therapist-dash-stats'))
 
   useEffect(() => {
     if (!profile) return

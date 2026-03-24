@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { useCachedState, hasCache } from '../../hooks/useCachedState'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
@@ -10,8 +11,8 @@ import { UserPlus, Search, Calendar, ChevronRight } from 'lucide-react'
 
 export default function PatientsPage() {
   const { profile } = useAuth()
-  const [patients, setPatients] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [patients, setPatients] = useCachedState('therapist-patients', [])
+  const [loading, setLoading] = useState(() => !hasCache('therapist-patients'))
   const [search, setSearch] = useState('')
   const [showAddModal, setShowAddModal] = useState(false)
   const [patientEmail, setPatientEmail] = useState('')
