@@ -5,6 +5,7 @@ import { useCachedState, hasCache } from '../../hooks/useCachedState'
 import Card from '../../components/ui/Card'
 import Badge from '../../components/ui/Badge'
 import Button from '../../components/ui/Button'
+import Modal from '../../components/ui/Modal'
 import {
   CheckCircle,
   Circle,
@@ -32,6 +33,7 @@ export default function PatientDashboard() {
   const { profile } = useAuth()
   const [tasks, setTasks] = useCachedState('patient-tasks', [])
   const [loading, setLoading] = useState(() => !hasCache('patient-tasks'))
+  const [selectedTask, setSelectedTask] = useState(null)
 
   useEffect(() => {
     if (profile) loadTasks()
@@ -142,7 +144,7 @@ export default function PatientDashboard() {
                   const config = statusConfig[task.status]
                   const StatusIcon = config.icon
                   return (
-                    <Card key={task.id}>
+                    <Card key={task.id} className="cursor-pointer" onClick={() => setSelectedTask(task)}>
                       <div className="flex items-center gap-4">
                         <div
                           className={`shrink-0 ${
@@ -186,7 +188,10 @@ export default function PatientDashboard() {
                           <Button
                             size="sm"
                             variant={task.status === 'in_progress' ? 'primary' : 'secondary'}
-                            onClick={() => updateStatus(task.id, config.next)}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              updateStatus(task.id, config.next)
+                            }}
                           >
                             {config.label}
                           </Button>
@@ -240,6 +245,56 @@ export default function PatientDashboard() {
           </Card>
         </div>
       )}
+
+      {/* Task Detail Modal */}
+      <Modal
+        isOpen={!!selectedTask}
+        onClose={() => setSelectedTask(null)}
+        title={selectedTask?.task_templates?.title || 'Task Details'}
+      >
+        {selectedTask && (
+          <div className="space-y-4">
+            <Badge color={selectedTask.status}>
+              {selectedTask.status === 'in_progress' ? 'In Progress' : selectedTask.status}
+            </Badge>
+
+            {selectedTask.task_templates?.description && (
+              <div>
+                <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1">
+                  Description
+                </p>
+                <p className="text-sm text-text-primary leading-relaxed">
+                  {selectedTask.task_templates.description}
+                </p>
+              </div>
+            )}
+
+            <div className="flex items-center gap-3">
+              <Badge color={selectedTask.task_templates?.therapy_type}>
+                {selectedTask.task_templates?.therapy_type}
+              </Badge>
+              <span className="text-sm text-text-muted flex items-center gap-1">
+                <Clock size={14} />
+                {selectedTask.task_templates?.duration_minutes} min
+              </span>
+            </div>
+
+            {statusConfig[selectedTask.status]?.next && (
+              <Button
+                variant={selectedTask.status === 'in_progress' ? 'primary' : 'secondary'}
+                size="lg"
+                className="w-full mt-2"
+                onClick={() => {
+                  updateStatus(selectedTask.id, statusConfig[selectedTask.status].next)
+                  setSelectedTask(null)
+                }}
+              >
+                {statusConfig[selectedTask.status].label}
+              </Button>
+            )}
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }
