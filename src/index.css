@@ -1,0 +1,52 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Manrope:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #18687b;
+  --color-primary-light: #1a7a8f;
+  --color-primary-dark: #135662;
+  --color-primary-container: #a2e7fd;
+  --color-secondary: #3f6754;
+  --color-secondary-container: #c0edd4;
+  --color-tertiary: #466275;
+  --color-tertiary-container: #c9e6fd;
+  --color-surface: #f8fafb;
+  --color-surface-alt: #f0f4f6;
+  --color-surface-card: #ffffff;
+  --color-surface-container: #eaeff0;
+  --color-text-primary: #2c3436;
+  --color-text-secondary: #596063;
+  --color-text-muted: #757c7e;
+  --color-border: #dce4e6;
+  --color-border-light: #eaeff0;
+  --color-success: #22c55e;
+  --color-success-bg: #f0fdf4;
+  --color-warning: #f59e0b;
+  --color-warning-bg: #fffbeb;
+  --color-danger: #ef4444;
+  --color-danger-bg: #fef2f2;
+  --color-speech: #8b5cf6;
+  --color-speech-bg: #f5f3ff;
+  --color-occupational: #f97316;
+  --color-occupational-bg: #fff7ed;
+  --color-physical: #06b6d4;
+  --color-physical-bg: #ecfeff;
+  --font-heading: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-body: 'Manrope', system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    font-family: var(--font-body);
+    background-color: var(--color-surface);
+    color: var(--color-text-primary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+}

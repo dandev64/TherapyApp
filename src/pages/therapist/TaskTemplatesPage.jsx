@@ -1,0 +1,261 @@
+import { useEffect, useState } from 'react'
+import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
+import Card from '../../components/ui/Card'
+import Button from '../../components/ui/Button'
+import Input from '../../components/ui/Input'
+import Select from '../../components/ui/Select'
+import Modal from '../../components/ui/Modal'
+import Badge from '../../components/ui/Badge'
+import { Plus, Clock, Trash2, Send } from 'lucide-react'
+
+const therapyTypes = [
+  { value: 'speech', label: 'Speech' },
+  { value: 'occupational', label: 'Occupational' },
+  { value: 'physical', label: 'Physical' },
+]
+
+const timeSlots = [
+  { value: 'morning', label: 'Morning' },
+  { value: 'afternoon', label: 'Afternoon' },
+  { value: 'evening', label: 'Evening' },
+]
+
+export default function TaskTemplatesPage() {
+  const { profile } = useAuth()
+  const [templates, setTemplates] = useState([])
+  const [showCreate, setShowCreate] = useState(false)
+  const [showAssign, setShowAssign] = useState(false)
+  const [selectedTemplate, setSelectedTemplate] = useState(null)
+  const [patients, setPatients] = useState([])
+  const [form, setForm] = useState({
+    title: '',
+    description: '',
+    duration_minutes: 15,
+    therapy_type: 'speech',
+  })
+  const [assignForm, setAssignForm] = useState({
+    patient_id: '',
+    assigned_date: new Date().toISOString().split('T')[0],
+    assigned_time_of_day: 'morning',
+  })
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (profile) {
+      loadTemplates()
+      loadPatients()
+    }
+  }, [profile])
+
+  async function loadTemplates() {
+    const { data } = await supabase
+      .from('task_templates')
+      .select('*')
+      .eq('therapist_id', profile.id)
+      .order('created_at', { ascending: false })
+    setTemplates(data || [])
+  }
+
+  async function loadPatients() {
+    const { data } = await supabase
+      .from('patient_assignments')
+      .select('patient_id, profiles!patient_assignments_patient_id_fkey(id, full_name)')
+      .eq('assigned_to', profile.id)
+      .eq('relationship', 'therapist')
+    setPatients(data?.map((a) => a.profiles) || [])
+  }
+
+  async function handleCreate(e) {
+    e.preventDefault()
+    setLoading(true)
+    await supabase.from('task_templates').insert({
+      ...form,
+      therapist_id: profile.id,
+    })
+    setLoading(false)
+    setForm({ title: '', description: '', duration_minutes: 15, therapy_type: 'speech' })
+    setShowCreate(false)
+    loadTemplates()
+  }
+
+  async function handleAssign(e) {
+    e.preventDefault()
+    setLoading(true)
+    await supabase.from('task_assignments').insert({
+      template_id: selectedTemplate.id,
+      patient_id: assignForm.patient_id,
+      therapist_id: profile.id,
+      assigned_date: assignForm.assigned_date,
+      assigned_time_of_day: assignForm.assigned_time_of_day,
+    })
+    setLoading(false)
+    setShowAssign(false)
+  }
+
+  async function handleDelete(id) {
+    await supabase.from('task_templates').delete().eq('id', id)
+    loadTemplates()
+  }
+
+  function openAssign(template) {
+    setSelectedTemplate(template)
+    setAssignForm({
+      patient_id: patients[0]?.id || '',
+      assigned_date: new Date().toISOString().split('T')[0],
+      assigned_time_of_day: 'morning',
+    })
+    setShowAssign(true)
+  }
+
+  return (
+    <div className="space-y-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-3xl font-extrabold text-text-primary tracking-tight">Task Templates</h2>
+          <p className="text-text-secondary mt-2">
+            Create reusable therapy tasks and assign them to patients
+          </p>
+        </div>
+        <Button onClick={() => setShowCreate(true)}>
+          <Plus size={16} /> New Template
+        </Button>
+      </div>
+
+      <div className="grid gap-6 sm:grid-cols-2">
+        {templates.length === 0 ? (
+          <Card className="sm:col-span-2">
+            <p className="text-sm text-text-muted text-center py-8">
+              No templates yet. Create one to get started.
+            </p>
+          </Card>
+        ) : (
+          templates.map((t) => (
+            <Card key={t.id}>
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <h4 className="text-sm font-bold text-text-primary">{t.title}</h4>
+                  {t.description && (
+                    <p className="text-xs text-text-secondary mt-1 line-clamp-2">
+                      {t.description}
+                    </p>
+                  )}
+                </div>
+                <Badge color={t.therapy_type}>{t.therapy_type}</Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-text-muted flex items-center gap-1">
+                  <Clock size={12} /> {t.duration_minutes} min
+                </span>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => openAssign(t)}
+                    title="Assign to patient"
+                  >
+                    <Send size={14} />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleDelete(t.id)}
+                    title="Delete template"
+                  >
+                    <Trash2 size={14} className="text-danger" />
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          ))
+        )}
+      </div>
+
+      {/* Create Template Modal */}
+      <Modal
+        isOpen={showCreate}
+        onClose={() => setShowCreate(false)}
+        title="New Task Template"
+      >
+        <form onSubmit={handleCreate} className="space-y-4">
+          <Input
+            label="Title"
+            placeholder="e.g. Vowel Resonation Exercises"
+            value={form.title}
+            onChange={(e) => setForm({ ...form, title: e.target.value })}
+            required
+          />
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-semibold text-text-secondary">Description</label>
+            <textarea
+              className="w-full px-4 py-3 rounded-xl border border-border text-sm bg-surface-alt text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white resize-none"
+              rows={3}
+              placeholder="Describe the exercise..."
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Duration (minutes)"
+              type="number"
+              min={1}
+              value={form.duration_minutes}
+              onChange={(e) => setForm({ ...form, duration_minutes: parseInt(e.target.value) || 1 })}
+            />
+            <Select
+              label="Therapy Type"
+              value={form.therapy_type}
+              onChange={(e) => setForm({ ...form, therapy_type: e.target.value })}
+              options={therapyTypes}
+            />
+          </div>
+          <Button type="submit" disabled={loading} className="w-full">
+            {loading ? 'Creating...' : 'Create Template'}
+          </Button>
+        </form>
+      </Modal>
+
+      {/* Assign Task Modal */}
+      <Modal
+        isOpen={showAssign}
+        onClose={() => setShowAssign(false)}
+        title={`Assign: ${selectedTemplate?.title}`}
+      >
+        <form onSubmit={handleAssign} className="space-y-4">
+          {patients.length === 0 ? (
+            <p className="text-sm text-text-muted text-center py-4">
+              You have no patients assigned. Add a patient first.
+            </p>
+          ) : (
+            <>
+              <Select
+                label="Patient"
+                value={assignForm.patient_id}
+                onChange={(e) => setAssignForm({ ...assignForm, patient_id: e.target.value })}
+                options={patients.map((p) => ({ value: p.id, label: p.full_name }))}
+              />
+              <Input
+                label="Date"
+                type="date"
+                value={assignForm.assigned_date}
+                onChange={(e) => setAssignForm({ ...assignForm, assigned_date: e.target.value })}
+              />
+              <Select
+                label="Time of Day"
+                value={assignForm.assigned_time_of_day}
+                onChange={(e) =>
+                  setAssignForm({ ...assignForm, assigned_time_of_day: e.target.value })
+                }
+                options={timeSlots}
+              />
+              <Button type="submit" disabled={loading} className="w-full">
+                {loading ? 'Assigning...' : 'Assign Task'}
+              </Button>
+            </>
+          )}
+        </form>
+      </Modal>
+    </div>
+  )
+}
