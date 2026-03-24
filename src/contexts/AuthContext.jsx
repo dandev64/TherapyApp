@@ -16,15 +16,15 @@ export function AuthProvider({ children }) {
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (event, session) => {
         const newUser = session?.user ?? null
         setUser(newUser)
-        if (newUser) {
-          // Keep loading true until profile fetch completes
-          setLoading(true)
-        } else {
+        if (!newUser) {
           setProfile(null)
           setLoading(false)
+        } else if (event === 'SIGNED_IN') {
+          // Only show loading on actual sign-in, not token refreshes
+          setLoading(true)
         }
       }
     )
