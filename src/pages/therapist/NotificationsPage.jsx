@@ -36,6 +36,7 @@ export default function NotificationsPage() {
       .from('notifications')
       .select('*, patient:profiles!notifications_patient_id_fkey(full_name)')
       .eq('recipient_id', profile.id)
+      .is('read_at', null)
       .order('created_at', { ascending: false })
       .limit(50)
     setNotifications(data || [])
@@ -43,11 +44,33 @@ export default function NotificationsPage() {
   }
 
   async function dismissNotification(id) {
-    await supabase
-      .from('notifications')
-      .update({ read_at: new Date().toISOString() })
-      .eq('id', id)
-    setNotifications((prev) => prev.filter((n) => n.id !== id))
+  console.log('🔔 Attempting to dismiss notification:', id);
+
+  // 1. Perform the update
+  const { data, error, status } = await supabase
+    .from('notifications')
+    .update({ read_at: new Date().toISOString() })
+    .eq('id', id)
+    .select(); // This is crucial to verify if the row was actually touched
+
+  // 2. Log exactly what happened
+  if (error) {
+    console.error('❌ Database Error:', error.code, error.message);
+    console.error('HTTP Status:', status);
+    alert(`Failed to dismiss: ${error.message}`);
+    return; // Stop here! Don't remove it from the UI.
+  }
+
+  if (!data || data.length === 0) {
+    console.warn('⚠️ Update ran but 0 rows were affected. This usually means an RLS Policy issue.');
+    alert('Dismiss failed: You might not have permission to update this specific notification.');
+    return;
+  }
+
+  console.log('✅ Successfully updated in DB:', data);
+
+  // 3. Only update local state if the DB part worked
+  setNotifications((prev) => prev.filter((n) => n.id !== id));
   }
 
   async function handleReply(notification) {
