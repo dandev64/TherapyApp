@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCachedState, hasCache } from '../../hooks/useCachedState'
+import { calculateStreak, getTodayProgress } from '../../utils/streak'
 import Card from '../../components/ui/Card'
 import Badge from '../../components/ui/Badge'
 import Button from '../../components/ui/Button'
@@ -14,6 +16,7 @@ import {
   Sunset,
   Moon,
   Trophy,
+  Flame,
 } from 'lucide-react'
 
 const timeIcons = {
@@ -30,11 +33,16 @@ const statusConfig = {
 
 export default function PatientDashboard() {
   const { profile } = useAuth()
+  const navigate = useNavigate()
   const [tasks, setTasks] = useCachedState('patient-tasks', [])
+  const [allTasks, setAllTasks] = useCachedState('patient-streak-tasks', [])
   const [loading, setLoading] = useState(() => !hasCache('patient-tasks'))
 
   useEffect(() => {
-    if (profile) loadTasks()
+    if (profile) {
+      loadTasks()
+      loadStreakData()
+    }
   }, [profile])
 
   async function loadTasks() {
@@ -49,6 +57,19 @@ export default function PatientDashboard() {
     setLoading(false)
   }
 
+  async function loadStreakData() {
+    const { data } = await supabase
+      .from('task_assignments')
+      .select('assigned_date, status, is_rest_day')
+      .eq('patient_id', profile.id)
+      .order('assigned_date', { ascending: false })
+      .limit(500)
+    setAllTasks(data || [])
+  }
+
+  const streak = calculateStreak(allTasks)
+  const todayProgress = getTodayProgress(allTasks)
+
   async function updateStatus(taskId, newStatus) {
     const updates = { status: newStatus }
     if (newStatus === 'completed') {
@@ -58,8 +79,8 @@ export default function PatientDashboard() {
     loadTasks()
   }
 
-  const total = tasks.length
-  const completed = tasks.filter((t) => t.status === 'completed').length
+  const total = tasks.filter((t) => !t.is_rest_day).length
+  const completed = tasks.filter((t) => !t.is_rest_day && t.status === 'completed').length
   const progress = total > 0 ? Math.round((completed / total) * 100) : 0
 
   const grouped = {
@@ -86,6 +107,29 @@ export default function PatientDashboard() {
           Here are your therapy tasks for today
         </p>
       </div>
+
+      {/* Streak Card */}
+      {(streak > 0 || todayProgress.total > 0) && (
+        <Card className="!p-5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Flame size={22} className="text-warning" />
+              <span className="text-lg font-extrabold text-text-primary">
+                {streak}-day streak!
+              </span>
+            </div>
+            <span className="text-sm font-semibold text-text-muted">
+              {todayProgress.percent}% today
+            </span>
+          </div>
+          <div className="w-full h-2.5 bg-surface-alt rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-700 ease-out bg-gradient-to-r from-warning to-warning/60"
+              style={{ width: `${todayProgress.percent}%` }}
+            />
+          </div>
+        </Card>
+      )}
 
       {/* Progress Card */}
       <Card className="!p-6">

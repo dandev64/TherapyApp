@@ -8,7 +8,15 @@ import TherapistDashboard from './pages/therapist/TherapistDashboard'
 import PatientsPage from './pages/therapist/PatientsPage'
 import TaskTemplatesPage from './pages/therapist/TaskTemplatesPage'
 import TherapistNotesPage from './pages/therapist/TherapistNotesPage'
+import NotificationsPage from './pages/therapist/NotificationsPage'
+import TherapistProfilePage from './pages/therapist/TherapistProfilePage'
+import TherapistMessagesPage from './pages/therapist/TherapistMessagesPage'
 import PatientDashboard from './pages/patient/PatientDashboard'
+import SchedulePage from './pages/patient/SchedulePage'
+import TaskDetailPage from './pages/patient/TaskDetailPage'
+import ProgressPage from './pages/patient/ProgressPage'
+import PatientProfilePage from './pages/patient/PatientProfilePage'
+import MessagesPage from './pages/patient/MessagesPage'
 import CaregiverDashboard from './pages/caregiver/CaregiverDashboard'
 import CaregiverNotesPage from './pages/caregiver/CaregiverNotesPage'
 
@@ -50,6 +58,9 @@ export default function App() {
             <Route path="patients" element={<PatientsPage />} />
             <Route path="templates" element={<TaskTemplatesPage />} />
             <Route path="notes" element={<TherapistNotesPage />} />
+            <Route path="notifications" element={<NotificationsPage />} />
+            <Route path="profile" element={<TherapistProfilePage />} />
+            <Route path="messages/:patientId" element={<TherapistMessagesPage />} />
           </Route>
 
           {/* Patient Routes */}
@@ -62,6 +73,11 @@ export default function App() {
             }
           >
             <Route index element={<PatientDashboard />} />
+            <Route path="schedule" element={<SchedulePage />} />
+            <Route path="task/:id" element={<TaskDetailPage />} />
+            <Route path="progress" element={<ProgressPage />} />
+            <Route path="profile" element={<PatientProfilePage />} />
+            <Route path="messages/:recipientId" element={<MessagesPage />} />
           </Route>
 
           {/* Caregiver Routes */}
