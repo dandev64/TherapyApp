@@ -142,12 +142,16 @@ create policy "Therapists can delete own templates"
 -- 4. Task Assignments (tasks assigned to patients per day)
 create table public.task_assignments (
   id uuid primary key default gen_random_uuid(),
-  template_id uuid not null references public.task_templates(id) on delete cascade,
+  template_id uuid references public.task_templates(id) on delete set null,
   patient_id uuid not null references public.profiles(id) on delete cascade,
   therapist_id uuid not null references public.profiles(id) on delete cascade,
   assigned_date date not null default current_date,
   assigned_time_of_day text not null default 'morning'
     check (assigned_time_of_day in ('morning', 'afternoon', 'evening')),
+  title text,
+  description text,
+  duration_minutes int,
+  therapy_type text,
   status text not null default 'pending'
     check (status in ('pending', 'in_progress', 'completed')),
   details text,

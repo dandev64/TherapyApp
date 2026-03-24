@@ -93,7 +93,7 @@ export default function PatientsPage() {
     setSelectedPatient(patient)
     const { data } = await supabase
       .from('task_assignments')
-      .select('*, task_templates(title, therapy_type, duration_minutes)')
+      .select('*')
       .eq('patient_id', patient.id)
       .order('assigned_date', { ascending: false })
       .order('created_at', { ascending: false })
@@ -229,11 +229,11 @@ export default function PatientsPage() {
               >
                 <div>
                   <p className="text-sm font-semibold text-text-primary">
-                    {task.task_templates?.title}
+                    {task.title}
                   </p>
                   <div className="flex items-center gap-2 mt-1">
-                    <Badge color={task.task_templates?.therapy_type}>
-                      {task.task_templates?.therapy_type}
+                    <Badge color={task.therapy_type}>
+                      {task.therapy_type}
                     </Badge>
                     <span className="text-xs text-text-muted flex items-center gap-1">
                       <Calendar size={12} />

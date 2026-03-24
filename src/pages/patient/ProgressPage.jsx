@@ -48,9 +48,9 @@ export default function ProgressPage() {
       // Therapy session remarks (task assignments with remarks)
       supabase
         .from('task_assignments')
-        .select('assigned_date, task_templates(therapy_type)')
+        .select('assigned_date, therapy_type')
         .eq('patient_id', profile.id)
-        .not('task_templates.therapy_type', 'is', null)
+        .not('therapy_type', 'is', null)
         .order('assigned_date', { ascending: false })
         .limit(30),
       // Daily remarks

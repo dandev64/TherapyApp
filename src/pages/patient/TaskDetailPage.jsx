@@ -47,7 +47,7 @@ export default function TaskDetailPage() {
   async function loadTask() {
     const { data } = await supabase
       .from('task_assignments')
-      .select('*, task_templates(title, description, therapy_type, duration_minutes)')
+      .select('*')
       .eq('id', id)
       .single()
     setTask(data)
@@ -129,8 +129,6 @@ export default function TaskDetailPage() {
     )
   }
 
-  const template = task.task_templates
-
   // Screen 1: Task Detail
   if (screen === 'detail') {
     return (
@@ -139,12 +137,12 @@ export default function TaskDetailPage() {
           <ArrowLeft size={16} /> Back
         </button>
 
-        <h2 className="text-2xl font-extrabold text-text-primary">{template?.title}</h2>
+        <h2 className="text-2xl font-extrabold text-text-primary">{task.title}</h2>
 
         {/* Description Card */}
         <Card>
           <div className="text-sm text-text-secondary leading-relaxed">
-            <Linkify text={template?.description || 'No description provided.'} />
+            <Linkify text={task.description || 'No description provided.'} />
           </div>
         </Card>
 
@@ -199,7 +197,7 @@ export default function TaskDetailPage() {
   // Screen 2: Post-Task Feedback
   return (
     <div className="space-y-6 max-w-lg mx-auto">
-      <h2 className="text-2xl font-extrabold text-text-primary">{template?.title}</h2>
+      <h2 className="text-2xl font-extrabold text-text-primary">{task.title}</h2>
       <p className="text-sm text-text-muted">Great job completing this task!</p>
 
       {/* Mood Selection */}

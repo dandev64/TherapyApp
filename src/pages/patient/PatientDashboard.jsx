@@ -51,7 +51,7 @@ export default function PatientDashboard() {
     const today = new Date().toISOString().split('T')[0]
     const { data } = await supabase
       .from('task_assignments')
-      .select('*, task_templates(title, description, therapy_type, duration_minutes)')
+      .select('*')
       .eq('patient_id', profile.id)
       .eq('assigned_date', today)
       .order('created_at', { ascending: true })
@@ -210,20 +210,20 @@ export default function PatientDashboard() {
                                 : 'text-text-primary'
                             }`}
                           >
-                            {task.task_templates?.title}
+                            {task.title}
                           </p>
-                          {task.task_templates?.description && (
+                          {task.description && (
                             <p className="text-xs text-text-secondary mt-0.5 line-clamp-1">
-                              {task.task_templates.description}
+                              {task.description}
                             </p>
                           )}
                           <div className="flex items-center gap-2 mt-1.5">
-                            <Badge color={task.task_templates?.therapy_type}>
-                              {task.task_templates?.therapy_type}
+                            <Badge color={task.therapy_type}>
+                              {task.therapy_type}
                             </Badge>
                             <span className="text-xs text-text-muted flex items-center gap-1">
                               <Clock size={11} />
-                              {task.task_templates?.duration_minutes} min
+                              {task.duration_minutes} min
                             </span>
                           </div>
                         </div>
@@ -270,7 +270,7 @@ export default function PatientDashboard() {
                     </div>
                     <div className="flex-1">
                       <p className="text-sm font-medium text-text-primary">
-                        {task.task_templates?.title}
+                        {task.title}
                       </p>
                       <p className="text-xs text-text-muted">
                         Completed at{' '}
@@ -294,7 +294,7 @@ export default function PatientDashboard() {
       <Modal
         isOpen={!!selectedTask}
         onClose={() => setSelectedTask(null)}
-        title={selectedTask?.task_templates?.title || 'Task Details'}
+        title={selectedTask?.title || 'Task Details'}
       >
         {selectedTask && (
           <div className="space-y-4">
@@ -302,13 +302,13 @@ export default function PatientDashboard() {
               {selectedTask.status === 'in_progress' ? 'In Progress' : selectedTask.status}
             </Badge>
 
-            {selectedTask.task_templates?.description && (
+            {selectedTask.description && (
               <div>
                 <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1">
                   Description
                 </p>
                 <p className="text-sm text-text-primary leading-relaxed">
-                  {selectedTask.task_templates.description}
+                  {selectedTask.description}
                 </p>
               </div>
             )}
@@ -325,12 +325,12 @@ export default function PatientDashboard() {
             )}
 
             <div className="flex items-center gap-3">
-              <Badge color={selectedTask.task_templates?.therapy_type}>
-                {selectedTask.task_templates?.therapy_type}
+              <Badge color={selectedTask.therapy_type}>
+                {selectedTask.therapy_type}
               </Badge>
               <span className="text-sm text-text-muted flex items-center gap-1">
                 <Clock size={14} />
-                {selectedTask.task_templates?.duration_minutes} min
+                {selectedTask.duration_minutes} min
               </span>
             </div>
 

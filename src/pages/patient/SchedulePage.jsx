@@ -40,7 +40,7 @@ export default function SchedulePage() {
     Promise.all([
       supabase
         .from('task_assignments')
-        .select('*, task_templates(title, description, therapy_type, duration_minutes)')
+        .select('*')
         .eq('patient_id', profile.id)
         .gte('assigned_date', startOfMonth)
         .lte('assigned_date', endOfMonth)
@@ -193,7 +193,7 @@ export default function SchedulePage() {
               const allDone = dayTotal > 0 && dayCompleted === dayTotal
               const isToday = dateStr === todayStr
               const isSelected = dateStr === selectedDate
-              const hasTherapy = dayRealTasks.some((t) => t.task_templates?.therapy_type)
+              const hasTherapy = dayRealTasks.some((t) => t.therapy_type)
 
               return (
                 <button
@@ -289,15 +289,15 @@ export default function SchedulePage() {
                       )}
                     </div>
                     <p className={`text-sm font-bold ${isDone ? 'text-text-muted line-through' : 'text-text-primary'}`}>
-                      {task.task_templates?.title}
+                      {task.title}
                     </p>
-                    {task.task_templates?.description && (
+                    {task.description && (
                       <p className="text-xs text-text-secondary mt-0.5 line-clamp-1">
-                        {task.task_templates.description}
+                        {task.description}
                       </p>
                     )}
                     <p className="text-sm text-on-surface-variant">
-                      {task.assigned_time_of_day} &middot; {task.task_templates?.duration_minutes} min
+                      {task.assigned_time_of_day} &middot; {task.duration_minutes} min
                     </p>
                   </div>
                 )
