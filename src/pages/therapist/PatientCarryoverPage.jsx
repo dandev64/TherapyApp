@@ -9,7 +9,7 @@ import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
 import Modal from '../../components/ui/Modal'
 import Card from '../../components/ui/Card'
-import { UserPlus, Search, Trash2, AlertTriangle } from 'lucide-react'
+import { UserPlus, Search, Trash2 } from 'lucide-react'
 
 export default function PatientCarryoverPage() {
   const { profile } = useAuth()
@@ -188,11 +188,6 @@ export default function PatientCarryoverPage() {
         ) : (
           filtered.map((patient) => (
             <div key={patient.id} className="flex items-center gap-2">
-              {!patient.hasTasksThisWeek && (
-                <span className="p-2 rounded-xl text-amber-500 shrink-0" title="No tasks assigned this week">
-                  <AlertTriangle size={16} />
-                </span>
-              )}
               <div className="flex-1">
                 <PatientCard
                   patient={patient}

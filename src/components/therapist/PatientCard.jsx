@@ -1,4 +1,4 @@
-import { ChevronRight, Flame } from 'lucide-react'
+import { ChevronRight, Flame, AlertTriangle } from 'lucide-react'
 import Card from '../ui/Card'
 
 function getStatusPill(completedToday, totalToday) {
@@ -14,9 +14,10 @@ function getStatusPill(completedToday, totalToday) {
 
 export default function PatientCard({ patient, onClick }) {
   const { label, className } = getStatusPill(patient.completedToday, patient.totalToday)
+  const noTasks = patient.hasTasksThisWeek === false
 
   return (
-    <Card hover onClick={onClick}>
+    <Card hover onClick={onClick} className={noTasks ? '!border-red-300 !bg-red-50/30' : ''}>
       <div className="flex items-center gap-4">
         <div className="w-11 h-11 rounded-xl bg-primary-container flex items-center justify-center text-primary font-bold text-sm shrink-0">
           {patient.full_name?.charAt(0)?.toUpperCase()}
@@ -50,6 +51,13 @@ export default function PatientCard({ patient, onClick }) {
               <span className="font-bold text-text-primary">{patient.consistency}%</span> consistency
             </span>
           </div>
+
+          {noTasks && (
+            <div className="flex items-center gap-1.5 mt-2">
+              <AlertTriangle size={12} className="text-red-500 shrink-0" />
+              <span className="text-xs font-semibold text-red-600">No tasks assigned this week</span>
+            </div>
+          )}
         </div>
 
         <ChevronRight size={18} className="text-text-muted shrink-0" />
