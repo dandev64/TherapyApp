@@ -187,7 +187,7 @@ export default function PatientCarryoverPage() {
             required
           />
           <p className="text-xs text-text-muted">
-            The patient must already have a Serene Sanctuary account.
+            The patient must already have a Simple Therapy account.
           </p>
           <Button type="submit" disabled={addLoading} className="w-full">
             {addLoading ? 'Adding...' : 'Add Patient'}
