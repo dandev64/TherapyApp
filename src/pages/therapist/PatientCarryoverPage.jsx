@@ -9,7 +9,7 @@ import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
 import Modal from '../../components/ui/Modal'
 import Card from '../../components/ui/Card'
-import { UserPlus, Search, Trash2 } from 'lucide-react'
+import { UserPlus, Search, Trash2, AlertTriangle } from 'lucide-react'
 
 export default function PatientCarryoverPage() {
   const { profile } = useAuth()
@@ -30,6 +30,12 @@ export default function PatientCarryoverPage() {
 
   async function loadPatients() {
     const today = new Date().toISOString().split('T')[0]
+    const startOfWeek = new Date()
+    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay() + 1)
+    const endOfWeek = new Date(startOfWeek)
+    endOfWeek.setDate(endOfWeek.getDate() + 6)
+    const weekStart = startOfWeek.toISOString().split('T')[0]
+    const weekEnd = endOfWeek.toISOString().split('T')[0]
 
     const { data: assignments } = await supabase
       .from('patient_assignments')
@@ -39,7 +45,7 @@ export default function PatientCarryoverPage() {
 
     const patientDetails = await Promise.all(
       (assignments || []).map(async (a) => {
-        const [todayRes, allRes] = await Promise.all([
+        const [todayRes, allRes, weekRes] = await Promise.all([
           supabase
             .from('task_assignments')
             .select('status, is_rest_day')
@@ -51,6 +57,13 @@ export default function PatientCarryoverPage() {
             .eq('patient_id', a.patient_id)
             .order('assigned_date', { ascending: false })
             .limit(500),
+          supabase
+            .from('task_assignments')
+            .select('id', { count: 'exact', head: true })
+            .eq('patient_id', a.patient_id)
+            .gte('assigned_date', weekStart)
+            .lte('assigned_date', weekEnd)
+            .eq('is_rest_day', false),
         ])
 
         const todayTasks = (todayRes.data || []).filter((t) => !t.is_rest_day)
@@ -65,6 +78,7 @@ export default function PatientCarryoverPage() {
           completedToday: todayTasks.filter((t) => t.status === 'completed').length,
           streak: calculateStreak(allTasks),
           consistency,
+          hasTasksThisWeek: (weekRes.count || 0) > 0,
         }
       })
     )
@@ -180,6 +194,11 @@ export default function PatientCarryoverPage() {
                   onClick={() => navigate(`/therapist/patients/${patient.id}`)}
                 />
               </div>
+              {!patient.hasTasksThisWeek && (
+                <span className="p-2 rounded-xl text-amber-500 shrink-0" title="No tasks assigned this week">
+                  <AlertTriangle size={16} />
+                </span>
+              )}
               <button
                 onClick={() => setRemovePatient(patient)}
                 className="p-2.5 rounded-xl text-text-muted hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer shrink-0"

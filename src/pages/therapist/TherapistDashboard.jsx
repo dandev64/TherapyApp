@@ -1,19 +1,16 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCachedState, hasCache } from '../../hooks/useCachedState'
 import { calculateStreak } from '../../utils/streak'
 import { MOOD_CONFIG } from '../../components/therapist/PatientMoodChart'
 import Card from '../../components/ui/Card'
-import PatientCard from '../../components/therapist/PatientCard'
 import { Users, ClipboardCheck, Target, FileText, Heart, AlertTriangle } from 'lucide-react'
 
 export default function TherapistDashboard() {
   const { profile } = useAuth()
-  const navigate = useNavigate()
   const [stats, setStats] = useCachedState('therapist-dash-stats', { patients: 0, todayTasks: 0, completedToday: 0, avgConsistency: 0, notes: 0 })
-  const [enrichedPatients, setEnrichedPatients] = useCachedState('therapist-dash-enriched', [])
   const [topMood, setTopMood] = useCachedState('therapist-dash-top-mood', null)
   const [noTasksThisWeek, setNoTasksThisWeek] = useState(false)
   const [loading, setLoading] = useState(() => !hasCache('therapist-dash-stats'))
@@ -106,8 +103,6 @@ export default function TherapistDashboard() {
       })
     )
 
-    setEnrichedPatients(patientDetails)
-
     const avgConsistency = patientDetails.length > 0
       ? Math.round(patientDetails.reduce((sum, p) => sum + p.consistency, 0) / patientDetails.length)
       : 0
@@ -191,10 +186,10 @@ export default function TherapistDashboard() {
               </p>
             </div>
             <Link
-              to="/therapist/templates"
+              to="/therapist/patients"
               className="shrink-0 px-4 py-2 rounded-xl bg-red-500 text-white text-sm font-bold hover:bg-red-600 transition-colors"
             >
-              Assign Tasks
+              View Patients
             </Link>
           </div>
         </Card>
@@ -216,38 +211,6 @@ export default function TherapistDashboard() {
         ))}
       </div>
 
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-xl font-bold text-text-primary">Patient Progress</h3>
-          <Link
-            to="/therapist/patients"
-            className="text-sm text-primary font-bold hover:underline"
-          >
-            View all
-          </Link>
-        </div>
-        <div className="space-y-3">
-          {enrichedPatients.length === 0 ? (
-            <Card>
-              <p className="text-sm text-text-muted text-center py-6">
-                No patients assigned yet. Go to{' '}
-                <Link to="/therapist/patients" className="text-primary font-bold hover:underline">
-                  Patients
-                </Link>{' '}
-                to add your first patient.
-              </p>
-            </Card>
-          ) : (
-            enrichedPatients.map((patient) => (
-              <PatientCard
-                key={patient.id}
-                patient={patient}
-                onClick={() => navigate(`/therapist/patients/${patient.id}`)}
-              />
-            ))
-          )}
-        </div>
-      </div>
     </div>
   )
 }
