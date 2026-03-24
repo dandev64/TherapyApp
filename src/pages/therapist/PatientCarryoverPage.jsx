@@ -9,7 +9,7 @@ import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
 import Modal from '../../components/ui/Modal'
 import Card from '../../components/ui/Card'
-import { UserPlus, Search } from 'lucide-react'
+import { UserPlus, Search, Trash2 } from 'lucide-react'
 
 export default function PatientCarryoverPage() {
   const { profile } = useAuth()
@@ -21,6 +21,8 @@ export default function PatientCarryoverPage() {
   const [patientEmail, setPatientEmail] = useState('')
   const [addError, setAddError] = useState('')
   const [addLoading, setAddLoading] = useState(false)
+  const [removePatient, setRemovePatient] = useState(null)
+  const [removeLoading, setRemoveLoading] = useState(false)
 
   useEffect(() => {
     if (profile) loadPatients()
@@ -110,6 +112,19 @@ export default function PatientCarryoverPage() {
     loadPatients()
   }
 
+  async function handleRemovePatient() {
+    setRemoveLoading(true)
+    await supabase
+      .from('patient_assignments')
+      .delete()
+      .eq('patient_id', removePatient.id)
+      .eq('assigned_to', profile.id)
+      .eq('relationship', 'therapist')
+    setRemoveLoading(false)
+    setRemovePatient(null)
+    loadPatients()
+  }
+
   const filtered = patients.filter((p) =>
     p.full_name?.toLowerCase().includes(search.toLowerCase())
   )
@@ -158,14 +173,47 @@ export default function PatientCarryoverPage() {
           </Card>
         ) : (
           filtered.map((patient) => (
-            <PatientCard
-              key={patient.id}
-              patient={patient}
-              onClick={() => navigate(`/therapist/patients/${patient.id}`)}
-            />
+            <div key={patient.id} className="flex items-center gap-2">
+              <div className="flex-1">
+                <PatientCard
+                  patient={patient}
+                  onClick={() => navigate(`/therapist/patients/${patient.id}`)}
+                />
+              </div>
+              <button
+                onClick={() => setRemovePatient(patient)}
+                className="p-2.5 rounded-xl text-text-muted hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer shrink-0"
+                title="Remove patient"
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
           ))
         )}
       </div>
+
+      <Modal
+        isOpen={!!removePatient}
+        onClose={() => setRemovePatient(null)}
+        title="Remove Patient"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-text-primary">
+            Are you sure you want to remove <span className="font-bold">{removePatient?.full_name}</span>?
+          </p>
+          <p className="text-xs text-text-muted">
+            This will unassign them from your practice. Their task history will not be deleted.
+          </p>
+          <div className="flex gap-3">
+            <Button variant="secondary" className="flex-1" onClick={() => setRemovePatient(null)}>
+              Cancel
+            </Button>
+            <Button variant="danger" className="flex-1" onClick={handleRemovePatient} disabled={removeLoading}>
+              {removeLoading ? 'Removing...' : 'Remove Patient'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         isOpen={showAddModal}

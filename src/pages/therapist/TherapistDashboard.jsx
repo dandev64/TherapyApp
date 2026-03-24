@@ -7,7 +7,7 @@ import { calculateStreak } from '../../utils/streak'
 import { MOOD_CONFIG } from '../../components/therapist/PatientMoodChart'
 import Card from '../../components/ui/Card'
 import PatientCard from '../../components/therapist/PatientCard'
-import { Users, ClipboardCheck, Target, FileText, Heart } from 'lucide-react'
+import { Users, ClipboardCheck, Target, FileText, Heart, AlertTriangle } from 'lucide-react'
 
 export default function TherapistDashboard() {
   const { profile } = useAuth()
@@ -15,6 +15,7 @@ export default function TherapistDashboard() {
   const [stats, setStats] = useCachedState('therapist-dash-stats', { patients: 0, todayTasks: 0, completedToday: 0, avgConsistency: 0, notes: 0 })
   const [enrichedPatients, setEnrichedPatients] = useCachedState('therapist-dash-enriched', [])
   const [topMood, setTopMood] = useCachedState('therapist-dash-top-mood', null)
+  const [noTasksThisWeek, setNoTasksThisWeek] = useState(false)
   const [loading, setLoading] = useState(() => !hasCache('therapist-dash-stats'))
 
   useEffect(() => {
@@ -55,6 +56,20 @@ export default function TherapistDashboard() {
     const patients = assignmentsRes.data || []
     const tasks = tasksRes.data || []
     const completedToday = tasks.filter((t) => t.status === 'completed').length
+
+    // Check if any non-rest tasks exist this week
+    const startOfWeek = new Date()
+    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay() + 1)
+    const endOfWeek = new Date(startOfWeek)
+    endOfWeek.setDate(endOfWeek.getDate() + 6)
+    const { count: weekTaskCount } = await supabase
+      .from('task_assignments')
+      .select('id', { count: 'exact', head: true })
+      .eq('therapist_id', profile.id)
+      .gte('assigned_date', startOfWeek.toISOString().split('T')[0])
+      .lte('assigned_date', endOfWeek.toISOString().split('T')[0])
+      .eq('is_rest_day', false)
+    setNoTasksThisWeek((weekTaskCount || 0) === 0)
 
     // Enrich patients with streak, consistency, today's tasks
     const patientIds = patients.map((p) => p.patient_id)
@@ -162,6 +177,28 @@ export default function TherapistDashboard() {
           )}
         </div>
       </header>
+
+      {noTasksThisWeek && stats.patients > 0 && (
+        <Card className="!p-5 !border-2 !border-red-200 !bg-red-50">
+          <div className="flex items-center gap-4">
+            <div className="p-2.5 rounded-xl bg-red-100 shrink-0">
+              <AlertTriangle size={22} className="text-red-500" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-bold text-red-700">No tasks assigned this week</p>
+              <p className="text-xs text-red-600 mt-0.5">
+                Your patients don&apos;t have any tasks scheduled. Assign tasks to keep them on track.
+              </p>
+            </div>
+            <Link
+              to="/therapist/templates"
+              className="shrink-0 px-4 py-2 rounded-xl bg-red-500 text-white text-sm font-bold hover:bg-red-600 transition-colors"
+            >
+              Assign Tasks
+            </Link>
+          </div>
+        </Card>
+      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
         {statCards.map(({ label, value, icon: Icon, bgColor, color }) => (
