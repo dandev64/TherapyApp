@@ -14,6 +14,11 @@
   --color-surface-alt: #f0f4f6;
   --color-surface-card: #ffffff;
   --color-surface-container: #eaeff0;
+  --color-surface-container-low: #f2f5f6;
+  --color-surface-container-lowest: #ffffff;
+  --color-outline: #73797b;
+  --color-on-surface-variant: #43484a;
+  --color-on-primary: #ffffff;
   --color-text-primary: #2c3436;
   --color-text-secondary: #596063;
   --color-text-muted: #757c7e;

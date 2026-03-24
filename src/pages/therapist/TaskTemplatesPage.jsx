@@ -22,6 +22,17 @@ const timeSlots = [
   { value: 'evening', label: 'Evening' },
 ]
 
+const WEEKDAYS = [
+  { key: 'monday', label: 'Mon' },
+  { key: 'tuesday', label: 'Tue' },
+  { key: 'wednesday', label: 'Wed' },
+  { key: 'thursday', label: 'Thu' },
+  { key: 'friday', label: 'Fri' },
+  { key: 'saturday', label: 'Sat' },
+]
+
+const DAY_INDEX = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 }
+
 export default function TaskTemplatesPage() {
   const { profile } = useAuth()
   const [templates, setTemplates] = useCachedState('therapist-templates', [])
@@ -38,8 +49,11 @@ export default function TaskTemplatesPage() {
   })
   const [assignForm, setAssignForm] = useState({
     patient_id: '',
-    assigned_date: new Date().toISOString().split('T')[0],
+    start_date: new Date().toISOString().split('T')[0],
+    end_date: '',
+    repeat_days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
     assigned_time_of_day: 'morning',
+    details: '',
   })
   const [loading, setLoading] = useState(false)
 
@@ -84,14 +98,46 @@ export default function TaskTemplatesPage() {
 
   async function handleAssign(e) {
     e.preventDefault()
+    if (!assignForm.start_date || !assignForm.end_date || assignForm.repeat_days.length === 0) return
     setLoading(true)
-    await supabase.from('task_assignments').insert({
-      template_id: selectedTemplate.id,
-      patient_id: assignForm.patient_id,
-      therapist_id: profile.id,
-      assigned_date: assignForm.assigned_date,
-      assigned_time_of_day: assignForm.assigned_time_of_day,
-    })
+
+    const rows = []
+    const start = new Date(assignForm.start_date + 'T00:00:00')
+    const end = new Date(assignForm.end_date + 'T00:00:00')
+    const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const dayName = DAY_NAMES[d.getDay()]
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+      if (dayName === 'sunday') continue // Sunday is excluded
+
+      if (assignForm.repeat_days.includes(dayName)) {
+        rows.push({
+          template_id: selectedTemplate.id,
+          patient_id: assignForm.patient_id,
+          therapist_id: profile.id,
+          assigned_date: dateStr,
+          assigned_time_of_day: assignForm.assigned_time_of_day,
+          is_rest_day: false,
+        })
+      } else {
+        // Rest day for weekdays not in repeat_days
+        rows.push({
+          template_id: selectedTemplate.id,
+          patient_id: assignForm.patient_id,
+          therapist_id: profile.id,
+          assigned_date: dateStr,
+          assigned_time_of_day: assignForm.assigned_time_of_day,
+          is_rest_day: true,
+        })
+      }
+    }
+
+    if (rows.length > 0) {
+      await supabase.from('task_assignments').insert(rows)
+    }
+
     setLoading(false)
     setShowAssign(false)
   }
@@ -105,10 +151,22 @@ export default function TaskTemplatesPage() {
     setSelectedTemplate(template)
     setAssignForm({
       patient_id: patients[0]?.id || '',
-      assigned_date: new Date().toISOString().split('T')[0],
+      start_date: new Date().toISOString().split('T')[0],
+      end_date: '',
+      repeat_days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
       assigned_time_of_day: 'morning',
+      details: '',
     })
     setShowAssign(true)
+  }
+
+  function toggleDay(day) {
+    setAssignForm((prev) => ({
+      ...prev,
+      repeat_days: prev.repeat_days.includes(day)
+        ? prev.repeat_days.filter((d) => d !== day)
+        : [...prev.repeat_days, day],
+    }))
   }
 
   if (pageLoading) {
@@ -246,12 +304,67 @@ export default function TaskTemplatesPage() {
                 onChange={(e) => setAssignForm({ ...assignForm, patient_id: e.target.value })}
                 options={patients.map((p) => ({ value: p.id, label: p.full_name }))}
               />
-              <Input
-                label="Date"
-                type="date"
-                value={assignForm.assigned_date}
-                onChange={(e) => setAssignForm({ ...assignForm, assigned_date: e.target.value })}
-              />
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-semibold text-text-secondary">Details (optional)</label>
+                <textarea
+                  className="w-full px-4 py-3 rounded-xl border border-border text-sm bg-surface-alt text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white resize-none"
+                  rows={2}
+                  placeholder="Additional instructions or links..."
+                  value={assignForm.details}
+                  onChange={(e) => setAssignForm({ ...assignForm, details: e.target.value })}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="Start Date"
+                  type="date"
+                  value={assignForm.start_date}
+                  onChange={(e) => setAssignForm({ ...assignForm, start_date: e.target.value })}
+                  required
+                />
+                <Input
+                  label="End Date"
+                  type="date"
+                  value={assignForm.end_date}
+                  onChange={(e) => setAssignForm({ ...assignForm, end_date: e.target.value })}
+                  required
+                />
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-semibold text-text-secondary">
+                    Repeat Days
+                  </label>
+                  <span className="text-xs text-text-muted">
+                    {assignForm.repeat_days.length} of {WEEKDAYS.length} selected
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  {WEEKDAYS.map(({ key, label }) => {
+                    const selected = assignForm.repeat_days.includes(key)
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => toggleDay(key)}
+                        className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer border-2 ${
+                          selected
+                            ? 'bg-primary text-on-primary border-primary shadow-sm'
+                            : 'bg-white text-text-muted border-dashed border-border hover:border-primary/40 hover:text-text-secondary'
+                        }`}
+                      >
+                        {label}
+                        <div className={`text-[10px] font-medium mt-0.5 ${selected ? 'text-on-primary/70' : 'text-text-muted/60'}`}>
+                          {selected ? '✓ On' : 'Off'}
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+                <p className="text-xs text-text-muted mt-1.5">
+                  Unselected days will be marked as rest days
+                </p>
+              </div>
               <Select
                 label="Time of Day"
                 value={assignForm.assigned_time_of_day}
@@ -260,8 +373,8 @@ export default function TaskTemplatesPage() {
                 }
                 options={timeSlots}
               />
-              <Button type="submit" disabled={loading} className="w-full">
-                {loading ? 'Assigning...' : 'Assign Task'}
+              <Button type="submit" disabled={loading || !assignForm.end_date} className="w-full">
+                {loading ? 'Creating Schedule...' : 'Save Schedule'}
               </Button>
             </>
           )}

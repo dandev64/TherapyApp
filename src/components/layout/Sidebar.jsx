@@ -9,6 +9,11 @@ import {
   Heart,
   Menu,
   X,
+  Bell,
+  User,
+  CalendarDays,
+  TrendingUp,
+  MessageSquare,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -18,9 +23,14 @@ const navItems = {
     { to: '/therapist/patients', icon: Users, label: 'Patients' },
     { to: '/therapist/templates', icon: ClipboardList, label: 'Task Templates' },
     { to: '/therapist/notes', icon: FileText, label: 'Caregiver Notes' },
+    { to: '/therapist/notifications', icon: Bell, label: 'Notifications' },
+    { to: '/therapist/profile', icon: User, label: 'Profile' },
   ],
   patient: [
-    { to: '/patient', icon: LayoutDashboard, label: 'My Tasks' },
+    { to: '/patient', icon: LayoutDashboard, label: 'Home' },
+    { to: '/patient/schedule', icon: CalendarDays, label: 'Schedule' },
+    { to: '/patient/progress', icon: TrendingUp, label: 'Progress' },
+    { to: '/patient/profile', icon: User, label: 'Profile' },
   ],
   caregiver: [
     { to: '/caregiver', icon: LayoutDashboard, label: 'Dashboard' },
