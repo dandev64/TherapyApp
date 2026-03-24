@@ -9,6 +9,7 @@ import { MessageSquare, Send, ChevronDown, ChevronUp } from 'lucide-react'
 export default function TherapistNotesPage() {
   const { profile } = useAuth()
   const [notes, setNotes] = useState([])
+  const [loading, setLoading] = useState(true)
   const [expandedNote, setExpandedNote] = useState(null)
   const [replies, setReplies] = useState({})
   const [replyText, setReplyText] = useState('')
@@ -39,6 +40,7 @@ export default function TherapistNotesPage() {
       .order('created_at', { ascending: false })
 
     setNotes(data || [])
+    setLoading(false)
   }
 
   async function loadReplies(noteId) {
@@ -82,6 +84,14 @@ export default function TherapistNotesPage() {
       hour: 'numeric',
       minute: '2-digit',
     })
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-8 h-8 border-[3px] border-primary/20 border-t-primary rounded-full animate-spin" />
+      </div>
+    )
   }
 
   return (

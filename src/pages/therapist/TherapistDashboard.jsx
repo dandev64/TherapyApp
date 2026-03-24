@@ -9,6 +9,7 @@ export default function TherapistDashboard() {
   const { profile } = useAuth()
   const [stats, setStats] = useState({ patients: 0, todayTasks: 0, completedToday: 0, notes: 0 })
   const [recentPatients, setRecentPatients] = useState([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (!profile) return
@@ -72,6 +73,7 @@ export default function TherapistDashboard() {
       })
     )
     setRecentPatients(patientDetails)
+    setLoading(false)
   }
 
   const statCards = [
@@ -80,6 +82,14 @@ export default function TherapistDashboard() {
     { label: 'Completed Today', value: stats.completedToday, icon: TrendingUp, bgColor: 'bg-success-bg', color: 'text-success' },
     { label: 'Caregiver Notes', value: stats.notes, icon: FileText, bgColor: 'bg-tertiary-container', color: 'text-tertiary' },
   ]
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-8 h-8 border-[3px] border-primary/20 border-t-primary rounded-full animate-spin" />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-8">

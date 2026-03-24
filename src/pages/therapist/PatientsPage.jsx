@@ -11,6 +11,7 @@ import { UserPlus, Search, Calendar, ChevronRight } from 'lucide-react'
 export default function PatientsPage() {
   const { profile } = useAuth()
   const [patients, setPatients] = useState([])
+  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [showAddModal, setShowAddModal] = useState(false)
   const [patientEmail, setPatientEmail] = useState('')
@@ -45,6 +46,7 @@ export default function PatientsPage() {
       })
     )
     setPatients(patientDetails)
+    setLoading(false)
   }
 
   async function handleAddPatient(e) {
@@ -101,6 +103,14 @@ export default function PatientsPage() {
   const filtered = patients.filter((p) =>
     p.full_name?.toLowerCase().includes(search.toLowerCase())
   )
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-8 h-8 border-[3px] border-primary/20 border-t-primary rounded-full animate-spin" />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-8">

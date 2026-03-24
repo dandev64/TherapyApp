@@ -10,6 +10,7 @@ export default function CaregiverDashboard() {
   const { profile } = useAuth()
   const [patients, setPatients] = useState([])
   const [noteCount, setNoteCount] = useState(0)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (profile) loadData()
@@ -44,6 +45,15 @@ export default function CaregiverDashboard() {
       .select('id', { count: 'exact' })
       .eq('caregiver_id', profile.id)
     setNoteCount(count || 0)
+    setLoading(false)
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-8 h-8 border-[3px] border-primary/20 border-t-primary rounded-full animate-spin" />
+      </div>
+    )
   }
 
   return (

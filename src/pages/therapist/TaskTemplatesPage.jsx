@@ -24,6 +24,7 @@ const timeSlots = [
 export default function TaskTemplatesPage() {
   const { profile } = useAuth()
   const [templates, setTemplates] = useState([])
+  const [pageLoading, setPageLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
   const [showAssign, setShowAssign] = useState(false)
   const [selectedTemplate, setSelectedTemplate] = useState(null)
@@ -55,6 +56,7 @@ export default function TaskTemplatesPage() {
       .eq('therapist_id', profile.id)
       .order('created_at', { ascending: false })
     setTemplates(data || [])
+    setPageLoading(false)
   }
 
   async function loadPatients() {
@@ -106,6 +108,14 @@ export default function TaskTemplatesPage() {
       assigned_time_of_day: 'morning',
     })
     setShowAssign(true)
+  }
+
+  if (pageLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-8 h-8 border-[3px] border-primary/20 border-t-primary rounded-full animate-spin" />
+      </div>
+    )
   }
 
   return (

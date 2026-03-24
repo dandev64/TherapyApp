@@ -18,6 +18,7 @@ export default function CaregiverNotesPage() {
   const { profile } = useAuth()
   const [notes, setNotes] = useState([])
   const [patients, setPatients] = useState([])
+  const [pageLoading, setPageLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
   const [form, setForm] = useState({ patient_id: '', content: '' })
   const [loading, setLoading] = useState(false)
@@ -28,8 +29,7 @@ export default function CaregiverNotesPage() {
 
   useEffect(() => {
     if (profile) {
-      loadNotes()
-      loadPatients()
+      Promise.all([loadNotes(), loadPatients()]).then(() => setPageLoading(false))
     }
   }, [profile])
 
@@ -107,6 +107,14 @@ export default function CaregiverNotesPage() {
       hour: 'numeric',
       minute: '2-digit',
     })
+  }
+
+  if (pageLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-8 h-8 border-[3px] border-primary/20 border-t-primary rounded-full animate-spin" />
+      </div>
+    )
   }
 
   return (
