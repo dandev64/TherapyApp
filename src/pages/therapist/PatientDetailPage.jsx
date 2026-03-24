@@ -219,6 +219,9 @@ export default function PatientDetailPage() {
             <p className="text-text-secondary mt-1">{patient.condition}</p>
           )}
         </div>
+        <Button size="sm" onClick={openAssignModal}>
+          <Send size={14} /> Assign Task
+        </Button>
         <Button
           variant="secondary"
           size="sm"
@@ -373,11 +376,6 @@ export default function PatientDetailPage() {
           )}
         </div>
       </div>
-
-      {/* Section 5 — Assign Task */}
-      <Button onClick={openAssignModal} className="w-full" size="lg">
-        <Send size={16} /> Assign New Task
-      </Button>
 
       {/* Assign Modal */}
       <Modal
