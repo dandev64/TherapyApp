@@ -148,6 +148,17 @@ export default function TaskDetailPage() {
           </div>
         </Card>
 
+        {task.details && (
+          <Card>
+            <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">
+              Additional Instructions
+            </p>
+            <div className="text-sm text-text-secondary leading-relaxed">
+              <Linkify text={task.details} />
+            </div>
+          </Card>
+        )}
+
         {/* Stopwatch */}
         <Card className="text-center">
           <div className="flex items-center justify-center gap-3 mb-4">

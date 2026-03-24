@@ -119,6 +119,7 @@ export default function TaskTemplatesPage() {
           therapist_id: profile.id,
           assigned_date: dateStr,
           assigned_time_of_day: assignForm.assigned_time_of_day,
+          details: assignForm.details || null,
           is_rest_day: false,
         })
       } else {
@@ -129,6 +130,7 @@ export default function TaskTemplatesPage() {
           therapist_id: profile.id,
           assigned_date: dateStr,
           assigned_time_of_day: assignForm.assigned_time_of_day,
+          details: assignForm.details || null,
           is_rest_day: true,
         })
       }

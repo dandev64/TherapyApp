@@ -313,6 +313,17 @@ export default function PatientDashboard() {
               </div>
             )}
 
+            {selectedTask.details && (
+              <div>
+                <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1">
+                  Additional Instructions
+                </p>
+                <p className="text-sm text-text-primary leading-relaxed">
+                  {selectedTask.details}
+                </p>
+              </div>
+            )}
+
             <div className="flex items-center gap-3">
               <Badge color={selectedTask.task_templates?.therapy_type}>
                 {selectedTask.task_templates?.therapy_type}

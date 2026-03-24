@@ -102,6 +102,18 @@ create policy "Therapists see own templates"
     )
   );
 
+-- Patients can read templates for tasks assigned to them
+create policy "Patients can read templates for their assigned tasks"
+  on public.task_templates for select
+  to authenticated
+  using (
+    exists (
+      select 1 from public.task_assignments
+      where task_assignments.template_id = task_templates.id
+        and task_assignments.patient_id = auth.uid()
+    )
+  );
+
 -- Therapists can create templates
 create policy "Therapists can create templates"
   on public.task_templates for insert
@@ -138,6 +150,7 @@ create table public.task_assignments (
     check (assigned_time_of_day in ('morning', 'afternoon', 'evening')),
   status text not null default 'pending'
     check (status in ('pending', 'in_progress', 'completed')),
+  details text,
   completed_at timestamptz,
   created_at timestamptz default now()
 );

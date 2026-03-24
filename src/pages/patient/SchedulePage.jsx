@@ -291,6 +291,11 @@ export default function SchedulePage() {
                     <p className={`text-sm font-bold ${isDone ? 'text-text-muted line-through' : 'text-text-primary'}`}>
                       {task.task_templates?.title}
                     </p>
+                    {task.task_templates?.description && (
+                      <p className="text-xs text-text-secondary mt-0.5 line-clamp-1">
+                        {task.task_templates.description}
+                      </p>
+                    )}
                     <p className="text-sm text-on-surface-variant">
                       {task.assigned_time_of_day} &middot; {task.task_templates?.duration_minutes} min
                     </p>
