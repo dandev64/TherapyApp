@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
-import { User, MessageSquare, Settings, Info, LogOut, Edit3, Check } from 'lucide-react'
+import { MessageSquare, LogOut, Edit3, Check } from 'lucide-react'
 
 export default function PatientProfilePage() {
   const { profile, signOut } = useAuth()
@@ -49,7 +49,7 @@ export default function PatientProfilePage() {
   }
 
   return (
-    <div className="space-y-6 max-w-lg mx-auto">
+    <div className="space-y-6">
       <h2 className="text-3xl font-extrabold text-text-primary tracking-tight">Profile</h2>
 
       {/* Profile Card */}
@@ -118,24 +118,6 @@ export default function PatientProfilePage() {
           </div>
         </button>
       )}
-
-      {/* Menu Items */}
-      <div className="space-y-2">
-        <button
-          onClick={() => {}}
-          className="w-full flex items-center gap-3 p-4 bg-surface-card rounded-2xl border border-border-light hover:bg-surface-alt transition-colors cursor-pointer"
-        >
-          <Settings size={18} className="text-text-secondary" />
-          <span className="text-sm font-semibold text-text-primary">App Settings</span>
-        </button>
-        <button
-          onClick={() => {}}
-          className="w-full flex items-center gap-3 p-4 bg-surface-card rounded-2xl border border-border-light hover:bg-surface-alt transition-colors cursor-pointer"
-        >
-          <Info size={18} className="text-text-secondary" />
-          <span className="text-sm font-semibold text-text-primary">About the App</span>
-        </button>
-      </div>
 
       {/* Sign Out */}
       <button

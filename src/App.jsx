@@ -5,7 +5,8 @@ import DashboardLayout from './components/layout/DashboardLayout'
 import LoginPage from './pages/auth/LoginPage'
 import SignUpPage from './pages/auth/SignUpPage'
 import TherapistDashboard from './pages/therapist/TherapistDashboard'
-import PatientsPage from './pages/therapist/PatientsPage'
+import PatientCarryoverPage from './pages/therapist/PatientCarryoverPage'
+import PatientDetailPage from './pages/therapist/PatientDetailPage'
 import TaskTemplatesPage from './pages/therapist/TaskTemplatesPage'
 import TherapistNotesPage from './pages/therapist/TherapistNotesPage'
 import NotificationsPage from './pages/therapist/NotificationsPage'
@@ -55,7 +56,8 @@ export default function App() {
             }
           >
             <Route index element={<TherapistDashboard />} />
-            <Route path="patients" element={<PatientsPage />} />
+            <Route path="patients" element={<PatientCarryoverPage />} />
+            <Route path="patients/:patientId" element={<PatientDetailPage />} />
             <Route path="templates" element={<TaskTemplatesPage />} />
             <Route path="notes" element={<TherapistNotesPage />} />
             <Route path="notifications" element={<NotificationsPage />} />
