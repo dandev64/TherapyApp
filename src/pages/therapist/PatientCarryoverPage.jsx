@@ -50,17 +50,20 @@ export default function PatientCarryoverPage() {
             .from('task_assignments')
             .select('status, is_rest_day')
             .eq('patient_id', a.patient_id)
+            .eq('therapist_id', profile.id)
             .eq('assigned_date', today),
           supabase
             .from('task_assignments')
             .select('assigned_date, status, is_rest_day')
             .eq('patient_id', a.patient_id)
+            .eq('therapist_id', profile.id)
             .order('assigned_date', { ascending: false })
             .limit(500),
           supabase
             .from('task_assignments')
             .select('id', { count: 'exact', head: true })
             .eq('patient_id', a.patient_id)
+            .eq('therapist_id', profile.id)
             .gte('assigned_date', weekStart)
             .lte('assigned_date', weekEnd)
             .eq('is_rest_day', false),

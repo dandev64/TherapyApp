@@ -10,7 +10,7 @@ const DAY_HEADERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const FULL_DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
-export default function ReadOnlyCalendar({ patientId }) {
+export default function ReadOnlyCalendar({ patientId, therapistId }) {
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date()
     return { year: now.getFullYear(), month: now.getMonth() }
@@ -34,6 +34,7 @@ export default function ReadOnlyCalendar({ patientId }) {
         .from('task_assignments')
         .select('*')
         .eq('patient_id', patientId)
+        .eq('therapist_id', therapistId)
         .gte('assigned_date', startOfMonth)
         .lte('assigned_date', endOfMonth)
         .order('created_at', { ascending: true }),

@@ -80,6 +80,7 @@ export default function PatientDetailPage() {
         .from('task_assignments')
         .select('assigned_date, status, is_rest_day')
         .eq('patient_id', patientId)
+        .eq('therapist_id', profile.id)
         .order('assigned_date', { ascending: false })
         .limit(500),
       supabase
@@ -241,7 +242,7 @@ export default function PatientDetailPage() {
 
       {/* Section 1 — Calendar */}
       <Card>
-        <ReadOnlyCalendar patientId={patientId} />
+        <ReadOnlyCalendar patientId={patientId} therapistId={profile.id} />
       </Card>
 
       {/* Section 2 — Task Completion Stats */}

@@ -78,11 +78,13 @@ export default function TherapistDashboard() {
             .from('task_assignments')
             .select('status, is_rest_day')
             .eq('patient_id', p.patient_id)
+            .eq('therapist_id', profile.id)
             .eq('assigned_date', today),
           supabase
             .from('task_assignments')
             .select('assigned_date, status, is_rest_day')
             .eq('patient_id', p.patient_id)
+            .eq('therapist_id', profile.id)
             .order('assigned_date', { ascending: false })
             .limit(500),
         ])
