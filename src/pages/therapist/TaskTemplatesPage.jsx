@@ -267,7 +267,7 @@ export default function TaskTemplatesPage() {
           <div className="flex flex-col gap-2">
             <label className="text-sm font-semibold text-text-secondary">Description</label>
             <textarea
-              className="w-full px-4 py-3 rounded-xl border border-border text-sm bg-surface-alt text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white resize-none"
+              className="w-full px-4 py-3 rounded-xl border border-border text-sm bg-surface-alt text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-surface-card resize-none"
               rows={3}
               placeholder="Describe the exercise..."
               value={form.description}
@@ -317,7 +317,7 @@ export default function TaskTemplatesPage() {
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-semibold text-text-secondary">Details (optional)</label>
                 <textarea
-                  className="w-full px-4 py-3 rounded-xl border border-border text-sm bg-surface-alt text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white resize-none"
+                  className="w-full px-4 py-3 rounded-xl border border-border text-sm bg-surface-alt text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-surface-card resize-none"
                   rows={2}
                   placeholder="Additional instructions or links..."
                   value={assignForm.details}
@@ -360,7 +360,7 @@ export default function TaskTemplatesPage() {
                         className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer border-2 ${
                           selected
                             ? 'bg-primary text-on-primary border-primary shadow-sm'
-                            : 'bg-white text-text-muted border-dashed border-border hover:border-primary/40 hover:text-text-secondary'
+                            : 'bg-surface-card text-text-muted border-dashed border-border hover:border-primary/40 hover:text-text-secondary'
                         }`}
                       >
                         {label}

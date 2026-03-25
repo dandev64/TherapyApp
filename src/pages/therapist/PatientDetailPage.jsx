@@ -449,7 +449,7 @@ export default function PatientDetailPage() {
                         className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer border-2 ${
                           selected
                             ? 'bg-primary text-on-primary border-primary shadow-sm'
-                            : 'bg-white text-text-muted border-dashed border-border hover:border-primary/40 hover:text-text-secondary'
+                            : 'bg-surface-card text-text-muted border-dashed border-border hover:border-primary/40 hover:text-text-secondary'
                         }`}
                       >
                         {label}

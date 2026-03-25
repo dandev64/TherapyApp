@@ -1,5 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
+import { useTheme } from '../../contexts/ThemeContext' 
 import {
   LayoutDashboard,
   Users,
@@ -14,6 +15,8 @@ import {
   CalendarDays,
   TrendingUp,
   MessageSquare,
+  Sun,
+  Moon,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -30,6 +33,7 @@ const navItems = {
     { to: '/patient', icon: LayoutDashboard, label: 'Home' },
     { to: '/patient/schedule', icon: CalendarDays, label: 'Schedule' },
     { to: '/patient/progress', icon: TrendingUp, label: 'Progress' },
+    { to: '/patient/notifications', icon: Bell, label: 'Notifications' },
     { to: '/patient/profile', icon: User, label: 'Profile' },
   ],
   caregiver: [
@@ -40,6 +44,7 @@ const navItems = {
 
 export default function Sidebar() {
   const { profile, signOut } = useAuth()
+  const { dark, toggleDark } = useTheme()
   const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
   const items = navItems[profile?.role] || []
@@ -86,6 +91,23 @@ export default function Sidebar() {
         ))}
       </nav>
 
+      <button
+          onClick={toggleDark}
+          className="flex items-center gap-3 w-full px-4 py-3 mb-2 rounded-xl text-sm font-semibold text-text-secondary hover:bg-surface-alt hover:text-text-primary transition-all duration-200 cursor-pointer"
+        >
+          {dark ? (
+            <>
+              <Sun size={18} className="text-yellow-500" />
+              <span>Light Mode</span>
+            </>
+          ) : (
+            <>
+              <Moon size={18} className="text-indigo-400" />
+              <span>Dark Mode</span>
+            </>
+          )}
+        </button>
+
       <div className="px-3 py-4 border-t border-border-light">
         <div className="px-4 py-3 mb-2">
           <p className="text-sm font-bold text-text-primary truncate">
@@ -108,7 +130,7 @@ export default function Sidebar() {
     <>
       {/* Mobile hamburger */}
       <button
-        className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-white rounded-xl shadow-md cursor-pointer"
+        className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-surface-card rounded-xl shadow-md cursor-pointer"
         onClick={() => setMobileOpen(!mobileOpen)}
       >
         {mobileOpen ? <X size={20} /> : <Menu size={20} />}
@@ -126,7 +148,7 @@ export default function Sidebar() {
       <aside
         className={`
           fixed lg:static inset-y-0 left-0 z-40
-          w-64 bg-white border-r border-border-light
+          w-64 bg-surface-card border-r border-border-light
           shadow-[20px_0_40px_rgba(44,52,54,0.04)]
           flex flex-col h-screen
           transition-transform duration-300

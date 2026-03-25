@@ -18,7 +18,7 @@ export default function ProtectedRoute({ allowedRoles, children }) {
   if (!profile) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-surface p-4">
-        <div className="bg-white rounded-2xl border border-border-light p-8 max-w-md text-center">
+        <div className="bg-surface-card rounded-2xl border border-border-light p-8 max-w-md text-center">
           <p className="text-lg font-semibold text-text-primary mb-2">Profile not found</p>
           <p className="text-sm text-text-secondary mb-4">
             Your profile couldn&apos;t be loaded. This usually means the database trigger
@@ -26,7 +26,7 @@ export default function ProtectedRoute({ allowedRoles, children }) {
           </p>
           <button
             onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-primary text-white rounded-xl text-sm font-semibold cursor-pointer"
+            className="px-4 py-2 bg-primary text-on-primary rounded-xl text-sm font-semibold cursor-pointer"
           >
             Retry
           </button>

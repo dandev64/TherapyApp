@@ -3,6 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, Cell, ResponsiveContainer, Tooltip } from 
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCachedState, hasCache } from '../../hooks/useCachedState'
+import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus'
 import { calculateStreak } from '../../utils/streak'
 import Card from '../../components/ui/Card'
 import { Flame, Target, Calendar, BarChart3 } from 'lucide-react'
@@ -24,6 +25,7 @@ export default function ProgressPage() {
   const [feedback, setFeedback] = useCachedState('patient-progress-feedback', [])
   const [remarks, setRemarks] = useCachedState('patient-progress-remarks', [])
   const [loading, setLoading] = useState(() => !hasCache('patient-progress-tasks'))
+  const refreshKey = useRefreshOnFocus()
 
   useEffect(() => {
     if (!profile) return
@@ -66,7 +68,7 @@ export default function ProgressPage() {
       setRemarks(remarksRes.data || [])
       setLoading(false)
     })
-  }, [profile])
+  }, [profile, refreshKey])
 
   // Streak calculation
   const streak = calculateStreak(allTasks)
@@ -153,14 +155,14 @@ export default function ProgressPage() {
               />
               <YAxis
                 allowDecimals={false}
-                tick={{ fontSize: 11, fill: '#757c7e' }}
+                tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }}
                 axisLine={false}
                 tickLine={false}
                 width={30}
               />
               <Tooltip
                 formatter={(value, name, { payload }) => [value, payload.mood]}
-                contentStyle={{ borderRadius: 12, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                contentStyle={{ borderRadius: 12, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', backgroundColor: 'var(--color-surface-card)', color: 'var(--color-text-primary)' }}
               />
               <Bar dataKey="count" radius={[6, 6, 0, 0]}>
                 {moodData.map((entry, i) => (
