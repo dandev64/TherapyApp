@@ -1,18 +1,23 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCachedState, hasCache } from '../../hooks/useCachedState'
 import { calculateStreak } from '../../utils/streak'
-import { MOOD_CONFIG } from '../../components/therapist/PatientMoodChart'
+import PatientMoodChart, { MOOD_CONFIG } from '../../components/therapist/PatientMoodChart'
 import Card from '../../components/ui/Card'
-import { Users, ClipboardCheck, Target, FileText, Heart, AlertTriangle } from 'lucide-react'
+import { BarChart, Bar, XAxis, YAxis, Cell, ResponsiveContainer, Tooltip } from 'recharts'
+import { Users, ClipboardCheck, Target, FileText, Heart, AlertTriangle, Flame, TrendingUp } from 'lucide-react'
 
 export default function TherapistDashboard() {
   const { profile } = useAuth()
+  const navigate = useNavigate()
   const [stats, setStats] = useCachedState('therapist-dash-stats', { patients: 0, todayTasks: 0, completedToday: 0, avgConsistency: 0, notes: 0 })
   const [topMood, setTopMood] = useCachedState('therapist-dash-top-mood', null)
-  const [noTasksThisWeek, setNoTasksThisWeek] = useState(false)
+  const [enrichedPatients, setEnrichedPatients] = useCachedState('therapist-dash-enriched', [])
+  const [dailyCompletion, setDailyCompletion] = useCachedState('therapist-dash-daily', [])
+  const [moodFeedback, setMoodFeedback] = useCachedState('therapist-dash-mood-fb', [])
+  const [patientsWithoutTasks, setPatientsWithoutTasks] = useState([])
   const [loading, setLoading] = useState(() => !hasCache('therapist-dash-stats'))
 
   useEffect(() => {
@@ -24,6 +29,9 @@ export default function TherapistDashboard() {
     const today = new Date().toISOString().split('T')[0]
     const weekAgo = new Date()
     weekAgo.setDate(weekAgo.getDate() - 7)
+    const fourteenDaysAgo = new Date()
+    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 13)
+    const fourteenDaysAgoStr = fourteenDaysAgo.toISOString().split('T')[0]
 
     const [assignmentsRes, tasksRes, notesRes] = await Promise.all([
       supabase
@@ -54,20 +62,11 @@ export default function TherapistDashboard() {
     const tasks = tasksRes.data || []
     const completedToday = tasks.filter((t) => t.status === 'completed').length
 
-    // Check if any non-rest tasks exist today
-    const { count: todayTaskCount } = await supabase
-      .from('task_assignments')
-      .select('id', { count: 'exact', head: true })
-      .eq('therapist_id', profile.id)
-      .eq('assigned_date', today)
-      .eq('is_rest_day', false)
-    setNoTasksThisWeek((todayTaskCount || 0) === 0)
-
-    // Enrich patients with streak, consistency, today's tasks
     const patientIds = patients.map((p) => p.patient_id)
 
+    // Enrich patients + fetch 14-day data for chart
     const patientDetails = await Promise.all(
-      patients.slice(0, 5).map(async (p) => {
+      patients.map(async (p) => {
         const [todayRes, allRes] = await Promise.all([
           supabase
             .from('task_assignments')
@@ -100,25 +99,53 @@ export default function TherapistDashboard() {
       })
     )
 
-    const avgConsistency = patientDetails.length > 0
-      ? Math.round(patientDetails.reduce((sum, p) => sum + p.consistency, 0) / patientDetails.length)
-      : 0
+    setEnrichedPatients(patientDetails)
+    setPatientsWithoutTasks(patientDetails.filter((p) => p.totalToday === 0))
 
-    setStats({
-      patients: patients.length,
-      todayTasks: tasks.length,
-      completedToday,
-      avgConsistency,
-      notes: notesRes.count || 0,
-    })
+    // 14-day completion chart data
+    if (patientIds.length > 0) {
+      const { data: recentTasks } = await supabase
+        .from('task_assignments')
+        .select('assigned_date, status, is_rest_day')
+        .eq('therapist_id', profile.id)
+        .in('patient_id', patientIds)
+        .gte('assigned_date', fourteenDaysAgoStr)
+        .lte('assigned_date', today)
 
-    // Weekly top mood
+      const byDate = {}
+      ;(recentTasks || []).forEach((t) => {
+        if (t.is_rest_day) return
+        if (!byDate[t.assigned_date]) byDate[t.assigned_date] = { total: 0, completed: 0 }
+        byDate[t.assigned_date].total++
+        if (t.status === 'completed') byDate[t.assigned_date].completed++
+      })
+
+      const chartData = []
+      for (let i = 13; i >= 0; i--) {
+        const d = new Date()
+        d.setDate(d.getDate() - i)
+        const dateStr = d.toISOString().split('T')[0]
+        const entry = byDate[dateStr]
+        chartData.push({
+          date: dateStr,
+          label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          percent: entry && entry.total > 0 ? Math.round((entry.completed / entry.total) * 100) : 0,
+          total: entry?.total || 0,
+          completed: entry?.completed || 0,
+        })
+      }
+      setDailyCompletion(chartData)
+    }
+
+    // Mood feedback for chart
     if (patientIds.length > 0) {
       const { data: fbData } = await supabase
         .from('task_feedback')
-        .select('mood')
+        .select('mood, created_at')
         .in('patient_id', patientIds)
         .gte('created_at', weekAgo.toISOString())
+
+      setMoodFeedback(fbData || [])
 
       if (fbData && fbData.length > 0) {
         const moodCounts = {}
@@ -131,6 +158,18 @@ export default function TherapistDashboard() {
       }
     }
 
+    const avgConsistency = patientDetails.length > 0
+      ? Math.round(patientDetails.reduce((sum, p) => sum + p.consistency, 0) / patientDetails.length)
+      : 0
+
+    setStats({
+      patients: patients.length,
+      todayTasks: tasks.length,
+      completedToday,
+      avgConsistency,
+      notes: notesRes.count || 0,
+    })
+
     setLoading(false)
   }
 
@@ -142,6 +181,13 @@ export default function TherapistDashboard() {
   ]
 
   const topMoodInfo = topMood ? MOOD_CONFIG[topMood] : null
+
+  function getBarColor(percent) {
+    if (percent >= 80) return '#22c55e'
+    if (percent >= 50) return '#f59e0b'
+    if (percent > 0) return '#ef4444'
+    return '#e5e7eb'
+  }
 
   if (loading) {
     return (
@@ -170,16 +216,20 @@ export default function TherapistDashboard() {
         </div>
       </header>
 
-      {noTasksThisWeek && stats.patients > 0 && (
+      {patientsWithoutTasks.length > 0 && (
         <Card className="!p-5 !border-2 !border-red-200 !bg-red-50">
           <div className="flex items-center gap-4">
             <div className="p-2.5 rounded-xl bg-red-100 shrink-0">
               <AlertTriangle size={22} className="text-red-500" />
             </div>
             <div className="flex-1">
-              <p className="text-sm font-bold text-red-700">No tasks assigned today</p>
+              <p className="text-sm font-bold text-red-700">
+                {patientsWithoutTasks.length === enrichedPatients.length
+                  ? 'No tasks assigned today'
+                  : `${patientsWithoutTasks.length} patient${patientsWithoutTasks.length !== 1 ? 's' : ''} without tasks today`}
+              </p>
               <p className="text-xs text-red-600 mt-0.5">
-                Your patients don&apos;t have any tasks scheduled for today. Assign tasks to keep them on track.
+                {patientsWithoutTasks.map((p) => p.full_name).join(', ')} {patientsWithoutTasks.length === 1 ? "doesn't" : "don't"} have any tasks scheduled for today.
               </p>
             </div>
             <Link
@@ -208,6 +258,130 @@ export default function TherapistDashboard() {
         ))}
       </div>
 
+      {/* Charts Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* 14-Day Completion Chart */}
+        <Card className="!p-6">
+          <div className="flex items-center gap-2 mb-6">
+            <TrendingUp size={18} className="text-primary" />
+            <h3 className="text-lg font-bold text-text-primary">Task Completion</h3>
+            <span className="text-xs text-text-muted">(last 14 days)</span>
+          </div>
+          {dailyCompletion.some((d) => d.total > 0) ? (
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={dailyCompletion} barCategoryGap="15%">
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 10, fill: '#757c7e' }}
+                  axisLine={false}
+                  tickLine={false}
+                  interval={1}
+                />
+                <YAxis
+                  domain={[0, 100]}
+                  tick={{ fontSize: 11, fill: '#757c7e' }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={35}
+                  tickFormatter={(v) => `${v}%`}
+                />
+                <Tooltip
+                  formatter={(value, name, { payload }) => [`${payload.completed}/${payload.total} tasks (${value}%)`, 'Completion']}
+                  contentStyle={{ borderRadius: 12, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                />
+                <Bar dataKey="percent" radius={[4, 4, 0, 0]}>
+                  {dailyCompletion.map((entry, i) => (
+                    <Cell key={i} fill={getBarColor(entry.percent)} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="text-sm text-text-muted text-center py-12">
+              No task data yet.
+            </p>
+          )}
+        </Card>
+
+        {/* Mood Overview */}
+        <Card className="!p-6">
+          <PatientMoodChart feedback={moodFeedback} title="Patient Moods" subtitle="(last 7 days)" />
+        </Card>
+      </div>
+
+      {/* Patient Summary Table */}
+      {enrichedPatients.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-bold text-text-primary">Patient Overview</h3>
+            <Link
+              to="/therapist/patients"
+              className="text-sm text-primary font-bold hover:underline"
+            >
+              View all
+            </Link>
+          </div>
+          <Card className="!p-0 overflow-hidden">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-left text-xs font-bold text-text-muted uppercase tracking-wider px-5 py-3">Patient</th>
+                  <th className="text-center text-xs font-bold text-text-muted uppercase tracking-wider px-3 py-3">Today</th>
+                  <th className="text-center text-xs font-bold text-text-muted uppercase tracking-wider px-3 py-3">Streak</th>
+                  <th className="text-center text-xs font-bold text-text-muted uppercase tracking-wider px-3 py-3">Consistency</th>
+                </tr>
+              </thead>
+              <tbody>
+                {enrichedPatients.map((patient) => {
+                  const allDone = patient.totalToday > 0 && patient.completedToday === patient.totalToday
+                  return (
+                    <tr
+                      key={patient.id}
+                      onClick={() => navigate(`/therapist/patients/${patient.id}`)}
+                      className="border-b border-border/50 last:border-0 hover:bg-primary-container/10 transition-colors cursor-pointer"
+                    >
+                      <td className="px-5 py-3.5">
+                        <p className="text-sm font-semibold text-text-primary">{patient.full_name}</p>
+                        {patient.condition && (
+                          <p className="text-xs text-text-muted mt-0.5">{patient.condition}</p>
+                        )}
+                      </td>
+                      <td className="text-center px-3 py-3.5">
+                        {patient.totalToday > 0 ? (
+                          <span className={`text-sm font-bold ${allDone ? 'text-green-600' : 'text-amber-600'}`}>
+                            {patient.completedToday}/{patient.totalToday}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-text-muted">—</span>
+                        )}
+                      </td>
+                      <td className="text-center px-3 py-3.5">
+                        {patient.streak > 0 ? (
+                          <span className="inline-flex items-center gap-1 text-sm font-bold text-amber-500">
+                            <Flame size={14} />
+                            {patient.streak}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-text-muted">0</span>
+                        )}
+                      </td>
+                      <td className="text-center px-3 py-3.5">
+                        <span className={`text-sm font-bold ${
+                          patient.consistency >= 80 ? 'text-green-600'
+                          : patient.consistency >= 50 ? 'text-amber-600'
+                          : 'text-red-500'
+                        }`}>
+                          {patient.consistency}%
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }
