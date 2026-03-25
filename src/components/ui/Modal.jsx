@@ -19,7 +19,7 @@ export default function Modal({ isOpen, onClose, title, children }) {
         className="absolute inset-0 bg-black/30 backdrop-blur-sm"
         onClick={onClose}
       />
-      <div className="relative bg-white rounded-3xl shadow-[0_20px_40px_rgba(44,52,54,0.12)] w-full max-w-lg max-h-[85vh] overflow-y-auto">
+      <div className="relative bg-surface-card rounded-3xl shadow-[0_20px_40px_rgba(44,52,54,0.12)] w-full max-w-lg max-h-[85vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-border-light">
           <h3 className="text-lg font-bold text-text-primary">{title}</h3>
           <button

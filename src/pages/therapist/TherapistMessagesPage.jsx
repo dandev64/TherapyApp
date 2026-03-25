@@ -202,7 +202,7 @@ export default function TherapistMessagesPage() {
               handleSend()
             }
           }}
-          className="flex-1 px-4 py-3 rounded-xl border border-border text-sm bg-surface-alt focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white"
+          className="flex-1 px-4 py-3 rounded-xl border border-border text-sm bg-surface-alt focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-surface-card"
         />
         <Button onClick={handleSend} disabled={sending || !text.trim()}>
           <Send size={16} />

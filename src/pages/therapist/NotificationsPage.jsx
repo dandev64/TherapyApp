@@ -12,29 +12,37 @@ const TYPE_CONFIG = {
   task_overdue: { icon: AlertTriangle, color: 'text-warning', bg: 'bg-warning-bg' },
   task_comment: { icon: MessageSquare, color: 'text-primary', bg: 'bg-primary-container' },
   new_message: { icon: Mail, color: 'text-tertiary', bg: 'bg-tertiary-container' },
+  new_task: { icon: Bell, color: 'text-primary', bg: 'bg-primary-container' },
 }
 
 export default function NotificationsPage() {
   const { profile } = useAuth()
   const navigate = useNavigate()
-  const [notifications, setNotifications] = useCachedState('therapist-notifications', [])
-  const [loading, setLoading] = useState(() => !hasCache('therapist-notifications'))
+  const cacheKey = `${profile?.role}-notifications`
+  const [notifications, setNotifications] = useCachedState(cacheKey, [])
+  const [loading, setLoading] = useState(() => !hasCache(cacheKey))
   const [replyingTo, setReplyingTo] = useState(null)
   const [replyText, setReplyText] = useState('')
   const [replySending, setReplySending] = useState(false)
 
   useEffect(() => {
     if (!profile) return
-    // Check for overdue tasks first, then load notifications
-    supabase.rpc('check_overdue_tasks', { p_therapist_id: profile.id }).then(() => {
-      loadNotifications()
-    })
+
+    async function init(){
+    // 2. Only run therapist-specific logic if the user IS a therapist
+    if (profile.role === 'therapist') {
+      await supabase.rpc('check_overdue_tasks', { p_therapist_id: profile.id })
+    }
+    loadNotifications()
+  }
+    
+    init()
   }, [profile])
 
   async function loadNotifications() {
     const { data } = await supabase
       .from('notifications')
-      .select('*, patient:profiles!notifications_patient_id_fkey(full_name)')
+      .select('*')
       .eq('recipient_id', profile.id)
       .is('read_at', null)
       .order('created_at', { ascending: false })
@@ -73,20 +81,55 @@ export default function NotificationsPage() {
   setNotifications((prev) => prev.filter((n) => n.id !== id));
   }
 
-  async function handleReply(notification) {
-    if (!replyText.trim()) return
-    setReplySending(true)
-    await supabase.from('messages').insert({
+async function handleReply(notification) {
+  if (!replyText.trim()) return;
+  setReplySending(true);
+
+  try {
+    let recipientId;
+
+    if (profile.role === 'therapist') {
+      // 1. Therapist replies to the patient involved in the notification
+      recipientId = notification.patient_id;
+    } else {
+      // 2. Patient replies to the Therapist. 
+      // Since your notifications table doesn't have a 'sender_id', 
+      // we fetch the sender of the message linked via reference_id.
+      const { data: originalMsg, error } = await supabase
+        .from('messages')
+        .select('sender_id')
+        .eq('id', notification.reference_id)
+        .single();
+
+      if (error || !originalMsg) {
+        throw new Error("Could not find the original sender.");
+      }
+      recipientId = originalMsg.sender_id;
+    }
+
+    // 3. Insert the new message
+    const { error: insertError } = await supabase.from('messages').insert({
       sender_id: profile.id,
-      recipient_id: notification.patient_id,
+      recipient_id: recipientId,
       content: replyText.trim(),
-    })
-    setReplyText('')
-    setReplyingTo(null)
-    setReplySending(false)
-    // Mark notification as read
-    dismissNotification(notification.id)
+    });
+
+    if (insertError) throw insertError;
+
+    // 4. Cleanup UI state
+    setReplyText('');
+    setReplyingTo(null);
+    
+    // 5. Mark notification as read (this removes it from the list)
+    await dismissNotification(notification.id);
+
+  } catch (err) {
+    console.error('Reply failed:', err);
+    alert('Failed to send reply. Please try again.');
+  } finally {
+    setReplySending(false);
   }
+}
 
   function formatTime(dateStr) {
     const d = new Date(dateStr)
@@ -112,7 +155,11 @@ export default function NotificationsPage() {
     <div className="space-y-8">
       <div>
         <h2 className="text-3xl font-extrabold text-text-primary tracking-tight">Notifications</h2>
-        <p className="text-text-secondary mt-2">Stay updated on your patients&apos; progress</p>
+        <p className="text-text-secondary mt-2">
+          {profile?.role === 'therapist' 
+            ? "Stay updated on your patients' progress" 
+            : "Updates regarding your care plan and messages"}
+        </p>
       </div>
 
       <div className="space-y-3">
@@ -176,7 +223,18 @@ export default function NotificationsPage() {
                               Reply
                             </button>
                             <button
-                              onClick={() => navigate(`/therapist/messages/${n.patient_id}`)}
+                              onClick={() => {
+                                const isTherapist = profile?.role === 'therapist';
+                                
+                                if (isTherapist) {
+                                  // Therapists go to the specific patient's thread
+                                  navigate(`/therapist/messages/${n.patient_id}`);
+                                } else {
+                                  // Patients usually go to a general messages page 
+                                  // or a specific thread with their therapist
+                                  navigate(`/patient/messages`); 
+                                }
+                              }}
                               className="text-xs font-semibold text-text-muted hover:text-primary cursor-pointer"
                             >
                               Open thread

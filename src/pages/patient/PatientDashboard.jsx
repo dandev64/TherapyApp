@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCachedState, hasCache } from '../../hooks/useCachedState'
+import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus'
 import { calculateStreak } from '../../utils/streak'
 import Card from '../../components/ui/Card'
 import Badge from '../../components/ui/Badge'
@@ -40,13 +41,14 @@ export default function PatientDashboard() {
   const [allTasks, setAllTasks] = useCachedState('patient-streak-tasks', [])
   const [loading, setLoading] = useState(() => !hasCache('patient-tasks'))
   const [selectedTask, setSelectedTask] = useState(null)
+  const refreshKey = useRefreshOnFocus()
 
   useEffect(() => {
     if (profile) {
       loadTasks()
       loadStreakData()
     }
-  }, [profile])
+  }, [profile, refreshKey])
 
   async function loadTasks() {
     const today = new Date().toISOString().split('T')[0]

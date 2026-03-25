@@ -225,7 +225,7 @@ export default function TaskDetailPage() {
       <Card>
         <p className="text-sm font-bold text-text-primary mb-3">Is there anything I want to say?</p>
         <textarea
-          className="w-full px-4 py-3 rounded-xl border border-border text-sm bg-surface-alt text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white resize-none"
+          className="w-full px-4 py-3 rounded-xl border border-border text-sm bg-surface-alt text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-surface-card resize-none"
           rows={4}
           placeholder="Write anything you'd like to share..."
           value={feedbackNote}

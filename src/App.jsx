@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { ThemeProvider } from './contexts/ThemeContext'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import ProtectedRoute from './components/layout/ProtectedRoute'
 import DashboardLayout from './components/layout/DashboardLayout'
@@ -39,6 +40,7 @@ function RootRedirect() {
 
 export default function App() {
   return (
+    <ThemeProvider>
     <BrowserRouter>
       <AuthProvider>
         <Routes>
@@ -78,6 +80,7 @@ export default function App() {
             <Route path="schedule" element={<SchedulePage />} />
             <Route path="task/:id" element={<TaskDetailPage />} />
             <Route path="progress" element={<ProgressPage />} />
+            <Route path="notifications" element={<NotificationsPage />} />
             <Route path="profile" element={<PatientProfilePage />} />
             <Route path="messages/:recipientId" element={<MessagesPage />} />
           </Route>
@@ -99,5 +102,6 @@ export default function App() {
         </Routes>
       </AuthProvider>
     </BrowserRouter>
+    </ThemeProvider>
   )
 }

@@ -213,7 +213,7 @@ export default function ReadOnlyCalendar({ patientId, therapistId }) {
                     <div key={task.id} className="relative pl-6">
                       <div className="absolute left-0 top-1">
                         {isDone ? (
-                          <CheckCircle size={16} className="text-secondary" style={{ fill: 'currentColor', stroke: 'white' }} />
+                          <CheckCircle size={16} className="text-secondary" style={{ fill: 'currentColor', stroke: 'var(--color-surface)' }} />
                         ) : (
                           <div className="w-4 h-4 rounded-full border-2 border-primary/20" />
                         )}

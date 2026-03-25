@@ -1,8 +1,8 @@
 const variants = {
   primary:
-    'bg-primary text-white hover:bg-primary-light active:bg-primary-dark shadow-sm hover:shadow-md',
+    'bg-primary text-on-primary hover:bg-primary-light active:bg-primary-dark shadow-sm hover:shadow-md',
   secondary:
-    'bg-white text-primary border border-primary/20 hover:bg-surface-alt active:bg-surface',
+    'bg-surface-card text-primary border border-primary/20 hover:bg-surface-alt active:bg-surface',
   ghost:
     'text-text-secondary hover:bg-surface-alt active:bg-surface',
   danger:

@@ -11,7 +11,7 @@ export default function Select({ label, options, error, className = '', ...props
           w-full px-4 py-3 rounded-xl border text-sm
           bg-surface-alt text-text-primary
           transition-all duration-200
-          focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white
+          focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-surface-card
           ${error ? 'border-danger' : 'border-border'}
         `}
         {...props}

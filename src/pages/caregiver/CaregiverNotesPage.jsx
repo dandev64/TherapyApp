@@ -221,7 +221,7 @@ export default function CaregiverNotesPage() {
                           handleReply(note.id)
                         }
                       }}
-                      className="flex-1 px-4 py-3 rounded-xl border border-border text-sm bg-surface-alt focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white"
+                      className="flex-1 px-4 py-3 rounded-xl border border-border text-sm bg-surface-alt focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-surface-card"
                     />
                     <Button
                       size="sm"
@@ -262,7 +262,7 @@ export default function CaregiverNotesPage() {
                   Note
                 </label>
                 <textarea
-                  className="w-full px-4 py-3 rounded-xl border border-border text-sm bg-surface-alt text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white resize-none"
+                  className="w-full px-4 py-3 rounded-xl border border-border text-sm bg-surface-alt text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-surface-card resize-none"
                   rows={5}
                   placeholder="Describe what you've observed — behavior, mood, appetite, sleep, progress with exercises..."
                   value={form.content}

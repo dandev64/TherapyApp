@@ -46,7 +46,7 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <div className="bg-white rounded-3xl border border-border-light p-8 shadow-[0_20px_40px_rgba(44,52,54,0.06)]">
+        <div className="bg-surface-card rounded-3xl border border-border-light p-8 shadow-[0_20px_40px_rgba(44,52,54,0.06)]">
           <form onSubmit={handleSubmit} className="space-y-5">
             {error && (
               <div className="p-4 rounded-xl bg-danger-bg text-danger text-sm font-semibold">

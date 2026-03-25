@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCachedState, hasCache } from '../../hooks/useCachedState'
+import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus'
 import { ChevronLeft, ChevronRight, CheckCircle, Circle, Clock } from 'lucide-react'
 import Badge from '../../components/ui/Badge'
 
@@ -27,6 +28,7 @@ export default function SchedulePage() {
   const [remarkText, setRemarkText] = useState('')
   const [remarkSaving, setRemarkSaving] = useState(false)
   const [loading, setLoading] = useState(() => !hasCache('patient-schedule-tasks'))
+  const refreshKey = useRefreshOnFocus()
 
   const todayStr = toDateStr(new Date())
 
@@ -60,7 +62,7 @@ export default function SchedulePage() {
       setRemarks(remarksMap)
       setLoading(false)
     })
-  }, [profile, currentMonth])
+  }, [profile, currentMonth, refreshKey])
 
   // Update remark text when selected date changes
   useEffect(() => {
@@ -283,7 +285,7 @@ export default function SchedulePage() {
                   >
                     <div className="absolute left-0 top-1">
                       {isDone ? (
-                        <CheckCircle size={16} className="text-secondary" style={{ fill: 'currentColor', stroke: 'white' }} />
+                        <CheckCircle size={16} className="text-secondary" style={{ fill: 'currentColor', stroke: 'var(--color-surface)' }} />
                       ) : (
                         <div className="w-4 h-4 rounded-full border-2 border-primary/20 hover:border-primary transition-colors" />
                       )}

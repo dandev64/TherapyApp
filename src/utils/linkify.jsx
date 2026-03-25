@@ -22,7 +22,7 @@ export function Linkify({ text, className = '' }) {
                 href={part}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-danger text-white text-xs font-semibold rounded-lg hover:opacity-90 transition-opacity no-underline"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-danger text-on-primary text-xs font-semibold rounded-lg hover:opacity-90 transition-opacity no-underline"
               >
                 <Play size={12} /> Watch on YouTube
               </a>
