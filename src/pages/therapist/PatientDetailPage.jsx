@@ -56,6 +56,7 @@ export default function PatientDetailPage() {
     end_date: '',
     repeat_days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
     assigned_time_of_day: 'morning',
+    details: '',
   })
   const [assigning, setAssigning] = useState(false)
 
@@ -122,6 +123,7 @@ export default function PatientDetailPage() {
       end_date: '',
       repeat_days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
       assigned_time_of_day: 'morning',
+      details: '',
     })
     setShowAssign(true)
   }
@@ -154,6 +156,7 @@ export default function PatientDetailPage() {
         description: selectedTemplate?.description || null,
         duration_minutes: selectedTemplate?.duration_minutes || null,
         therapy_type: selectedTemplate?.therapy_type || null,
+        details: assignForm.details || null,
       })
     }
 
@@ -401,6 +404,16 @@ export default function PatientDetailPage() {
                 onChange={(e) => setAssignForm({ ...assignForm, template_id: e.target.value })}
                 options={templates.map((t) => ({ value: t.id, label: `${t.title} (${t.therapy_type})` }))}
               />
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-semibold text-text-secondary">Details (optional)</label>
+                <textarea
+                  className="w-full px-4 py-3 rounded-xl border border-border text-sm bg-surface-alt text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white resize-none"
+                  rows={2}
+                  placeholder="Additional instructions or links..."
+                  value={assignForm.details}
+                  onChange={(e) => setAssignForm({ ...assignForm, details: e.target.value })}
+                />
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <Input
                   label="Start Date"
