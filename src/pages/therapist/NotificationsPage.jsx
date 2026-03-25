@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { useNotifications } from '../../contexts/NotificationContext'
 import { useCachedState, hasCache } from '../../hooks/useCachedState'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
@@ -17,6 +18,7 @@ const TYPE_CONFIG = {
 
 export default function NotificationsPage() {
   const { profile } = useAuth()
+  const { decrementCount } = useNotifications()
   const navigate = useNavigate()
   const cacheKey = `${profile?.role}-notifications`
   const [notifications, setNotifications] = useCachedState(cacheKey, [])
@@ -29,15 +31,37 @@ export default function NotificationsPage() {
     if (!profile) return
 
     async function init(){
-    // 2. Only run therapist-specific logic if the user IS a therapist
     if (profile.role === 'therapist') {
       await supabase.rpc('check_overdue_tasks', { p_therapist_id: profile.id })
     }
     loadNotifications()
   }
-    
+
     init()
   }, [profile])
+
+  // Live: prepend new notifications as they arrive via Realtime
+  useEffect(() => {
+    if (!profile) return
+
+    const channel = supabase
+      .channel('page-notifications')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `recipient_id=eq.${profile.id}`,
+        },
+        (payload) => {
+          setNotifications((prev) => [payload.new, ...prev])
+        }
+      )
+      .subscribe()
+
+    return () => supabase.removeChannel(channel)
+  }, [profile?.id])
 
   async function loadNotifications() {
     const { data } = await supabase
@@ -79,6 +103,7 @@ export default function NotificationsPage() {
 
   // 3. Only update local state if the DB part worked
   setNotifications((prev) => prev.filter((n) => n.id !== id));
+  decrementCount();
   }
 
 async function handleReply(notification) {
@@ -223,16 +248,23 @@ async function handleReply(notification) {
                               Reply
                             </button>
                             <button
-                              onClick={() => {
-                                const isTherapist = profile?.role === 'therapist';
-                                
-                                if (isTherapist) {
-                                  // Therapists go to the specific patient's thread
-                                  navigate(`/therapist/messages/${n.patient_id}`);
+                              onClick={async () => {
+                                if (profile?.role === 'therapist') {
+                                  navigate(`/therapist/messages/${n.patient_id}`)
                                 } else {
-                                  // Patients usually go to a general messages page 
-                                  // or a specific thread with their therapist
-                                  navigate(`/patient/messages`); 
+                                  // For patients: look up who sent the message so we can open the right thread
+                                  if (n.type === 'new_message' && n.reference_id) {
+                                    const { data: msg } = await supabase
+                                      .from('messages')
+                                      .select('sender_id')
+                                      .eq('id', n.reference_id)
+                                      .single()
+                                    if (msg) {
+                                      navigate(`/patient/messages/${msg.sender_id}`)
+                                      return
+                                    }
+                                  }
+                                  navigate(`/patient/notifications`)
                                 }
                               }}
                               className="text-xs font-semibold text-text-muted hover:text-primary cursor-pointer"

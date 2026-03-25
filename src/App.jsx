@@ -1,6 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { NotificationProvider } from './contexts/NotificationContext'
+import ToastContainer from './components/ui/Toast'
 import ProtectedRoute from './components/layout/ProtectedRoute'
 import DashboardLayout from './components/layout/DashboardLayout'
 import LoginPage from './pages/auth/LoginPage'
@@ -43,6 +45,8 @@ export default function App() {
     <ThemeProvider>
     <BrowserRouter>
       <AuthProvider>
+      <NotificationProvider>
+        <ToastContainer />
         <Routes>
           <Route path="/" element={<RootRedirect />} />
           <Route path="/login" element={<LoginPage />} />
@@ -100,6 +104,7 @@ export default function App() {
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+      </NotificationProvider>
       </AuthProvider>
     </BrowserRouter>
     </ThemeProvider>

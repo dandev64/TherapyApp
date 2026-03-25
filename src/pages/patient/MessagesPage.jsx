@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { useNotifications } from '../../contexts/NotificationContext'
 import Button from '../../components/ui/Button'
 import { Send, ArrowLeft } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
@@ -9,6 +10,7 @@ import { useNavigate } from 'react-router-dom'
 export default function MessagesPage() {
   const { recipientId } = useParams()
   const { profile } = useAuth()
+  const { refreshCount } = useNotifications()
   const navigate = useNavigate()
   const [messages, setMessages] = useState([])
   const [recipient, setRecipient] = useState(null)
@@ -22,21 +24,22 @@ export default function MessagesPage() {
     loadRecipient()
     loadMessages()
 
-    // Subscribe to new messages
+    // Subscribe to new messages via Realtime
     const channel = supabase
-      .channel('messages')
+      .channel(`chat-${recipientId}`)
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
           table: 'messages',
-          filter: `sender_id=eq.${recipientId}`,
         },
         (payload) => {
-          if (payload.new.recipient_id === profile.id) {
-            setMessages((prev) => [...prev, payload.new])
-            markAsRead(payload.new.id)
+          const msg = payload.new
+          const isForMe = msg.sender_id === recipientId && msg.recipient_id === profile.id
+          if (isForMe) {
+            setMessages((prev) => [...prev, msg])
+            markAsRead(msg.id)
           }
         }
       )
@@ -80,6 +83,14 @@ export default function MessagesPage() {
         .from('messages')
         .update({ read_at: new Date().toISOString() })
         .in('id', ids)
+      // Dismiss notifications for these messages
+      await supabase
+        .from('notifications')
+        .update({ read_at: new Date().toISOString() })
+        .eq('recipient_id', profile.id)
+        .eq('type', 'new_message')
+        .in('reference_id', ids)
+      refreshCount()
     }
   }
 
@@ -88,6 +99,14 @@ export default function MessagesPage() {
       .from('messages')
       .update({ read_at: new Date().toISOString() })
       .eq('id', msgId)
+    // Dismiss any notification created for this message
+    await supabase
+      .from('notifications')
+      .update({ read_at: new Date().toISOString() })
+      .eq('recipient_id', profile.id)
+      .eq('type', 'new_message')
+      .eq('reference_id', msgId)
+    refreshCount()
   }
 
   async function handleSend() {
