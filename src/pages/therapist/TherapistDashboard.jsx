@@ -54,19 +54,14 @@ export default function TherapistDashboard() {
     const tasks = tasksRes.data || []
     const completedToday = tasks.filter((t) => t.status === 'completed').length
 
-    // Check if any non-rest tasks exist this week
-    const startOfWeek = new Date()
-    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay() + 1)
-    const endOfWeek = new Date(startOfWeek)
-    endOfWeek.setDate(endOfWeek.getDate() + 6)
-    const { count: weekTaskCount } = await supabase
+    // Check if any non-rest tasks exist today
+    const { count: todayTaskCount } = await supabase
       .from('task_assignments')
       .select('id', { count: 'exact', head: true })
       .eq('therapist_id', profile.id)
-      .gte('assigned_date', startOfWeek.toISOString().split('T')[0])
-      .lte('assigned_date', endOfWeek.toISOString().split('T')[0])
+      .eq('assigned_date', today)
       .eq('is_rest_day', false)
-    setNoTasksThisWeek((weekTaskCount || 0) === 0)
+    setNoTasksThisWeek((todayTaskCount || 0) === 0)
 
     // Enrich patients with streak, consistency, today's tasks
     const patientIds = patients.map((p) => p.patient_id)
@@ -182,9 +177,9 @@ export default function TherapistDashboard() {
               <AlertTriangle size={22} className="text-red-500" />
             </div>
             <div className="flex-1">
-              <p className="text-sm font-bold text-red-700">No tasks assigned this week</p>
+              <p className="text-sm font-bold text-red-700">No tasks assigned today</p>
               <p className="text-xs text-red-600 mt-0.5">
-                Your patients don&apos;t have any tasks scheduled. Assign tasks to keep them on track.
+                Your patients don&apos;t have any tasks scheduled for today. Assign tasks to keep them on track.
               </p>
             </div>
             <Link
