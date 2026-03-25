@@ -1,25 +1,59 @@
-# Rename App: "Simple Therapy" → "HabitOT"
+# Email Notification Functions (Commented Out)
 
 ## Context
-Rebrand the app name from "Simple Therapy" to "HabitOT" across all locations. The icon stays as-is — only text changes needed.
+Create Supabase Edge Functions for email notifications, but keep them **fully commented out** so they don't consume free tier resources. The code will be ready to uncomment and deploy when needed.
 
-## Text Replacements
+## What gets emailed (2 scenarios)
+1. **Therapist reminder** — morning check: if a therapist hasn't assigned any tasks for a patient today, email the therapist
+2. **Patient reminder** — if a patient hasn't completed a task past its scheduled time of day, email the patient
 
-| # | File | Change |
-|---|------|--------|
-| 1 | `index.html:7` | `<title>Simple Therapy</title>` → `<title>HabitOT</title>` |
-| 2 | `package.json:2` | `"name": "simple-therapy"` → `"name": "habitot"` |
-| 3 | `src/components/layout/Sidebar.jsx:61` | `Simple Therapy` → `HabitOT` |
-| 4 | `src/pages/auth/LoginPage.jsx:48` | `Sign in to Simple Therapy` → `Sign in to HabitOT` |
-| 5 | `src/pages/auth/SignUpPage.jsx:50` | `Join Simple Therapy` → `Join HabitOT` |
-| 6 | `src/pages/therapist/PatientsPage.jsx:205` | `a Simple Therapy account` → `a HabitOT account` |
-| 7 | `src/pages/therapist/PatientCarryoverPage.jsx:255` | `a Simple Therapy account` → `a HabitOT account` |
+## Existing infrastructure to leverage
+- `notifications` table already exists with types: `task_completed`, `task_overdue`, `task_comment`, `new_message`
+- `profiles` table has `email` field for all users
+- `check_overdue_tasks()` SQL function already finds overdue tasks
+- Notification triggers already fire on task completion/feedback
 
-## Styling
-The "HabitOT" text in the image uses a heavy/extrabold dark font. Update the sidebar `<h1>` from `font-bold` to `font-extrabold` to match the logo style.
+## Implementation Plan
+
+### 1. Create Supabase Edge Function files (commented out)
+
+**`supabase/functions/send-email-reminders/index.ts`**
+- Commented-out Deno Edge Function using Resend API
+- Two main checks:
+  - Query therapists who have patients with no tasks today → send reminder email
+  - Query patients with incomplete tasks past their time slot → send reminder email
+- Uses `RESEND_API_KEY` env var
+- Designed to be called via pg_cron or external cron
+
+### 2. Add SQL migration for email scheduling
+
+**`supabase/migration_email_notifications.sql`**
+- Commented-out SQL that:
+  - Adds `email_notifications_enabled` boolean to `profiles` table (opt-in)
+  - Creates `email_log` table to prevent duplicate sends
+  - Creates pg_cron schedule to call the Edge Function twice daily (8am for therapist reminders, hourly for patient reminders)
+  - Creates `send_email_reminders()` SQL function that calls the Edge Function via `pg_net`
+
+### 3. Add env variable placeholder
+
+**Update `.env.example`**
+- Add `RESEND_API_KEY=your_resend_api_key_here` (commented)
+
+## Files to create/modify
+| File | Action |
+|------|--------|
+| `supabase/functions/send-email-reminders/index.ts` | Create (all code commented) |
+| `supabase/migration_email_notifications.sql` | Create (all SQL commented) |
+| `.env.example` | Add commented RESEND_API_KEY |
+
+## How to activate later
+1. Sign up at resend.com, get API key
+2. Set `RESEND_API_KEY` in Supabase Edge Function secrets
+3. Uncomment the Edge Function code and deploy: `supabase functions deploy send-email-reminders`
+4. Uncomment and run the SQL migration in Supabase dashboard
+5. Enable pg_cron extension in Supabase dashboard
 
 ## Verification
-- Browser tab shows "HabitOT"
-- Sidebar header says "HabitOT"
-- Login/signup pages reference "HabitOT"
-- Add Patient helper text says "HabitOT account"
+- All files are syntactically correct (just commented)
+- No runtime impact — nothing executes until uncommented
+- Clear instructions in comments for activation
