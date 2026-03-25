@@ -24,6 +24,11 @@ export default function SignUpPage() {
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
+
+    if (!fullName.trim()) { setError('Full name is required.'); return }
+    if (!email.trim()) { setError('Email is required.'); return }
+    if (password.length < 6) { setError('Password must be at least 6 characters.'); return }
+
     setLoading(true)
 
     const { error: err } = await signUp({ email, password, fullName, role })

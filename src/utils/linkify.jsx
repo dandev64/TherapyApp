@@ -1,6 +1,6 @@
 import { ExternalLink, Play } from 'lucide-react'
 
-const URL_REGEX = /(https?:\/\/[^\s]+)/g
+const URL_REGEX = /(https?:\/\/[^\s]+)/
 
 function isYouTubeUrl(url) {
   return url.includes('youtube.com') || url.includes('youtu.be')
@@ -13,8 +13,7 @@ export function Linkify({ text, className = '' }) {
   return (
     <span className={className}>
       {parts.map((part, i) => {
-        if (URL_REGEX.test(part)) {
-          URL_REGEX.lastIndex = 0
+        if (part && part.match(URL_REGEX)) {
           if (isYouTubeUrl(part)) {
             return (
               <a

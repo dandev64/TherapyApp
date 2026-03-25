@@ -45,7 +45,7 @@ export function NotificationProvider({ children }) {
     if (!profile) return
 
     const channel = supabase
-      .channel('global-notifications')
+      .channel(`notifications-${profile.id}`)
       .on(
         'postgres_changes',
         {

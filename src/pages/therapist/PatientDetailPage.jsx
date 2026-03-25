@@ -165,7 +165,8 @@ export default function PatientDetailPage() {
     }
 
     if (rows.length > 0) {
-      await supabase.from('task_assignments').insert(rows)
+      const { error: err } = await supabase.from('task_assignments').insert(rows)
+      if (err) { setAssigning(false); return }
     }
 
     setAssigning(false)

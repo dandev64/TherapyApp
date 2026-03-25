@@ -14,6 +14,14 @@ export default function Modal({ isOpen, onClose, title, children }) {
   }, [isOpen])
 
   useEffect(() => {
+    if (!isOpen || !dialogRef.current) return
+    const focusable = dialogRef.current.querySelectorAll(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    )
+    if (focusable.length > 0) focusable[0].focus()
+  }, [isOpen])
+
+  useEffect(() => {
     if (!isOpen) return
     function handleKeyDown(e) {
       if (e.key === 'Escape') { onClose(); return }

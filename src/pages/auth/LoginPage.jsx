@@ -34,7 +34,10 @@ export default function LoginPage() {
       return
     }
 
-    const role = data.user?.user_metadata?.role || 'patient'
+    const validRoles = ['patient', 'therapist', 'caregiver']
+    const role = validRoles.includes(data.user?.user_metadata?.role)
+      ? data.user.user_metadata.role
+      : 'patient'
     navigate(`/${role}`)
   }
 

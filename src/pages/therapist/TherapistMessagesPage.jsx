@@ -37,7 +37,9 @@ export default function TherapistMessagesPage() {
           const msg = payload.new
           const isForMe = msg.sender_id === patientId && msg.recipient_id === profile.id
           if (isForMe) {
-            setMessages((prev) => [...prev, msg])
+            setMessages((prev) =>
+              prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]
+            )
             markAsRead(msg.id)
           }
         }

@@ -101,6 +101,7 @@ export default function PatientsPage() {
 
   async function viewHistory(patient) {
     setSelectedPatient(patient)
+    setPatientHistory([])
     const { data } = await supabase
       .from('task_assignments')
       .select('id, title, therapy_type, assigned_date, status')

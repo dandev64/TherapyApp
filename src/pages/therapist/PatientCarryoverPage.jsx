@@ -49,39 +49,51 @@ export default function PatientCarryoverPage() {
     if (err) { setError('Failed to load patients.'); setLoading(false); return }
     setError(null)
 
-    const patientDetails = await Promise.all(
-      (assignments || []).map(async (a) => {
-        const [todayRes, allRes] = await Promise.all([
-          supabase
-            .from('task_assignments')
-            .select('status, is_rest_day')
-            .eq('patient_id', a.patient_id)
-            .eq('therapist_id', profile.id)
-            .eq('assigned_date', today),
-          supabase
-            .from('task_assignments')
-            .select('assigned_date, status, is_rest_day')
-            .eq('patient_id', a.patient_id)
-            .eq('therapist_id', profile.id)
-            .gte('assigned_date', ninetyDaysAgoStr)
-            .order('assigned_date', { ascending: false }),
-        ])
+    const patientIds = (assignments || []).map((a) => a.patient_id)
+    if (patientIds.length === 0) { setPatients([]); setLoading(false); return }
 
-        const todayTasks = (todayRes.data || []).filter((t) => !t.is_rest_day)
-        const allTasks = allRes.data || []
-        const realAll = allTasks.filter((t) => !t.is_rest_day)
-        const totalCompleted = realAll.filter((t) => t.status === 'completed').length
-        const consistency = realAll.length > 0 ? Math.round((totalCompleted / realAll.length) * 100) : 0
+    const [todayBatchRes, allBatchRes] = await Promise.all([
+      supabase
+        .from('task_assignments')
+        .select('patient_id, status, is_rest_day')
+        .eq('therapist_id', profile.id)
+        .in('patient_id', patientIds)
+        .eq('assigned_date', today),
+      supabase
+        .from('task_assignments')
+        .select('patient_id, assigned_date, status, is_rest_day')
+        .eq('therapist_id', profile.id)
+        .in('patient_id', patientIds)
+        .gte('assigned_date', ninetyDaysAgoStr)
+        .order('assigned_date', { ascending: false }),
+    ])
 
-        return {
-          ...a.profiles,
-          totalToday: todayTasks.length,
-          completedToday: todayTasks.filter((t) => t.status === 'completed').length,
-          streak: calculateStreak(allTasks),
-          consistency,
-        }
-      })
-    )
+    const todayByPatient = {}
+    ;(todayBatchRes.data || []).forEach((t) => {
+      if (!todayByPatient[t.patient_id]) todayByPatient[t.patient_id] = []
+      todayByPatient[t.patient_id].push(t)
+    })
+    const allByPatient = {}
+    ;(allBatchRes.data || []).forEach((t) => {
+      if (!allByPatient[t.patient_id]) allByPatient[t.patient_id] = []
+      allByPatient[t.patient_id].push(t)
+    })
+
+    const patientDetails = (assignments || []).map((a) => {
+      const todayTasks = (todayByPatient[a.patient_id] || []).filter((t) => !t.is_rest_day)
+      const allTasks = allByPatient[a.patient_id] || []
+      const realAll = allTasks.filter((t) => !t.is_rest_day)
+      const totalCompleted = realAll.filter((t) => t.status === 'completed').length
+      const consistency = realAll.length > 0 ? Math.round((totalCompleted / realAll.length) * 100) : 0
+
+      return {
+        ...a.profiles,
+        totalToday: todayTasks.length,
+        completedToday: todayTasks.filter((t) => t.status === 'completed').length,
+        streak: calculateStreak(allTasks),
+        consistency,
+      }
+    })
 
     setPatients(patientDetails)
     setLoading(false)

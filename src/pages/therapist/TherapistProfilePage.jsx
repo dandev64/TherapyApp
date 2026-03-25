@@ -8,12 +8,13 @@ import Input from '../../components/ui/Input'
 import { Users, LogOut, Edit3, Check } from 'lucide-react'
 
 export default function TherapistProfilePage() {
-  const { profile, signOut } = useAuth()
+  const { profile, signOut, refreshProfile } = useAuth()
   const navigate = useNavigate()
   const [patientCount, setPatientCount] = useState(0)
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState('')
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     if (!profile) return
@@ -32,13 +33,15 @@ export default function TherapistProfilePage() {
 
   async function handleSave() {
     setSaving(true)
-    const { error } = await supabase
+    const { error: err } = await supabase
       .from('profiles')
       .update({ full_name: name })
       .eq('id', profile.id)
     setSaving(false)
-    if (error) { alert('Failed to save profile.'); return }
+    if (err) { setError('Failed to save profile.'); return }
+    setError('')
     setEditing(false)
+    refreshProfile()
   }
 
   async function handleSignOut() {
@@ -49,6 +52,12 @@ export default function TherapistProfilePage() {
   return (
     <div className="space-y-6">
       <h2 className="text-3xl font-extrabold text-text-primary tracking-tight">Profile</h2>
+
+      {error && (
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 font-medium">
+          {error}
+        </div>
+      )}
 
       <Card>
         <div className="flex items-center gap-4 mb-6">

@@ -78,6 +78,16 @@ export function AuthProvider({ children }) {
     return { data, error }
   }
 
+  async function refreshProfile() {
+    if (!user) return
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single()
+    if (data) setProfile(data)
+  }
+
   async function signOut() {
     await supabase.auth.signOut()
     clearDataCache()
@@ -87,7 +97,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, profile, loading, signUp, signIn, signOut }}
+      value={{ user, profile, loading, signUp, signIn, signOut, refreshProfile }}
     >
       {children}
     </AuthContext.Provider>

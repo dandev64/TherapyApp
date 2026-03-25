@@ -8,7 +8,7 @@ import Input from '../../components/ui/Input'
 import { MessageSquare, LogOut, Edit3, Check } from 'lucide-react'
 
 export default function PatientProfilePage() {
-  const { profile, signOut } = useAuth()
+  const { profile, signOut, refreshProfile } = useAuth()
   const navigate = useNavigate()
   const [therapist, setTherapist] = useState(null)
   const [editing, setEditing] = useState(false)
@@ -40,7 +40,7 @@ export default function PatientProfilePage() {
       .eq('id', profile.id)
     setSaving(false)
     setEditing(false)
-    // Profile will be stale until next auth refresh, but that's ok
+    refreshProfile()
   }
 
   async function handleSignOut() {

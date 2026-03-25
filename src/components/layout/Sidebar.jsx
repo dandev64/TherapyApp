@@ -18,7 +18,7 @@ import {
   Sun,
   Moon,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 const navItems = {
   therapist: [
@@ -49,6 +49,15 @@ export default function Sidebar() {
   const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
   const items = navItems[profile?.role] || []
+
+  useEffect(() => {
+    if (!mobileOpen) return
+    function handleKey(e) {
+      if (e.key === 'Escape') setMobileOpen(false)
+    }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [mobileOpen])
 
   async function handleSignOut() {
     await signOut()

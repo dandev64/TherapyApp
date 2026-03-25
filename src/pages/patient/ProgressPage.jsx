@@ -48,14 +48,6 @@ export default function ProgressPage() {
         .select('mood, created_at')
         .eq('patient_id', profile.id)
         .gte('created_at', thirtyDaysAgo.toISOString()),
-      // Therapy session remarks (task assignments with remarks)
-      supabase
-        .from('task_assignments')
-        .select('assigned_date, therapy_type')
-        .eq('patient_id', profile.id)
-        .not('therapy_type', 'is', null)
-        .order('assigned_date', { ascending: false })
-        .limit(30),
       // Daily remarks
       supabase
         .from('daily_remarks')
@@ -63,8 +55,8 @@ export default function ProgressPage() {
         .eq('patient_id', profile.id)
         .order('date', { ascending: false })
         .limit(30),
-    ]).then(([tasksRes, feedbackRes, , remarksRes]) => {
-      if (tasksRes.error || feedbackRes.error) {
+    ]).then(([tasksRes, feedbackRes, remarksRes]) => {
+      if (tasksRes.error || feedbackRes.error || remarksRes.error) {
         setError('Failed to load progress data. Please try again.')
         setLoading(false)
         return
