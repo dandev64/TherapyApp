@@ -12,6 +12,7 @@ export default function CaregiverDashboard() {
   const [patients, setPatients] = useCachedState('caregiver-patients', [])
   const [noteCount, setNoteCount] = useCachedState('caregiver-notecount', 0)
   const [loading, setLoading] = useState(() => !hasCache('caregiver-patients'))
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     if (profile) loadData()
@@ -20,11 +21,13 @@ export default function CaregiverDashboard() {
   async function loadData() {
     const today = new Date().toISOString().split('T')[0]
 
-    const { data: assignments } = await supabase
+    const { data: assignments, error: err } = await supabase
       .from('patient_assignments')
       .select('patient_id, profiles!patient_assignments_patient_id_fkey(id, full_name, email)')
       .eq('assigned_to', profile.id)
       .eq('relationship', 'caregiver')
+    if (err) { setError('Failed to load data.'); setLoading(false); return }
+    setError(null)
 
     const patientDetails = await Promise.all(
       (assignments || []).map(async (a) => {
@@ -59,6 +62,12 @@ export default function CaregiverDashboard() {
 
   return (
     <div className="space-y-8">
+      {error && (
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 font-medium flex items-center justify-between">
+          {error}
+          <button onClick={() => { setError(null); loadData() }} className="text-red-500 hover:text-red-700 font-bold text-xs cursor-pointer">Retry</button>
+        </div>
+      )}
       <div>
         <h2 className="text-3xl font-extrabold text-text-primary tracking-tight">
           Hello, {profile?.full_name?.split(' ')[0]}

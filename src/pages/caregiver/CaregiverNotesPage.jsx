@@ -27,6 +27,7 @@ export default function CaregiverNotesPage() {
   const [replies, setReplies] = useState({})
   const [replyText, setReplyText] = useState('')
   const [replyLoading, setReplyLoading] = useState(false)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     if (profile) {
@@ -56,12 +57,13 @@ export default function CaregiverNotesPage() {
     e.preventDefault()
     if (!form.content.trim() || !form.patient_id) return
     setLoading(true)
-    await supabase.from('caregiver_notes').insert({
+    const { error: err } = await supabase.from('caregiver_notes').insert({
       caregiver_id: profile.id,
       patient_id: form.patient_id,
       content: form.content.trim(),
     })
     setLoading(false)
+    if (err) { setError('Failed to submit note.'); return }
     setForm({ patient_id: patients[0]?.id || '', content: '' })
     setShowCreate(false)
     loadNotes()
@@ -90,13 +92,14 @@ export default function CaregiverNotesPage() {
   async function handleReply(noteId) {
     if (!replyText.trim()) return
     setReplyLoading(true)
-    await supabase.from('note_replies').insert({
+    const { error: err } = await supabase.from('note_replies').insert({
       note_id: noteId,
       author_id: profile.id,
       content: replyText.trim(),
     })
-    setReplyText('')
     setReplyLoading(false)
+    if (err) { setError('Failed to send reply.'); return }
+    setReplyText('')
     await loadReplies(noteId)
   }
 
@@ -120,6 +123,12 @@ export default function CaregiverNotesPage() {
 
   return (
     <div className="space-y-8">
+      {error && (
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 font-medium flex items-center justify-between">
+          {error}
+          <button onClick={() => { setError(null); loadNotes() }} className="text-red-500 hover:text-red-700 font-bold text-xs cursor-pointer">Retry</button>
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-extrabold text-text-primary tracking-tight">My Notes</h2>

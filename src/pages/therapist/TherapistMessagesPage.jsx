@@ -63,7 +63,7 @@ export default function TherapistMessagesPage() {
   async function loadMessages() {
     const { data } = await supabase
       .from('messages')
-      .select('*')
+      .select('id, sender_id, recipient_id, content, created_at, read_at')
       .or(
         `and(sender_id.eq.${profile.id},recipient_id.eq.${patientId}),and(sender_id.eq.${patientId},recipient_id.eq.${profile.id})`
       )

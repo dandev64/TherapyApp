@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
+import { supabase } from '../../lib/supabase'
 import Input from '../../components/ui/Input'
 import Button from '../../components/ui/Button'
 
@@ -17,6 +18,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [resetSent, setResetSent] = useState(false)
+  const [resetLoading, setResetLoading] = useState(false)
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -33,6 +36,22 @@ export default function LoginPage() {
 
     const role = data.user?.user_metadata?.role || 'patient'
     navigate(`/${role}`)
+  }
+
+  async function handleForgotPassword() {
+    if (!email.trim()) {
+      setError('Please enter your email address first.')
+      return
+    }
+    setError('')
+    setResetLoading(true)
+    const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim())
+    setResetLoading(false)
+    if (err) {
+      setError(err.message)
+      return
+    }
+    setResetSent(true)
   }
 
   return (
@@ -53,6 +72,11 @@ export default function LoginPage() {
                 {error}
               </div>
             )}
+            {resetSent && (
+              <div className="p-4 rounded-xl bg-success-bg text-success text-sm font-semibold">
+                Password reset email sent. Check your inbox.
+              </div>
+            )}
 
             <Input
               label="Email"
@@ -70,6 +94,17 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
             />
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                disabled={resetLoading}
+                className="text-xs text-primary font-semibold hover:underline cursor-pointer"
+              >
+                {resetLoading ? 'Sending...' : 'Forgot password?'}
+              </button>
+            </div>
 
             <Button type="submit" disabled={loading} className="w-full" size="lg">
               {loading ? 'Signing in...' : 'Sign In'}

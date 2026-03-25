@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from 'recharts'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -69,6 +69,9 @@ export default function PatientDetailPage() {
     const thirtyDaysAgo = new Date()
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
     const thirtyDaysAgoStr = thirtyDaysAgo.toISOString()
+    const ninetyDaysAgo = new Date()
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
+    const ninetyDaysAgoStr = ninetyDaysAgo.toISOString().split('T')[0]
 
     const [patientRes, tasksRes, feedbackRes, notesRes, remarksRes] = await Promise.all([
       supabase
@@ -81,8 +84,8 @@ export default function PatientDetailPage() {
         .select('assigned_date, status, is_rest_day')
         .eq('patient_id', patientId)
         .eq('therapist_id', profile.id)
-        .order('assigned_date', { ascending: false })
-        .limit(500),
+        .gte('assigned_date', ninetyDaysAgoStr)
+        .order('assigned_date', { ascending: false }),
       supabase
         .from('task_feedback')
         .select('mood, created_at')
@@ -394,9 +397,14 @@ export default function PatientDetailPage() {
       >
         <form onSubmit={handleAssign} className="space-y-4">
           {templates.length === 0 ? (
-            <p className="text-sm text-text-muted text-center py-4">
-              No templates yet. Create one in Task Templates first.
-            </p>
+            <div className="text-center py-4">
+              <p className="text-sm text-text-muted">
+                No templates yet.
+              </p>
+              <Link to="/therapist/templates" className="text-sm text-primary font-bold hover:underline mt-1 inline-block">
+                Create a template
+              </Link>
+            </div>
           ) : (
             <>
               <Select

@@ -25,6 +25,7 @@ export default function ProgressPage() {
   const [feedback, setFeedback] = useCachedState('patient-progress-feedback', [])
   const [remarks, setRemarks] = useCachedState('patient-progress-remarks', [])
   const [loading, setLoading] = useState(() => !hasCache('patient-progress-tasks'))
+  const [error, setError] = useState(null)
   const refreshKey = useRefreshOnFocus()
 
   useEffect(() => {
@@ -63,6 +64,12 @@ export default function ProgressPage() {
         .order('date', { ascending: false })
         .limit(30),
     ]).then(([tasksRes, feedbackRes, , remarksRes]) => {
+      if (tasksRes.error || feedbackRes.error) {
+        setError('Failed to load progress data. Please try again.')
+        setLoading(false)
+        return
+      }
+      setError(null)
       setAllTasks(tasksRes.data || [])
       setFeedback(feedbackRes.data || [])
       setRemarks(remarksRes.data || [])
@@ -102,6 +109,11 @@ export default function ProgressPage() {
 
   return (
     <div className="space-y-8">
+      {error && (
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 font-medium">
+          {error}
+        </div>
+      )}
       <div>
         <h2 className="text-3xl font-extrabold text-text-primary tracking-tight">My Progress</h2>
         <p className="text-text-secondary mt-2">Track your therapy journey</p>

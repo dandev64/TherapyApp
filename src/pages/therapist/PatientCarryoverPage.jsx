@@ -23,6 +23,13 @@ export default function PatientCarryoverPage() {
   const [addLoading, setAddLoading] = useState(false)
   const [removePatient, setRemovePatient] = useState(null)
   const [removeLoading, setRemoveLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [successMsg, setSuccessMsg] = useState('')
+
+  function showSuccess(msg) {
+    setSuccessMsg(msg)
+    setTimeout(() => setSuccessMsg(''), 3000)
+  }
 
   useEffect(() => {
     if (profile) loadPatients()
@@ -30,22 +37,21 @@ export default function PatientCarryoverPage() {
 
   async function loadPatients() {
     const today = new Date().toISOString().split('T')[0]
-    const startOfWeek = new Date()
-    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay() + 1)
-    const endOfWeek = new Date(startOfWeek)
-    endOfWeek.setDate(endOfWeek.getDate() + 6)
-    const weekStart = startOfWeek.toISOString().split('T')[0]
-    const weekEnd = endOfWeek.toISOString().split('T')[0]
+    const ninetyDaysAgo = new Date()
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
+    const ninetyDaysAgoStr = ninetyDaysAgo.toISOString().split('T')[0]
 
-    const { data: assignments } = await supabase
+    const { data: assignments, error: err } = await supabase
       .from('patient_assignments')
       .select('patient_id, profiles!patient_assignments_patient_id_fkey(id, full_name, email, condition)')
       .eq('assigned_to', profile.id)
       .eq('relationship', 'therapist')
+    if (err) { setError('Failed to load patients.'); setLoading(false); return }
+    setError(null)
 
     const patientDetails = await Promise.all(
       (assignments || []).map(async (a) => {
-        const [todayRes, allRes, weekRes] = await Promise.all([
+        const [todayRes, allRes] = await Promise.all([
           supabase
             .from('task_assignments')
             .select('status, is_rest_day')
@@ -57,16 +63,8 @@ export default function PatientCarryoverPage() {
             .select('assigned_date, status, is_rest_day')
             .eq('patient_id', a.patient_id)
             .eq('therapist_id', profile.id)
-            .order('assigned_date', { ascending: false })
-            .limit(500),
-          supabase
-            .from('task_assignments')
-            .select('id', { count: 'exact', head: true })
-            .eq('patient_id', a.patient_id)
-            .eq('therapist_id', profile.id)
-            .gte('assigned_date', weekStart)
-            .lte('assigned_date', weekEnd)
-            .eq('is_rest_day', false),
+            .gte('assigned_date', ninetyDaysAgoStr)
+            .order('assigned_date', { ascending: false }),
         ])
 
         const todayTasks = (todayRes.data || []).filter((t) => !t.is_rest_day)
@@ -81,7 +79,6 @@ export default function PatientCarryoverPage() {
           completedToday: todayTasks.filter((t) => t.status === 'completed').length,
           streak: calculateStreak(allTasks),
           consistency,
-          hasTasksThisWeek: (weekRes.count || 0) > 0,
         }
       })
     )
@@ -126,19 +123,22 @@ export default function PatientCarryoverPage() {
 
     setPatientEmail('')
     setShowAddModal(false)
+    showSuccess('Patient added successfully.')
     loadPatients()
   }
 
   async function handleRemovePatient() {
     setRemoveLoading(true)
-    await supabase
+    const { error: err } = await supabase
       .from('patient_assignments')
       .delete()
       .eq('patient_id', removePatient.id)
       .eq('assigned_to', profile.id)
       .eq('relationship', 'therapist')
     setRemoveLoading(false)
+    if (err) { setError('Failed to remove patient.'); return }
     setRemovePatient(null)
+    showSuccess('Patient removed.')
     loadPatients()
   }
 
@@ -156,6 +156,17 @@ export default function PatientCarryoverPage() {
 
   return (
     <div className="space-y-8">
+      {error && (
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 font-medium flex items-center justify-between">
+          {error}
+          <button onClick={() => { setError(null); loadPatients() }} className="text-red-500 hover:text-red-700 font-bold text-xs cursor-pointer">Retry</button>
+        </div>
+      )}
+      {successMsg && (
+        <div className="p-4 rounded-xl bg-green-50 border border-green-200 text-sm text-green-700 font-medium">
+          {successMsg}
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-extrabold text-text-primary tracking-tight">Patients</h2>

@@ -20,6 +20,13 @@ export default function PatientsPage() {
   const [addLoading, setAddLoading] = useState(false)
   const [selectedPatient, setSelectedPatient] = useState(null)
   const [patientHistory, setPatientHistory] = useState([])
+  const [error, setError] = useState(null)
+  const [successMsg, setSuccessMsg] = useState('')
+
+  function showSuccess(msg) {
+    setSuccessMsg(msg)
+    setTimeout(() => setSuccessMsg(''), 3000)
+  }
 
   useEffect(() => {
     if (profile) loadPatients()
@@ -27,11 +34,13 @@ export default function PatientsPage() {
 
   async function loadPatients() {
     const today = new Date().toISOString().split('T')[0]
-    const { data: assignments } = await supabase
+    const { data: assignments, error: err } = await supabase
       .from('patient_assignments')
       .select('patient_id, profiles!patient_assignments_patient_id_fkey(id, full_name, email)')
       .eq('assigned_to', profile.id)
       .eq('relationship', 'therapist')
+    if (err) { setError('Failed to load patients.'); setLoading(false); return }
+    setError(null)
 
     const patientDetails = await Promise.all(
       (assignments || []).map(async (a) => {
@@ -86,6 +95,7 @@ export default function PatientsPage() {
 
     setPatientEmail('')
     setShowAddModal(false)
+    showSuccess('Patient added successfully.')
     loadPatients()
   }
 
@@ -93,7 +103,7 @@ export default function PatientsPage() {
     setSelectedPatient(patient)
     const { data } = await supabase
       .from('task_assignments')
-      .select('*')
+      .select('id, title, therapy_type, assigned_date, status')
       .eq('patient_id', patient.id)
       .order('assigned_date', { ascending: false })
       .order('created_at', { ascending: false })
@@ -115,6 +125,17 @@ export default function PatientsPage() {
 
   return (
     <div className="space-y-8">
+      {error && (
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 font-medium flex items-center justify-between">
+          {error}
+          <button onClick={() => { setError(null); loadPatients() }} className="text-red-500 hover:text-red-700 font-bold text-xs cursor-pointer">Retry</button>
+        </div>
+      )}
+      {successMsg && (
+        <div className="p-4 rounded-xl bg-green-50 border border-green-200 text-sm text-green-700 font-medium">
+          {successMsg}
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-extrabold text-text-primary tracking-tight">Patients</h2>

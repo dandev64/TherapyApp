@@ -40,6 +40,7 @@ export default function PatientDashboard() {
   const [tasks, setTasks] = useCachedState('patient-tasks', [])
   const [allTasks, setAllTasks] = useCachedState('patient-streak-tasks', [])
   const [loading, setLoading] = useState(() => !hasCache('patient-tasks'))
+  const [error, setError] = useState(null)
   const [selectedTask, setSelectedTask] = useState(null)
   const refreshKey = useRefreshOnFocus()
 
@@ -52,24 +53,28 @@ export default function PatientDashboard() {
 
   async function loadTasks() {
     const today = new Date().toISOString().split('T')[0]
-    const { data } = await supabase
+    const { data, error: err } = await supabase
       .from('task_assignments')
       .select('*')
       .eq('patient_id', profile.id)
       .eq('assigned_date', today)
       .order('created_at', { ascending: true })
+    if (err) { setError('Failed to load tasks. Please try again.'); setLoading(false); return }
+    setError(null)
     setTasks(data || [])
     setLoading(false)
   }
 
   async function loadStreakData() {
-    const { data } = await supabase
+    const ninetyDaysAgo = new Date()
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
+    const { data, error: err } = await supabase
       .from('task_assignments')
       .select('assigned_date, status, is_rest_day')
       .eq('patient_id', profile.id)
+      .gte('assigned_date', ninetyDaysAgo.toISOString().split('T')[0])
       .order('assigned_date', { ascending: false })
-      .limit(500)
-    setAllTasks(data || [])
+    if (!err) setAllTasks(data || [])
   }
 
   const streak = calculateStreak(allTasks)
@@ -79,7 +84,8 @@ export default function PatientDashboard() {
     if (newStatus === 'completed') {
       updates.completed_at = new Date().toISOString()
     }
-    await supabase.from('task_assignments').update(updates).eq('id', taskId)
+    const { error: err } = await supabase.from('task_assignments').update(updates).eq('id', taskId)
+    if (err) { setError('Failed to update task status.'); return }
     loadTasks()
   }
 
@@ -109,6 +115,12 @@ export default function PatientDashboard() {
 
   return (
     <div className="space-y-8">
+      {error && (
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 font-medium flex items-center justify-between">
+          {error}
+          <button onClick={() => { setError(null); loadTasks() }} className="text-red-500 hover:text-red-700 font-bold text-xs cursor-pointer">Retry</button>
+        </div>
+      )}
       <div>
         <div className="flex items-center gap-3">
           <h2 className="text-3xl font-extrabold text-text-primary tracking-tight">

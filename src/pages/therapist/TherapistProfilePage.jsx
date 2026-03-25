@@ -32,11 +32,12 @@ export default function TherapistProfilePage() {
 
   async function handleSave() {
     setSaving(true)
-    await supabase
+    const { error } = await supabase
       .from('profiles')
       .update({ full_name: name })
       .eq('id', profile.id)
     setSaving(false)
+    if (error) { alert('Failed to save profile.'); return }
     setEditing(false)
   }
 
@@ -56,7 +57,7 @@ export default function TherapistProfilePage() {
           </div>
           <div className="flex-1">
             <p className="text-xs font-semibold text-primary uppercase tracking-wider mb-1">
-              Occupational Therapist
+              {profile?.condition || 'Therapist'}
             </p>
             {editing ? (
               <Input

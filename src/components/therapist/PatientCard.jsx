@@ -14,7 +14,7 @@ function getStatusPill(completedToday, totalToday) {
 
 export default function PatientCard({ patient, onClick }) {
   const { label, className } = getStatusPill(patient.completedToday, patient.totalToday)
-  const noTasks = patient.hasTasksThisWeek === false
+  const noTasks = patient.totalToday === 0
 
   return (
     <Card hover onClick={onClick} className={noTasks ? '!border-red-300 !bg-red-50/30' : ''}>

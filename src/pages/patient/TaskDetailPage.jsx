@@ -45,11 +45,12 @@ export default function TaskDetailPage() {
   }, [id])
 
   async function loadTask() {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('task_assignments')
       .select('*')
       .eq('id', id)
       .single()
+    if (error) console.error('Failed to load task:', error.message)
     setTask(data)
     setLoading(false)
   }
@@ -73,10 +74,11 @@ export default function TaskDetailPage() {
 
   async function handleDone() {
     // Mark task as completed
-    await supabase
+    const { error } = await supabase
       .from('task_assignments')
       .update({ status: 'completed', completed_at: new Date().toISOString() })
       .eq('id', id)
+    if (error) { alert('Failed to mark task as done. Please try again.'); return }
 
     // Stop timer
     if (intervalRef.current) {
@@ -91,13 +93,14 @@ export default function TaskDetailPage() {
   async function handleSaveFeedback() {
     if (!selectedMood) return
     setSaving(true)
-    await supabase.from('task_feedback').insert({
+    const { error } = await supabase.from('task_feedback').insert({
       task_assignment_id: id,
       patient_id: profile.id,
       mood: selectedMood,
       note: feedbackNote.trim() || null,
     })
     setSaving(false)
+    if (error) { alert('Failed to save feedback. Please try again.'); return }
     navigate('/patient/schedule')
   }
 

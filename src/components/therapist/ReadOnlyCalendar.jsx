@@ -40,8 +40,9 @@ export default function ReadOnlyCalendar({ patientId, therapistId }) {
         .order('created_at', { ascending: true }),
       supabase
         .from('daily_remarks')
-        .select('*')
+        .select('date, content')
         .eq('patient_id', patientId)
+        .eq('therapist_id', therapistId)
         .gte('date', startOfMonth)
         .lte('date', endOfMonth),
     ]).then(([tasksRes, remarksRes]) => {

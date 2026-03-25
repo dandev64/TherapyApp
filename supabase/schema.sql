@@ -90,24 +90,13 @@ create table public.task_templates (
 
 alter table public.task_templates enable row level security;
 
--- Therapists can see their own templates
+-- Therapists can see their own templates; patients can see templates for their assigned tasks
 create policy "Therapists see own templates"
   on public.task_templates for select
   to authenticated
   using (
     therapist_id = auth.uid()
     or exists (
-      select 1 from public.profiles
-      where id = auth.uid() and role = 'therapist'
-    )
-  );
-
--- Patients can read templates for tasks assigned to them
-create policy "Patients can read templates for their assigned tasks"
-  on public.task_templates for select
-  to authenticated
-  using (
-    exists (
       select 1 from public.task_assignments
       where task_assignments.template_id = task_templates.id
         and task_assignments.patient_id = auth.uid()
@@ -304,6 +293,7 @@ create index idx_patient_assignments_patient on public.patient_assignments(patie
 create index idx_patient_assignments_assigned on public.patient_assignments(assigned_to);
 create index idx_task_assignments_patient_date on public.task_assignments(patient_id, assigned_date);
 create index idx_task_assignments_therapist on public.task_assignments(therapist_id);
+create index idx_task_assignments_therapist_date on public.task_assignments(therapist_id, assigned_date);
 create index idx_caregiver_notes_patient on public.caregiver_notes(patient_id);
 create index idx_note_replies_note on public.note_replies(note_id);
 create index idx_task_templates_therapist on public.task_templates(therapist_id);

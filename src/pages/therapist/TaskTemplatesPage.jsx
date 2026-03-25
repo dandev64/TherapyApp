@@ -56,6 +56,13 @@ export default function TaskTemplatesPage() {
     details: '',
   })
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [successMsg, setSuccessMsg] = useState('')
+
+  function showSuccess(msg) {
+    setSuccessMsg(msg)
+    setTimeout(() => setSuccessMsg(''), 3000)
+  }
 
   useEffect(() => {
     if (profile) {
@@ -65,11 +72,13 @@ export default function TaskTemplatesPage() {
   }, [profile])
 
   async function loadTemplates() {
-    const { data } = await supabase
+    const { data, error: err } = await supabase
       .from('task_templates')
       .select('*')
       .eq('therapist_id', profile.id)
       .order('created_at', { ascending: false })
+    if (err) { setError('Failed to load templates.'); setPageLoading(false); return }
+    setError(null)
     setTemplates(data || [])
     setPageLoading(false)
   }
@@ -86,13 +95,15 @@ export default function TaskTemplatesPage() {
   async function handleCreate(e) {
     e.preventDefault()
     setLoading(true)
-    await supabase.from('task_templates').insert({
+    const { error: err } = await supabase.from('task_templates').insert({
       ...form,
       therapist_id: profile.id,
     })
     setLoading(false)
+    if (err) { setError('Failed to create template.'); return }
     setForm({ title: '', description: '', duration_minutes: 15, therapy_type: 'speech' })
     setShowCreate(false)
+    showSuccess('Template created successfully.')
     loadTemplates()
   }
 
@@ -145,15 +156,18 @@ export default function TaskTemplatesPage() {
     }
 
     if (rows.length > 0) {
-      await supabase.from('task_assignments').insert(rows)
+      const { error: err } = await supabase.from('task_assignments').insert(rows)
+      if (err) { setError('Failed to assign tasks.'); setLoading(false); return }
     }
 
     setLoading(false)
     setShowAssign(false)
+    showSuccess('Tasks assigned successfully.')
   }
 
   async function handleDelete(id) {
-    await supabase.from('task_templates').delete().eq('id', id)
+    const { error: err } = await supabase.from('task_templates').delete().eq('id', id)
+    if (err) { setError('Failed to delete template.'); return }
     loadTemplates()
   }
 
@@ -189,6 +203,17 @@ export default function TaskTemplatesPage() {
 
   return (
     <div className="space-y-8">
+      {error && (
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 font-medium flex items-center justify-between">
+          {error}
+          <button onClick={() => { setError(null); loadTemplates() }} className="text-red-500 hover:text-red-700 font-bold text-xs cursor-pointer">Retry</button>
+        </div>
+      )}
+      {successMsg && (
+        <div className="p-4 rounded-xl bg-green-50 border border-green-200 text-sm text-green-700 font-medium">
+          {successMsg}
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-extrabold text-text-primary tracking-tight">Task Templates</h2>

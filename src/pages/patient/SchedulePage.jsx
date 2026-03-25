@@ -28,6 +28,7 @@ export default function SchedulePage() {
   const [remarkText, setRemarkText] = useState('')
   const [remarkSaving, setRemarkSaving] = useState(false)
   const [loading, setLoading] = useState(() => !hasCache('patient-schedule-tasks'))
+  const [error, setError] = useState(null)
   const refreshKey = useRefreshOnFocus()
 
   const todayStr = toDateStr(new Date())
@@ -49,11 +50,17 @@ export default function SchedulePage() {
         .order('created_at', { ascending: true }),
       supabase
         .from('daily_remarks')
-        .select('*')
+        .select('id, date, content')
         .eq('patient_id', profile.id)
         .gte('date', startOfMonth)
         .lte('date', endOfMonth),
     ]).then(([tasksRes, remarksRes]) => {
+      if (tasksRes.error || remarksRes.error) {
+        setError('Failed to load schedule. Please try again.')
+        setLoading(false)
+        return
+      }
+      setError(null)
       setTasks(tasksRes.data || [])
       const remarksMap = {}
       ;(remarksRes.data || []).forEach((r) => {
@@ -106,15 +113,17 @@ export default function SchedulePage() {
     if (!remarkText.trim()) return
     setRemarkSaving(true)
     const existing = remarks[selectedDate]
+    let err
     if (existing) {
-      await supabase.from('daily_remarks').update({ content: remarkText.trim() }).eq('id', existing.id)
+      ({ error: err } = await supabase.from('daily_remarks').update({ content: remarkText.trim() }).eq('id', existing.id))
     } else {
-      await supabase.from('daily_remarks').insert({
+      ({ error: err } = await supabase.from('daily_remarks').insert({
         patient_id: profile.id,
         date: selectedDate,
         content: remarkText.trim(),
-      })
+      }))
     }
+    if (err) { setError('Failed to save remark.'); setRemarkSaving(false); return }
     setRemarks((prev) => ({
       ...prev,
       [selectedDate]: { ...prev[selectedDate], content: remarkText.trim(), date: selectedDate },
@@ -137,6 +146,11 @@ export default function SchedulePage() {
 
   return (
     <div className="space-y-6">
+      {error && (
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 font-medium">
+          {error}
+        </div>
+      )}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

@@ -66,7 +66,7 @@ export default function NotificationsPage() {
   async function loadNotifications() {
     const { data } = await supabase
       .from('notifications')
-      .select('*')
+      .select('id, content, type, patient_id, reference_id, created_at')
       .eq('recipient_id', profile.id)
       .is('read_at', null)
       .order('created_at', { ascending: false })
@@ -76,34 +76,24 @@ export default function NotificationsPage() {
   }
 
   async function dismissNotification(id) {
-  console.log('🔔 Attempting to dismiss notification:', id);
+    const { data, error } = await supabase
+      .from('notifications')
+      .update({ read_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
 
-  // 1. Perform the update
-  const { data, error, status } = await supabase
-    .from('notifications')
-    .update({ read_at: new Date().toISOString() })
-    .eq('id', id)
-    .select(); // This is crucial to verify if the row was actually touched
+    if (error) {
+      alert(`Failed to dismiss: ${error.message}`)
+      return
+    }
 
-  // 2. Log exactly what happened
-  if (error) {
-    console.error('❌ Database Error:', error.code, error.message);
-    console.error('HTTP Status:', status);
-    alert(`Failed to dismiss: ${error.message}`);
-    return; // Stop here! Don't remove it from the UI.
-  }
+    if (!data || data.length === 0) {
+      alert('Dismiss failed: You might not have permission to update this notification.')
+      return
+    }
 
-  if (!data || data.length === 0) {
-    console.warn('⚠️ Update ran but 0 rows were affected. This usually means an RLS Policy issue.');
-    alert('Dismiss failed: You might not have permission to update this specific notification.');
-    return;
-  }
-
-  console.log('✅ Successfully updated in DB:', data);
-
-  // 3. Only update local state if the DB part worked
-  setNotifications((prev) => prev.filter((n) => n.id !== id));
-  decrementCount();
+    setNotifications((prev) => prev.filter((n) => n.id !== id))
+    decrementCount()
   }
 
 async function handleReply(notification) {
@@ -149,7 +139,6 @@ async function handleReply(notification) {
     await dismissNotification(notification.id);
 
   } catch (err) {
-    console.error('Reply failed:', err);
     alert('Failed to send reply. Please try again.');
   } finally {
     setReplySending(false);

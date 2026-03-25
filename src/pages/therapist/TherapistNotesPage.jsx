@@ -15,6 +15,7 @@ export default function TherapistNotesPage() {
   const [replies, setReplies] = useState({})
   const [replyText, setReplyText] = useState('')
   const [replyLoading, setReplyLoading] = useState(false)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     if (profile) loadNotes()
@@ -34,12 +35,14 @@ export default function TherapistNotesPage() {
       return
     }
 
-    const { data } = await supabase
+    const { data, error: err } = await supabase
       .from('caregiver_notes')
       .select('*, profiles!caregiver_notes_caregiver_id_fkey(full_name), patient:profiles!caregiver_notes_patient_id_fkey(full_name)')
       .in('patient_id', patientIds)
       .order('created_at', { ascending: false })
 
+    if (err) { setError('Failed to load notes.'); setLoading(false); return }
+    setError(null)
     setNotes(data || [])
     setLoading(false)
   }
@@ -67,13 +70,14 @@ export default function TherapistNotesPage() {
   async function handleReply(noteId) {
     if (!replyText.trim()) return
     setReplyLoading(true)
-    await supabase.from('note_replies').insert({
+    const { error: err } = await supabase.from('note_replies').insert({
       note_id: noteId,
       author_id: profile.id,
       content: replyText.trim(),
     })
-    setReplyText('')
     setReplyLoading(false)
+    if (err) { setError('Failed to send reply.'); return }
+    setReplyText('')
     await loadReplies(noteId)
   }
 
@@ -97,6 +101,12 @@ export default function TherapistNotesPage() {
 
   return (
     <div className="space-y-8">
+      {error && (
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 font-medium flex items-center justify-between">
+          {error}
+          <button onClick={() => { setError(null); loadNotes() }} className="text-red-500 hover:text-red-700 font-bold text-xs cursor-pointer">Retry</button>
+        </div>
+      )}
       <div>
         <h2 className="text-3xl font-extrabold text-text-primary tracking-tight">Caregiver Notes</h2>
         <p className="text-text-secondary mt-2">

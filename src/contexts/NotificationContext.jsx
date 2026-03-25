@@ -9,6 +9,20 @@ export function NotificationProvider({ children }) {
   const [unreadCount, setUnreadCount] = useState(0)
   const [toasts, setToasts] = useState([])
   const toastIdRef = useRef(0)
+  const toastTimers = useRef({})
+  const profileRef = useRef(profile)
+  profileRef.current = profile
+
+  async function fetchUnreadCount() {
+    const currentProfile = profileRef.current
+    if (!currentProfile) return
+    const { count, error } = await supabase
+      .from('notifications')
+      .select('*', { count: 'exact', head: true })
+      .eq('recipient_id', currentProfile.id)
+      .is('read_at', null)
+    if (!error) setUnreadCount(count || 0)
+  }
 
   // Fetch initial unread count + re-fetch on tab focus
   useEffect(() => {
@@ -50,24 +64,21 @@ export function NotificationProvider({ children }) {
     return () => supabase.removeChannel(channel)
   }, [profile?.id])
 
-  async function fetchUnreadCount() {
-    const { count } = await supabase
-      .from('notifications')
-      .select('*', { count: 'exact', head: true })
-      .eq('recipient_id', profile.id)
-      .is('read_at', null)
-    setUnreadCount(count || 0)
-  }
-
   function showToast(message, type, notification) {
     const id = ++toastIdRef.current
     setToasts((prev) => [...prev, { id, message, type, notification }])
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id))
+      delete toastTimers.current[id]
     }, 5000)
+    toastTimers.current[id] = timer
   }
 
   function dismissToast(id) {
+    if (toastTimers.current[id]) {
+      clearTimeout(toastTimers.current[id])
+      delete toastTimers.current[id]
+    }
     setToasts((prev) => prev.filter((t) => t.id !== id))
   }
 
@@ -76,8 +87,8 @@ export function NotificationProvider({ children }) {
   }, [])
 
   const refreshCount = useCallback(() => {
-    if (profile) fetchUnreadCount()
-  }, [profile?.id])
+    fetchUnreadCount()
+  }, [])
 
   return (
     <NotificationContext.Provider

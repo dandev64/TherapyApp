@@ -19,6 +19,7 @@ export default function TherapistDashboard() {
   const [moodFeedback, setMoodFeedback] = useCachedState('therapist-dash-mood-fb', [])
   const [patientsWithoutTasks, setPatientsWithoutTasks] = useState([])
   const [loading, setLoading] = useState(() => !hasCache('therapist-dash-stats'))
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     if (!profile) return
@@ -32,8 +33,11 @@ export default function TherapistDashboard() {
     const fourteenDaysAgo = new Date()
     fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 13)
     const fourteenDaysAgoStr = fourteenDaysAgo.toISOString().split('T')[0]
+    const ninetyDaysAgo = new Date()
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
+    const ninetyDaysAgoStr = ninetyDaysAgo.toISOString().split('T')[0]
 
-    const [assignmentsRes, tasksRes, notesRes] = await Promise.all([
+    const results = await Promise.all([
       supabase
         .from('patient_assignments')
         .select('patient_id, profiles!patient_assignments_patient_id_fkey(id, full_name, email, condition)')
@@ -41,7 +45,7 @@ export default function TherapistDashboard() {
         .eq('relationship', 'therapist'),
       supabase
         .from('task_assignments')
-        .select('*')
+        .select('status')
         .eq('therapist_id', profile.id)
         .eq('assigned_date', today),
       supabase
@@ -58,46 +62,63 @@ export default function TherapistDashboard() {
         ),
     ])
 
+    const [assignmentsRes, tasksRes, notesRes] = results
+    if (assignmentsRes.error || tasksRes.error) {
+      setError('Failed to load dashboard data. Please try again.')
+      setLoading(false)
+      return
+    }
+    setError(null)
+
     const patients = assignmentsRes.data || []
     const tasks = tasksRes.data || []
     const completedToday = tasks.filter((t) => t.status === 'completed').length
 
     const patientIds = patients.map((p) => p.patient_id)
 
-    // Enrich patients + fetch 14-day data for chart
-    const patientDetails = await Promise.all(
-      patients.map(async (p) => {
-        const [todayRes, allRes] = await Promise.all([
-          supabase
-            .from('task_assignments')
-            .select('status, is_rest_day')
-            .eq('patient_id', p.patient_id)
-            .eq('therapist_id', profile.id)
-            .eq('assigned_date', today),
-          supabase
-            .from('task_assignments')
-            .select('assigned_date, status, is_rest_day')
-            .eq('patient_id', p.patient_id)
-            .eq('therapist_id', profile.id)
-            .order('assigned_date', { ascending: false })
-            .limit(500),
-        ])
+    // Batch-fetch today's tasks and all tasks for all patients (2 queries instead of 2*N)
+    const [todayBatchRes, allBatchRes] = await Promise.all([
+      supabase
+        .from('task_assignments')
+        .select('patient_id, status, is_rest_day')
+        .eq('therapist_id', profile.id)
+        .in('patient_id', patientIds)
+        .eq('assigned_date', today),
+      supabase
+        .from('task_assignments')
+        .select('patient_id, assigned_date, status, is_rest_day')
+        .eq('therapist_id', profile.id)
+        .in('patient_id', patientIds)
+        .gte('assigned_date', ninetyDaysAgoStr)
+        .order('assigned_date', { ascending: false }),
+    ])
 
-        const todayTasks = (todayRes.data || []).filter((t) => !t.is_rest_day)
-        const allTasks = allRes.data || []
-        const realAll = allTasks.filter((t) => !t.is_rest_day)
-        const totalCompleted = realAll.filter((t) => t.status === 'completed').length
-        const consistency = realAll.length > 0 ? Math.round((totalCompleted / realAll.length) * 100) : 0
+    const todayByPatient = {}
+    ;(todayBatchRes.data || []).forEach((t) => {
+      if (!todayByPatient[t.patient_id]) todayByPatient[t.patient_id] = []
+      todayByPatient[t.patient_id].push(t)
+    })
+    const allByPatient = {}
+    ;(allBatchRes.data || []).forEach((t) => {
+      if (!allByPatient[t.patient_id]) allByPatient[t.patient_id] = []
+      allByPatient[t.patient_id].push(t)
+    })
 
-        return {
-          ...p.profiles,
-          totalToday: todayTasks.length,
-          completedToday: todayTasks.filter((t) => t.status === 'completed').length,
-          streak: calculateStreak(allTasks),
-          consistency,
-        }
-      })
-    )
+    const patientDetails = patients.map((p) => {
+      const todayTasks = (todayByPatient[p.patient_id] || []).filter((t) => !t.is_rest_day)
+      const allTasks = allByPatient[p.patient_id] || []
+      const realAll = allTasks.filter((t) => !t.is_rest_day)
+      const totalCompleted = realAll.filter((t) => t.status === 'completed').length
+      const consistency = realAll.length > 0 ? Math.round((totalCompleted / realAll.length) * 100) : 0
+
+      return {
+        ...p.profiles,
+        totalToday: todayTasks.length,
+        completedToday: todayTasks.filter((t) => t.status === 'completed').length,
+        streak: calculateStreak(allTasks),
+        consistency,
+      }
+    })
 
     setEnrichedPatients(patientDetails)
     setPatientsWithoutTasks(patientDetails.filter((p) => p.totalToday === 0))
@@ -199,6 +220,12 @@ export default function TherapistDashboard() {
 
   return (
     <div className="space-y-8">
+      {error && (
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 font-medium flex items-center justify-between">
+          {error}
+          <button onClick={() => { setError(null); loadDashboard() }} className="text-red-500 hover:text-red-700 font-bold text-xs cursor-pointer">Retry</button>
+        </div>
+      )}
       <header>
         <h2 className="text-3xl font-extrabold text-text-primary tracking-tight">
           Good {getTimeOfDay()}, {profile?.full_name?.split(' ')[0]}
