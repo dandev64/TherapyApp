@@ -1,6 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
-import { useTheme } from '../../contexts/ThemeContext' 
+import { useTheme } from '../../contexts/ThemeContext'
+import { useNotifications } from '../../contexts/NotificationContext'
 import {
   LayoutDashboard,
   Users,
@@ -44,6 +45,7 @@ const navItems = {
 export default function Sidebar() {
   const { profile, signOut } = useAuth()
   const { dark, toggleDark } = useTheme()
+  const { unreadCount } = useNotifications()
   const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
   const items = navItems[profile?.role] || []
@@ -84,6 +86,11 @@ export default function Sidebar() {
           >
             <Icon size={18} />
             {label}
+            {label === 'Notifications' && unreadCount > 0 && (
+              <span className="ml-auto bg-danger text-white text-[10px] font-bold min-w-[18px] h-[18px] flex items-center justify-center rounded-full px-1">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            )}
           </NavLink>
         ))}
       </nav>

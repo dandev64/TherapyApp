@@ -2,12 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { useNotifications } from '../../contexts/NotificationContext'
 import Button from '../../components/ui/Button'
 import { Send, ArrowLeft } from 'lucide-react'
 
 export default function TherapistMessagesPage() {
   const { patientId } = useParams()
   const { profile } = useAuth()
+  const { refreshCount } = useNotifications()
   const navigate = useNavigate()
   const [messages, setMessages] = useState([])
   const [patient, setPatient] = useState(null)
@@ -21,20 +23,22 @@ export default function TherapistMessagesPage() {
     loadPatient()
     loadMessages()
 
+    // Subscribe to new messages via Realtime
     const channel = supabase
-      .channel('therapist-messages')
+      .channel(`chat-${patientId}`)
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
           table: 'messages',
-          filter: `sender_id=eq.${patientId}`,
         },
         (payload) => {
-          if (payload.new.recipient_id === profile.id) {
-            setMessages((prev) => [...prev, payload.new])
-            markAsRead(payload.new.id)
+          const msg = payload.new
+          const isForMe = msg.sender_id === patientId && msg.recipient_id === profile.id
+          if (isForMe) {
+            setMessages((prev) => [...prev, msg])
+            markAsRead(msg.id)
           }
         }
       )
@@ -72,10 +76,18 @@ export default function TherapistMessagesPage() {
       (m) => m.recipient_id === profile.id && !m.read_at
     )
     if (unread.length > 0) {
+      const ids = unread.map((m) => m.id)
       await supabase
         .from('messages')
         .update({ read_at: new Date().toISOString() })
-        .in('id', unread.map((m) => m.id))
+        .in('id', ids)
+      await supabase
+        .from('notifications')
+        .update({ read_at: new Date().toISOString() })
+        .eq('recipient_id', profile.id)
+        .eq('type', 'new_message')
+        .in('reference_id', ids)
+      refreshCount()
     }
   }
 
@@ -84,6 +96,13 @@ export default function TherapistMessagesPage() {
       .from('messages')
       .update({ read_at: new Date().toISOString() })
       .eq('id', msgId)
+    await supabase
+      .from('notifications')
+      .update({ read_at: new Date().toISOString() })
+      .eq('recipient_id', profile.id)
+      .eq('type', 'new_message')
+      .eq('reference_id', msgId)
+    refreshCount()
   }
 
   async function handleSend() {
