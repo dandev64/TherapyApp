@@ -55,7 +55,7 @@ export default function PatientCard({ patient, onClick }) {
           {noTasks && (
             <div className="flex items-center gap-1.5 mt-2">
               <AlertTriangle size={12} className="text-red-500 shrink-0" />
-              <span className="text-xs font-semibold text-red-600">No tasks assigned this week</span>
+              <span className="text-xs font-semibold text-red-600">No tasks assigned this day</span>
             </div>
           )}
         </div>
