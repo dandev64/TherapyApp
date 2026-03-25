@@ -112,7 +112,7 @@ export default function PatientDetailPage() {
   async function openAssignModal() {
     const { data } = await supabase
       .from('task_templates')
-      .select('id, title, therapy_type')
+      .select('id, title, description, duration_minutes, therapy_type')
       .eq('therapist_id', profile.id)
       .order('created_at', { ascending: false })
     setTemplates(data || [])
@@ -135,6 +135,7 @@ export default function PatientDetailPage() {
     const start = new Date(assignForm.start_date + 'T00:00:00')
     const end = new Date(assignForm.end_date + 'T00:00:00')
     const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+    const selectedTemplate = templates.find((t) => t.id === assignForm.template_id)
 
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       const dayName = DAY_NAMES[d.getDay()]
@@ -149,6 +150,10 @@ export default function PatientDetailPage() {
         assigned_date: dateStr,
         assigned_time_of_day: assignForm.assigned_time_of_day,
         is_rest_day: !assignForm.repeat_days.includes(dayName),
+        title: selectedTemplate?.title || null,
+        description: selectedTemplate?.description || null,
+        duration_minutes: selectedTemplate?.duration_minutes || null,
+        therapy_type: selectedTemplate?.therapy_type || null,
       })
     }
 
