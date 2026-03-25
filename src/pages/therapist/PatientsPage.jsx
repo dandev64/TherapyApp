@@ -202,7 +202,7 @@ export default function PatientsPage() {
             required
           />
           <p className="text-xs text-text-muted">
-            The patient must already have a Simple Therapy account.
+            The patient must already have a HabitOT account.
           </p>
           <Button type="submit" disabled={addLoading} className="w-full">
             {addLoading ? 'Adding...' : 'Add Patient'}

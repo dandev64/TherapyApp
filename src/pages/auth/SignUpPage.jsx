@@ -4,7 +4,6 @@ import { useAuth } from '../../contexts/AuthContext'
 import Input from '../../components/ui/Input'
 import Button from '../../components/ui/Button'
 import Select from '../../components/ui/Select'
-import { Heart } from 'lucide-react'
 
 const roleOptions = [
   { value: 'patient', label: 'Patient' },
@@ -42,12 +41,10 @@ export default function SignUpPage() {
     <div className="min-h-screen flex items-center justify-center bg-surface p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-10">
-          <div className="w-16 h-16 rounded-2xl bg-primary-container flex items-center justify-center mx-auto mb-5">
-            <Heart size={30} className="text-primary" />
-          </div>
+          <img src="/habitot-icon.png" alt="HabitOT" className="w-16 h-16 rounded-2xl object-contain mx-auto mb-5" />
           <h1 className="text-3xl font-extrabold text-text-primary tracking-tight">Create your account</h1>
           <p className="text-text-secondary mt-2">
-            Join Simple Therapy
+            Join HabitOT
           </p>
         </div>
 

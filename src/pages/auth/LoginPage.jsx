@@ -3,7 +3,6 @@ import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import Input from '../../components/ui/Input'
 import Button from '../../components/ui/Button'
-import { Heart } from 'lucide-react'
 
 export default function LoginPage() {
   const { user, profile, signIn } = useAuth()
@@ -40,12 +39,10 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-surface p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-10">
-          <div className="w-16 h-16 rounded-2xl bg-primary-container flex items-center justify-center mx-auto mb-5">
-            <Heart size={30} className="text-primary" />
-          </div>
+          <img src="/habitot-icon.png" alt="HabitOT" className="w-16 h-16 rounded-2xl object-contain mx-auto mb-5" />
           <h1 className="text-3xl font-extrabold text-text-primary tracking-tight">Welcome back</h1>
           <p className="text-text-secondary mt-2">
-            Sign in to Simple Therapy
+            Sign in to HabitOT
           </p>
         </div>
 
