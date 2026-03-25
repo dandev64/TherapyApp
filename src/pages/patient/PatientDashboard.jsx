@@ -18,6 +18,7 @@ import {
   Moon,
   Trophy,
   Flame,
+  AlertTriangle,
 } from 'lucide-react'
 
 const timeIcons = {
@@ -124,7 +125,7 @@ export default function PatientDashboard() {
       </div>
 
       {/* Progress Card */}
-      <Card className="!p-6">
+      <Card className={`!p-6 ${total > 0 && remaining > 0 ? '!border-red-300 !bg-red-50/30' : ''}`}>
         <div className="flex items-center justify-between mb-4">
           <div>
             <p className="text-sm font-medium text-text-secondary">Today&apos;s Progress</p>
@@ -137,6 +138,12 @@ export default function PatientDashboard() {
             <div className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-success-bg">
               <Trophy size={20} className="text-success" />
               <span className="text-sm font-bold text-success">All done!</span>
+            </div>
+          )}
+          {total > 0 && remaining > 0 && (
+            <div className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-red-100">
+              <AlertTriangle size={18} className="text-red-500" />
+              <span className="text-xs font-bold text-red-600">{remaining} left</span>
             </div>
           )}
         </div>
@@ -189,7 +196,7 @@ export default function PatientDashboard() {
                   const config = statusConfig[task.status]
                   const StatusIcon = config.icon
                   return (
-                    <Card key={task.id} className="cursor-pointer" onClick={() => setSelectedTask(task)}>
+                    <Card key={task.id} className={`cursor-pointer ${task.status !== 'completed' && !task.is_rest_day ? '!border-red-300 !bg-red-50/30' : ''}`} onClick={() => setSelectedTask(task)}>
                       <div className="flex items-center gap-4">
                         <div
                           className={`shrink-0 ${
