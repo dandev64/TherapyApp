@@ -30,12 +30,12 @@ export default function NotificationsPage() {
   useEffect(() => {
     if (!profile) return
 
-    async function init(){
-    if (profile.role === 'therapist') {
-      await supabase.rpc('check_overdue_tasks', { p_therapist_id: profile.id })
+    async function init() {
+      if (profile.role === 'therapist') {
+        await supabase.rpc('check_overdue_tasks', { p_therapist_id: profile.id })
+      }
+      loadNotifications()
     }
-    loadNotifications()
-  }
 
     init()
   }, [profile])
@@ -96,54 +96,51 @@ export default function NotificationsPage() {
     decrementCount()
   }
 
-async function handleReply(notification) {
-  if (!replyText.trim()) return;
-  setReplySending(true);
+  async function handleReply(notification) {
+    if (!replyText.trim()) return
+    setReplySending(true)
 
-  try {
-    let recipientId;
+    try {
+      let recipientId
 
-    if (profile.role === 'therapist') {
-      // 1. Therapist replies to the patient involved in the notification
-      recipientId = notification.patient_id;
-    } else {
-      // 2. Patient replies to the Therapist. 
-      // Since your notifications table doesn't have a 'sender_id', 
-      // we fetch the sender of the message linked via reference_id.
-      const { data: originalMsg, error } = await supabase
-        .from('messages')
-        .select('sender_id')
-        .eq('id', notification.reference_id)
-        .single();
+      if (profile.role === 'therapist') {
+        // Therapist replies to the patient involved in the notification
+        recipientId = notification.patient_id
+      } else {
+        // Patient replies to the Therapist.
+        // Since the notifications table doesn't have a 'sender_id',
+        // we fetch the sender of the message linked via reference_id.
+        const { data: originalMsg, error } = await supabase
+          .from('messages')
+          .select('sender_id')
+          .eq('id', notification.reference_id)
+          .single()
 
-      if (error || !originalMsg) {
-        throw new Error("Could not find the original sender.");
+        if (error || !originalMsg) {
+          throw new Error('Could not find the original sender.')
+        }
+        recipientId = originalMsg.sender_id
       }
-      recipientId = originalMsg.sender_id;
+
+      const { error: insertError } = await supabase.from('messages').insert({
+        sender_id: profile.id,
+        recipient_id: recipientId,
+        content: replyText.trim(),
+      })
+
+      if (insertError) throw insertError
+
+      setReplyText('')
+      setReplyingTo(null)
+
+      // Mark notification as read (removes it from the list)
+      await dismissNotification(notification.id)
+    } catch (err) {
+      alert('Failed to send reply. Please try again.')
+    } finally {
+      setReplySending(false)
     }
-
-    // 3. Insert the new message
-    const { error: insertError } = await supabase.from('messages').insert({
-      sender_id: profile.id,
-      recipient_id: recipientId,
-      content: replyText.trim(),
-    });
-
-    if (insertError) throw insertError;
-
-    // 4. Cleanup UI state
-    setReplyText('');
-    setReplyingTo(null);
-    
-    // 5. Mark notification as read (this removes it from the list)
-    await dismissNotification(notification.id);
-
-  } catch (err) {
-    alert('Failed to send reply. Please try again.');
-  } finally {
-    setReplySending(false);
   }
-}
 
   function formatTime(dateStr) {
     const d = new Date(dateStr)

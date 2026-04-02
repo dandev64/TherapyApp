@@ -1,4 +1,4 @@
-function toLocalDateStr(date) {
+export function toDateStr(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
@@ -19,7 +19,7 @@ export function calculateStreak(taskAssignments) {
   d.setDate(d.getDate() - 1)
 
   while (true) {
-    const dateStr = toLocalDateStr(d)
+    const dateStr = toDateStr(d)
     const day = byDate[dateStr]
 
     if (!day) {
@@ -39,7 +39,7 @@ export function calculateStreak(taskAssignments) {
   }
 
   // Include today if all tasks are done
-  const todayStr = toLocalDateStr(today)
+  const todayStr = toDateStr(today)
   const todayData = byDate[todayStr]
   if (todayData && todayData.total > 0 && todayData.completed === todayData.total) {
     streak++
@@ -49,7 +49,7 @@ export function calculateStreak(taskAssignments) {
 }
 
 export function getTodayProgress(taskAssignments) {
-  const todayStr = toLocalDateStr(new Date())
+  const todayStr = toDateStr(new Date())
   const todayTasks = taskAssignments.filter(
     (t) => t.assigned_date === todayStr
   )

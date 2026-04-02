@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from 'recharts'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { calculateStreak } from '../../utils/streak'
+import { calculateStreak, toDateStr } from '../../utils/streak'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
@@ -14,10 +14,6 @@ import PatientFeedbackList from '../../components/therapist/PatientFeedbackList'
 import {
   ArrowLeft, Flame, Target, CheckCircle, Calendar, ClipboardList, MessageSquare, Send,
 } from 'lucide-react'
-
-function toDateStr(date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-}
 
 export default function PatientDetailPage() {
   const { patientId } = useParams()

@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { formatTime } from '../../utils/time'
 import Card from '../../components/ui/Card'
-import { MessageSquare, Search } from 'lucide-react'
+import { Search } from 'lucide-react'
 
 export default function TherapistMessagesInbox() {
   const { profile } = useAuth()
@@ -66,20 +67,6 @@ export default function TherapistMessagesInbox() {
 
     setConversations(convos)
     setLoading(false)
-  }
-
-  function formatTime(dateStr) {
-    if (!dateStr) return ''
-    const d = new Date(dateStr)
-    const now = new Date()
-    const diffDays = Math.floor((now - d) / (1000 * 60 * 60 * 24))
-    if (diffDays === 0) {
-      return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-    }
-    if (diffDays < 7) {
-      return d.toLocaleDateString('en-US', { weekday: 'short' })
-    }
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
   }
 
   const filtered = conversations.filter((c) =>

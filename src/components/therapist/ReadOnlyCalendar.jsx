@@ -1,16 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import { ChevronLeft, ChevronRight, CheckCircle, Camera, MessageSquare, Clock, CheckSquare } from 'lucide-react'
+import { toDateStr } from '../../utils/streak'
+import { ChevronLeft, ChevronRight, CheckCircle, MessageSquare, Clock, CheckSquare } from 'lucide-react'
 import Modal from '../ui/Modal'
 import Badge from '../ui/Badge'
 
 const MOOD_EMOJI = {
   excited: '🤩', happy: '😊', calm: '😌', scared: '😨',
   anxious: '😰', angry: '😠', tired: '😴', sad: '😢',
-}
-
-function toDateStr(date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
 const DAY_HEADERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']

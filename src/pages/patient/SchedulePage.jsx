@@ -4,12 +4,9 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCachedState, hasCache } from '../../hooks/useCachedState'
 import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus'
+import { toDateStr } from '../../utils/streak'
 import { ChevronLeft, ChevronRight, CheckCircle, Circle, Clock } from 'lucide-react'
 import Badge from '../../components/ui/Badge'
-
-function toDateStr(date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-}
 
 const DAY_HEADERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const FULL_DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']

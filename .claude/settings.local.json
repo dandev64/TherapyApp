@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find \"/c/Users/Evan Jonathan Smith/Downloads/Thesis/TherapyApp\" -type f \\\\\\( -name \"*.ts\" -o -name \"*.tsx\" -o -name \"*.js\" -o -name \"*.jsx\" -o -name \"*.sql\" -o -name \"*.env*\" \\\\\\) -exec grep -l \"email\" {} \\\\;)"
+    ]
+  }
+}
