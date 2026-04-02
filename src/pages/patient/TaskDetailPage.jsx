@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { Linkify } from '../../utils/linkify'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
-import { Home, Timer, ArrowLeft } from 'lucide-react'
+import { Home, Timer, ArrowLeft, Camera, Upload, X, CheckSquare, Clock } from 'lucide-react'
 
 const MOODS = [
   { key: 'excited', emoji: '🤩', label: 'Excited' },
@@ -36,6 +36,12 @@ export default function TaskDetailPage() {
   const [selectedMood, setSelectedMood] = useState(null)
   const [feedbackNote, setFeedbackNote] = useState('')
   const [saving, setSaving] = useState(false)
+
+  // Proof upload state
+  const [proofFile, setProofFile] = useState(null)
+  const [proofPreview, setProofPreview] = useState(null)
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef(null)
 
   useEffect(() => {
     loadTask()
@@ -72,19 +78,73 @@ export default function TaskDetailPage() {
     return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
   }
 
+  function handleFileSelect(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setProofFile(file)
+    const reader = new FileReader()
+    reader.onload = (ev) => setProofPreview(ev.target.result)
+    reader.readAsDataURL(file)
+  }
+
+  function clearProof() {
+    setProofFile(null)
+    setProofPreview(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
   async function handleDone() {
-    // Mark task as completed
-    const { error } = await supabase
-      .from('task_assignments')
-      .update({ status: 'completed', completed_at: new Date().toISOString() })
-      .eq('id', id)
-    if (error) { alert('Failed to mark task as done. Please try again.'); return }
+    // If proof is required but not provided, don't allow completion
+    if (task.requires_proof && !proofFile && !task.proof_url) return
 
     // Stop timer
     if (intervalRef.current) {
       clearInterval(intervalRef.current)
       intervalRef.current = null
       setTimerRunning(false)
+    }
+
+    setUploading(true)
+
+    let proofUrl = task.proof_url || null
+
+    // Upload proof photo if provided
+    if (proofFile) {
+      const ext = proofFile.name.split('.').pop()
+      const filePath = `${profile.id}/${id}.${ext}`
+
+      const { error: uploadErr } = await supabase.storage
+        .from('task-proofs')
+        .upload(filePath, proofFile, { upsert: true })
+
+      if (uploadErr) {
+        alert('Failed to upload proof photo. Please try again.')
+        setUploading(false)
+        return
+      }
+
+      const { data: urlData } = supabase.storage
+        .from('task-proofs')
+        .getPublicUrl(filePath)
+
+      proofUrl = urlData.publicUrl
+    }
+
+    // Mark task as completed
+    const { error } = await supabase
+      .from('task_assignments')
+      .update({
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+        proof_url: proofUrl,
+      })
+      .eq('id', id)
+
+    setUploading(false)
+
+    if (error) {
+      alert('Failed to mark task as done. Please try again.')
+      return
     }
 
     setScreen('feedback')
@@ -134,6 +194,7 @@ export default function TaskDetailPage() {
 
   // Screen 1: Task Detail
   if (screen === 'detail') {
+    const needsProof = task.requires_proof && !proofFile && !task.proof_url
     return (
       <div className="space-y-6 max-w-lg mx-auto">
         <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-sm text-text-secondary hover:text-primary cursor-pointer">
@@ -142,8 +203,22 @@ export default function TaskDetailPage() {
 
         <h2 className="text-2xl font-extrabold text-text-primary">{task.title}</h2>
 
+        {/* Scheduled Time */}
+        {task.assigned_time && (
+          <div className="flex items-center gap-2 text-sm text-text-secondary">
+            <Clock size={16} className="text-primary" />
+            <span>
+              Scheduled for{' '}
+              {new Date(`2000-01-01T${task.assigned_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+            </span>
+          </div>
+        )}
+
         {/* Description Card */}
         <Card>
+          <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">
+            Description
+          </p>
           <div className="text-sm text-text-secondary leading-relaxed">
             <Linkify text={task.description || 'No description provided.'} />
           </div>
@@ -171,10 +246,69 @@ export default function TaskDetailPage() {
           </Card>
         )}
 
-        {task.requires_proof && (
-          <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-700 font-medium">
-            Your therapist has requested proof of completion for this task.
-          </div>
+        {/* Proof of Completion Section */}
+        {task.requires_proof && task.status !== 'completed' && (
+          <Card>
+            <div className="flex items-center gap-2 mb-3">
+              <CheckSquare size={16} className="text-amber-600" />
+              <p className="text-sm font-bold text-amber-700">
+                Photo proof required to complete
+              </p>
+            </div>
+
+            {proofPreview ? (
+              <div className="relative">
+                <img
+                  src={proofPreview}
+                  alt="Proof preview"
+                  className="w-full rounded-xl object-cover max-h-64"
+                />
+                <button
+                  onClick={clearProof}
+                  className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 text-white hover:bg-black/70 cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            ) : (
+              <div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full flex flex-col items-center gap-3 p-8 rounded-xl border-2 border-dashed border-border hover:border-primary/40 hover:bg-surface-alt transition-colors cursor-pointer"
+                >
+                  <div className="p-3 rounded-full bg-primary-container">
+                    <Camera size={24} className="text-primary" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-semibold text-text-primary">Take or upload a photo</p>
+                    <p className="text-xs text-text-muted mt-1">Tap to open camera or choose from gallery</p>
+                  </div>
+                </button>
+              </div>
+            )}
+          </Card>
+        )}
+
+        {/* Show existing proof if already uploaded */}
+        {task.proof_url && (
+          <Card>
+            <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">
+              Proof Submitted
+            </p>
+            <img
+              src={task.proof_url}
+              alt="Proof of completion"
+              className="w-full rounded-xl object-cover max-h-64"
+            />
+          </Card>
         )}
 
         {/* Stopwatch */}
@@ -204,7 +338,21 @@ export default function TaskDetailPage() {
             <Home size={16} /> Home
           </Button>
           {task.status !== 'completed' && (
-            <Button onClick={handleDone}>Done!</Button>
+            <div className="flex flex-col items-end gap-1">
+              <Button
+                onClick={handleDone}
+                disabled={needsProof || uploading}
+              >
+                {uploading ? (
+                  <><Upload size={16} className="animate-pulse" /> Uploading...</>
+                ) : (
+                  'Done!'
+                )}
+              </Button>
+              {needsProof && (
+                <p className="text-xs text-amber-600 font-medium">Upload proof first</p>
+              )}
+            </div>
           )}
           {task.status === 'completed' && (
             <span className="text-sm font-semibold text-success">Already completed</span>

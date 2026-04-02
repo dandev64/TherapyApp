@@ -275,6 +275,11 @@ export default function PatientDashboard() {
                             variant={task.status === 'in_progress' ? 'primary' : 'secondary'}
                             onClick={(e) => {
                               e.stopPropagation()
+                              // If completing a task that requires proof, go to detail page
+                              if (config.next === 'completed' && task.requires_proof) {
+                                navigate(`/patient/task/${task.id}`)
+                                return
+                              }
                               updateStatus(task.id, config.next)
                             }}
                           >
@@ -387,7 +392,13 @@ export default function PatientDashboard() {
                 size="lg"
                 className="w-full mt-2"
                 onClick={() => {
-                  updateStatus(selectedTask.id, statusConfig[selectedTask.status].next)
+                  const nextStatus = statusConfig[selectedTask.status].next
+                  if (nextStatus === 'completed' && selectedTask.requires_proof) {
+                    setSelectedTask(null)
+                    navigate(`/patient/task/${selectedTask.id}`)
+                    return
+                  }
+                  updateStatus(selectedTask.id, nextStatus)
                   setSelectedTask(null)
                 }}
               >
