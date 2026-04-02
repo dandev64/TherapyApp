@@ -15,6 +15,7 @@ import TherapistNotesPage from './pages/therapist/TherapistNotesPage'
 import NotificationsPage from './pages/therapist/NotificationsPage'
 import TherapistProfilePage from './pages/therapist/TherapistProfilePage'
 import TherapistMessagesPage from './pages/therapist/TherapistMessagesPage'
+import TherapistMessagesInbox from './pages/therapist/TherapistMessagesInbox'
 import PatientDashboard from './pages/patient/PatientDashboard'
 import SchedulePage from './pages/patient/SchedulePage'
 import TaskDetailPage from './pages/patient/TaskDetailPage'
@@ -68,6 +69,7 @@ export default function App() {
             <Route path="notes" element={<TherapistNotesPage />} />
             <Route path="notifications" element={<NotificationsPage />} />
             <Route path="profile" element={<TherapistProfilePage />} />
+            <Route path="messages" element={<TherapistMessagesInbox />} />
             <Route path="messages/:patientId" element={<TherapistMessagesPage />} />
           </Route>
 
