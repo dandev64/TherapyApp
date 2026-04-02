@@ -20,6 +20,7 @@ import {
   Flame,
   AlertTriangle,
   CheckSquare,
+  ChevronRight,
 } from 'lucide-react'
 
 const timeIcons = {
@@ -210,7 +211,7 @@ export default function PatientDashboard() {
                   const config = statusConfig[task.status]
                   const StatusIcon = config.icon
                   return (
-                    <Card key={task.id} className={`cursor-pointer ${task.status !== 'completed' && !task.is_rest_day ? '!border-red-300 !bg-red-50/30' : ''}`} onClick={() => navigate(`/patient/task/${task.id}`)}>
+                    <Card key={task.id} hover className={`${task.status !== 'completed' && !task.is_rest_day ? '!border-red-300 !bg-red-50/30' : ''}`} onClick={() => navigate(`/patient/task/${task.id}`)}>
                       <div className="flex items-center gap-4">
                         <div
                           className={`shrink-0 ${
@@ -257,7 +258,7 @@ export default function PatientDashboard() {
                           )}
                         </div>
 
-                        {config.next && (
+                        {config.next ? (
                           <Button
                             size="sm"
                             variant={task.status === 'in_progress' ? 'primary' : 'secondary'}
@@ -268,6 +269,8 @@ export default function PatientDashboard() {
                           >
                             {config.label}
                           </Button>
+                        ) : (
+                          <ChevronRight size={16} className="text-text-muted shrink-0" />
                         )}
                       </div>
                     </Card>

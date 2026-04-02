@@ -8,7 +8,7 @@ import Input from '../../components/ui/Input'
 import Select from '../../components/ui/Select'
 import Badge from '../../components/ui/Badge'
 import Modal from '../../components/ui/Modal'
-import { Plus, CheckSquare, Trash2, MessageSquare, Clock } from 'lucide-react'
+import { Plus, CheckSquare, Trash2, MessageSquare, Clock, Filter } from 'lucide-react'
 
 const MOOD_EMOJI = {
   excited: '🤩', happy: '😊', calm: '😌', scared: '😨',
@@ -34,6 +34,9 @@ export default function TaskAssignmentPage() {
   const [error, setError] = useState(null)
   const [successMsg, setSuccessMsg] = useState('')
   const [selectedTask, setSelectedTask] = useState(null)
+  const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0])
+  const [filterStatus, setFilterStatus] = useState('')
+  const [filterPatient, setFilterPatient] = useState('')
 
   function showSuccess(msg) {
     setSuccessMsg(msg)
@@ -65,8 +68,9 @@ export default function TaskAssignmentPage() {
       .from('task_assignments')
       .select('id, title, description, assigned_date, assigned_time, status, requires_proof, proof_url, resource_url, patient_id, profiles!task_assignments_patient_id_fkey(full_name)')
       .eq('therapist_id', profile.id)
+      .order('assigned_date', { ascending: false })
       .order('created_at', { ascending: false })
-      .limit(20)
+      .limit(100)
     if (err) { setError('Failed to load assignments.'); setPageLoading(false); return }
     setError(null)
 
@@ -137,14 +141,23 @@ export default function TaskAssignmentPage() {
     return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
   }
 
+  const filteredAssignments = useMemo(() => {
+    return recentAssignments.filter((a) => {
+      if (filterDate && a.assigned_date !== filterDate) return false
+      if (filterStatus && a.status !== filterStatus) return false
+      if (filterPatient && a.patient_id !== filterPatient) return false
+      return true
+    })
+  }, [recentAssignments, filterDate, filterStatus, filterPatient])
+
   const groupedByDate = useMemo(() => {
     const groups = {}
-    recentAssignments.forEach((a) => {
+    filteredAssignments.forEach((a) => {
       if (!groups[a.assigned_date]) groups[a.assigned_date] = []
       groups[a.assigned_date].push(a)
     })
     return Object.entries(groups).sort(([a], [b]) => b.localeCompare(a))
-  }, [recentAssignments])
+  }, [filteredAssignments])
 
   if (pageLoading) {
     return (
@@ -259,11 +272,54 @@ export default function TaskAssignmentPage() {
       )}
 
       <div>
-        <h3 className="text-lg font-bold text-text-primary mb-4">Recent Assignments</h3>
-        {recentAssignments.length === 0 ? (
+        {/* Filters */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-end gap-3 mb-4">
+          <div className="flex items-center gap-2">
+            <Filter size={16} className="text-text-muted" />
+            <span className="text-sm font-bold text-text-secondary">Filters</span>
+          </div>
+          <div className="flex flex-wrap gap-3 flex-1">
+            <input
+              type="date"
+              value={filterDate}
+              onChange={(e) => setFilterDate(e.target.value)}
+              className="px-3 py-2 rounded-xl border border-border text-sm bg-surface-alt text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+            />
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="px-3 py-2 rounded-xl border border-border text-sm bg-surface-alt text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary cursor-pointer"
+            >
+              <option value="">All Statuses</option>
+              <option value="pending">Pending</option>
+              <option value="in_progress">In Progress</option>
+              <option value="completed">Completed</option>
+            </select>
+            <select
+              value={filterPatient}
+              onChange={(e) => setFilterPatient(e.target.value)}
+              className="px-3 py-2 rounded-xl border border-border text-sm bg-surface-alt text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary cursor-pointer"
+            >
+              <option value="">All Patients</option>
+              {patients.map((p) => (
+                <option key={p.id} value={p.id}>{p.full_name}</option>
+              ))}
+            </select>
+            {(filterDate || filterStatus || filterPatient) && (
+              <button
+                onClick={() => { setFilterDate(''); setFilterStatus(''); setFilterPatient('') }}
+                className="px-3 py-2 rounded-xl text-sm font-medium text-primary hover:bg-primary-container/30 transition-colors cursor-pointer"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+
+        {filteredAssignments.length === 0 ? (
           <Card>
             <p className="text-sm text-text-muted text-center py-8">
-              No assignments yet. Create one to get started.
+              {recentAssignments.length === 0 ? 'No assignments yet. Create one to get started.' : 'No assignments match the selected filters.'}
             </p>
           </Card>
         ) : (
