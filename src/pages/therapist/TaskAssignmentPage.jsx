@@ -301,12 +301,6 @@ export default function TaskAssignmentPage() {
             ))}
           </select>
           {(filterDate || filterStatus || filterPatient) && (
-            <button
-              onClick={() => { setFilterDate(''); setFilterStatus(''); setFilterPatient('') }}
-              className="px-3 py-1.5 rounded-lg text-sm font-medium text-primary hover:bg-primary-container/30 transition-colors cursor-pointer"
-            >
-              Clear
-            </button>
           )}
         </div>
 
