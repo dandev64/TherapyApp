@@ -8,7 +8,6 @@ import { calculateStreak } from '../../utils/streak'
 import Card from '../../components/ui/Card'
 import Badge from '../../components/ui/Badge'
 import Button from '../../components/ui/Button'
-import Modal from '../../components/ui/Modal'
 import {
   CheckCircle,
   Circle,
@@ -42,7 +41,6 @@ export default function PatientDashboard() {
   const [allTasks, setAllTasks] = useCachedState('patient-streak-tasks', [])
   const [loading, setLoading] = useState(() => !hasCache('patient-tasks'))
   const [error, setError] = useState(null)
-  const [selectedTask, setSelectedTask] = useState(null)
   const refreshKey = useRefreshOnFocus()
 
   useEffect(() => {
@@ -79,16 +77,6 @@ export default function PatientDashboard() {
   }
 
   const streak = calculateStreak(allTasks)
-
-  async function updateStatus(taskId, newStatus) {
-    const updates = { status: newStatus }
-    if (newStatus === 'completed') {
-      updates.completed_at = new Date().toISOString()
-    }
-    const { error: err } = await supabase.from('task_assignments').update(updates).eq('id', taskId)
-    if (err) { setError('Failed to update task status.'); return }
-    loadTasks()
-  }
 
   const total = tasks.filter((t) => !t.is_rest_day).length
   const completed = tasks.filter((t) => !t.is_rest_day && t.status === 'completed').length
@@ -222,7 +210,7 @@ export default function PatientDashboard() {
                   const config = statusConfig[task.status]
                   const StatusIcon = config.icon
                   return (
-                    <Card key={task.id} className={`cursor-pointer ${task.status !== 'completed' && !task.is_rest_day ? '!border-red-300 !bg-red-50/30' : ''}`} onClick={() => setSelectedTask(task)}>
+                    <Card key={task.id} className={`cursor-pointer ${task.status !== 'completed' && !task.is_rest_day ? '!border-red-300 !bg-red-50/30' : ''}`} onClick={() => navigate(`/patient/task/${task.id}`)}>
                       <div className="flex items-center gap-4">
                         <div
                           className={`shrink-0 ${
@@ -275,12 +263,7 @@ export default function PatientDashboard() {
                             variant={task.status === 'in_progress' ? 'primary' : 'secondary'}
                             onClick={(e) => {
                               e.stopPropagation()
-                              // If completing a task that requires proof, go to detail page
-                              if (config.next === 'completed' && task.requires_proof) {
-                                navigate(`/patient/task/${task.id}`)
-                                return
-                              }
-                              updateStatus(task.id, config.next)
+                              navigate(`/patient/task/${task.id}`)
                             }}
                           >
                             {config.label}
@@ -336,78 +319,6 @@ export default function PatientDashboard() {
         </div>
       )}
 
-      {/* Task Detail Modal */}
-      <Modal
-        isOpen={!!selectedTask}
-        onClose={() => setSelectedTask(null)}
-        title={selectedTask?.title || 'Task Details'}
-      >
-        {selectedTask && (
-          <div className="space-y-4">
-            <Badge color={selectedTask.status}>
-              {selectedTask.status === 'in_progress' ? 'In Progress' : selectedTask.status}
-            </Badge>
-
-            {selectedTask.description && (
-              <div>
-                <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1">
-                  Description
-                </p>
-                <p className="text-sm text-text-primary leading-relaxed">
-                  {selectedTask.description}
-                </p>
-              </div>
-            )}
-
-            {selectedTask.resource_url && (
-              <div>
-                <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1">
-                  Resources
-                </p>
-                <p className="text-sm text-text-primary leading-relaxed whitespace-pre-wrap">
-                  {selectedTask.resource_url}
-                </p>
-              </div>
-            )}
-
-            {selectedTask.assigned_time && (
-              <div className="flex items-center gap-2">
-                <Clock size={14} className="text-text-muted" />
-                <span className="text-sm text-text-muted">
-                  {new Date(`2000-01-01T${selectedTask.assigned_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-                </span>
-              </div>
-            )}
-
-            {selectedTask.requires_proof && (
-              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-700 font-medium flex items-center gap-2">
-                <CheckSquare size={16} />
-                Proof of completion required
-              </div>
-            )}
-
-            {statusConfig[selectedTask.status]?.next && (
-              <Button
-                variant={selectedTask.status === 'in_progress' ? 'primary' : 'secondary'}
-                size="lg"
-                className="w-full mt-2"
-                onClick={() => {
-                  const nextStatus = statusConfig[selectedTask.status].next
-                  if (nextStatus === 'completed' && selectedTask.requires_proof) {
-                    setSelectedTask(null)
-                    navigate(`/patient/task/${selectedTask.id}`)
-                    return
-                  }
-                  updateStatus(selectedTask.id, nextStatus)
-                  setSelectedTask(null)
-                }}
-              >
-                {statusConfig[selectedTask.status].label}
-              </Button>
-            )}
-          </div>
-        )}
-      </Modal>
     </div>
   )
 }

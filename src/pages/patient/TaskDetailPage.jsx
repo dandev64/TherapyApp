@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { Linkify } from '../../utils/linkify'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
-import { Home, Timer, ArrowLeft, Camera, Upload, X, CheckSquare, Clock } from 'lucide-react'
+import { Home, ArrowLeft, Camera, Upload, X, CheckSquare, Clock } from 'lucide-react'
 
 const MOODS = [
   { key: 'excited', emoji: '🤩', label: 'Excited' },
@@ -25,29 +25,19 @@ export default function TaskDetailPage() {
 
   const [task, setTask] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [screen, setScreen] = useState('detail') // 'detail' | 'feedback'
-
-  // Timer state
-  const [seconds, setSeconds] = useState(0)
-  const [timerRunning, setTimerRunning] = useState(false)
-  const intervalRef = useRef(null)
+  const [submitting, setSubmitting] = useState(false)
 
   // Feedback state
   const [selectedMood, setSelectedMood] = useState(null)
   const [feedbackNote, setFeedbackNote] = useState('')
-  const [saving, setSaving] = useState(false)
 
   // Proof upload state
   const [proofFile, setProofFile] = useState(null)
   const [proofPreview, setProofPreview] = useState(null)
-  const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef(null)
 
   useEffect(() => {
     loadTask()
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current)
-    }
   }, [id])
 
   async function loadTask() {
@@ -59,23 +49,14 @@ export default function TaskDetailPage() {
     if (error) console.error('Failed to load task:', error.message)
     setTask(data)
     setLoading(false)
-  }
 
-  function toggleTimer() {
-    if (timerRunning) {
-      clearInterval(intervalRef.current)
-      intervalRef.current = null
-      setTimerRunning(false)
-    } else {
-      intervalRef.current = setInterval(() => setSeconds((s) => s + 1), 1000)
-      setTimerRunning(true)
+    // Auto-mark as in_progress if still pending
+    if (data && data.status === 'pending') {
+      await supabase
+        .from('task_assignments')
+        .update({ status: 'in_progress' })
+        .eq('id', id)
     }
-  }
-
-  function formatTime(s) {
-    const m = Math.floor(s / 60)
-    const sec = s % 60
-    return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
   }
 
   function handleFileSelect(e) {
@@ -93,18 +74,9 @@ export default function TaskDetailPage() {
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  async function handleDone() {
-    // If proof is required but not provided, don't allow completion
+  async function handleComplete() {
     if (task.requires_proof && !proofFile && !task.proof_url) return
-
-    // Stop timer
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current)
-      intervalRef.current = null
-      setTimerRunning(false)
-    }
-
-    setUploading(true)
+    setSubmitting(true)
 
     let proofUrl = task.proof_url || null
 
@@ -119,7 +91,7 @@ export default function TaskDetailPage() {
 
       if (uploadErr) {
         alert('Failed to upload proof photo. Please try again.')
-        setUploading(false)
+        setSubmitting(false)
         return
       }
 
@@ -131,7 +103,7 @@ export default function TaskDetailPage() {
     }
 
     // Mark task as completed
-    const { error } = await supabase
+    const { error: taskErr } = await supabase
       .from('task_assignments')
       .update({
         status: 'completed',
@@ -140,37 +112,24 @@ export default function TaskDetailPage() {
       })
       .eq('id', id)
 
-    setUploading(false)
-
-    if (error) {
-      alert('Failed to mark task as done. Please try again.')
+    if (taskErr) {
+      alert('Failed to complete task. Please try again.')
+      setSubmitting(false)
       return
     }
 
-    setScreen('feedback')
-  }
-
-  async function handleSaveFeedback() {
-    if (!selectedMood) return
-    setSaving(true)
-    const { error } = await supabase.from('task_feedback').insert({
-      task_assignment_id: id,
-      patient_id: profile.id,
-      mood: selectedMood,
-      note: feedbackNote.trim() || null,
-    })
-    setSaving(false)
-    if (error) { alert('Failed to save feedback. Please try again.'); return }
-    navigate('/patient/schedule')
-  }
-
-  function handleGoHome() {
-    // If feedback has a mood selected, save it before leaving
+    // Save feedback if mood was selected
     if (selectedMood) {
-      handleSaveFeedback()
-    } else {
-      navigate('/patient/schedule')
+      await supabase.from('task_feedback').insert({
+        task_assignment_id: id,
+        patient_id: profile.id,
+        mood: selectedMood,
+        note: feedbackNote.trim() || null,
+      })
     }
+
+    setSubmitting(false)
+    navigate('/patient/schedule')
   }
 
   if (loading) {
@@ -192,220 +151,186 @@ export default function TaskDetailPage() {
     )
   }
 
-  // Screen 1: Task Detail
-  if (screen === 'detail') {
-    const needsProof = task.requires_proof && !proofFile && !task.proof_url
-    return (
-      <div className="space-y-6 max-w-lg mx-auto">
-        <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-sm text-text-secondary hover:text-primary cursor-pointer">
-          <ArrowLeft size={16} /> Back
-        </button>
+  const isCompleted = task.status === 'completed'
+  const needsProof = task.requires_proof && !proofFile && !task.proof_url
 
-        <h2 className="text-2xl font-extrabold text-text-primary">{task.title}</h2>
-
-        {/* Scheduled Time */}
-        {task.assigned_time && (
-          <div className="flex items-center gap-2 text-sm text-text-secondary">
-            <Clock size={16} className="text-primary" />
-            <span>
-              Scheduled for{' '}
-              {new Date(`2000-01-01T${task.assigned_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-            </span>
-          </div>
-        )}
-
-        {/* Description Card */}
-        <Card>
-          <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">
-            Description
-          </p>
-          <div className="text-sm text-text-secondary leading-relaxed">
-            <Linkify text={task.description || 'No description provided.'} />
-          </div>
-        </Card>
-
-        {task.details && (
-          <Card>
-            <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">
-              Additional Instructions
-            </p>
-            <div className="text-sm text-text-secondary leading-relaxed">
-              <Linkify text={task.details} />
-            </div>
-          </Card>
-        )}
-
-        {task.resource_url && (
-          <Card>
-            <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">
-              Resources
-            </p>
-            <div className="text-sm text-text-secondary leading-relaxed">
-              <Linkify text={task.resource_url} />
-            </div>
-          </Card>
-        )}
-
-        {/* Proof of Completion Section */}
-        {task.requires_proof && task.status !== 'completed' && (
-          <Card>
-            <div className="flex items-center gap-2 mb-3">
-              <CheckSquare size={16} className="text-amber-600" />
-              <p className="text-sm font-bold text-amber-700">
-                Photo proof required to complete
-              </p>
-            </div>
-
-            {proofPreview ? (
-              <div className="relative">
-                <img
-                  src={proofPreview}
-                  alt="Proof preview"
-                  className="w-full rounded-xl object-cover max-h-64"
-                />
-                <button
-                  onClick={clearProof}
-                  className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 text-white hover:bg-black/70 cursor-pointer"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-            ) : (
-              <div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  onChange={handleFileSelect}
-                  className="hidden"
-                />
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full flex flex-col items-center gap-3 p-8 rounded-xl border-2 border-dashed border-border hover:border-primary/40 hover:bg-surface-alt transition-colors cursor-pointer"
-                >
-                  <div className="p-3 rounded-full bg-primary-container">
-                    <Camera size={24} className="text-primary" />
-                  </div>
-                  <div className="text-center">
-                    <p className="text-sm font-semibold text-text-primary">Take or upload a photo</p>
-                    <p className="text-xs text-text-muted mt-1">Tap to open camera or choose from gallery</p>
-                  </div>
-                </button>
-              </div>
-            )}
-          </Card>
-        )}
-
-        {/* Show existing proof if already uploaded */}
-        {task.proof_url && (
-          <Card>
-            <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">
-              Proof Submitted
-            </p>
-            <img
-              src={task.proof_url}
-              alt="Proof of completion"
-              className="w-full rounded-xl object-cover max-h-64"
-            />
-          </Card>
-        )}
-
-        {/* Stopwatch */}
-        <Card className="text-center">
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <Timer size={20} className="text-primary" />
-            <span className="text-xs font-bold text-outline uppercase tracking-wider">Stopwatch</span>
-          </div>
-          <p className="text-5xl font-extrabold text-text-primary font-heading tabular-nums">
-            {formatTime(seconds)}
-          </p>
-          <button
-            onClick={toggleTimer}
-            className={`mt-4 px-6 py-2 rounded-full text-sm font-bold transition-colors cursor-pointer ${
-              timerRunning
-                ? 'bg-warning-bg text-warning hover:bg-warning/10'
-                : 'bg-primary-container text-primary hover:bg-primary-container/70'
-            }`}
-          >
-            {timerRunning ? 'Pause' : seconds > 0 ? 'Resume' : 'Start'}
-          </button>
-        </Card>
-
-        {/* Bottom Buttons */}
-        <div className="flex items-center justify-between pt-4">
-          <Button variant="ghost" onClick={() => navigate('/patient/schedule')}>
-            <Home size={16} /> Home
-          </Button>
-          {task.status !== 'completed' && (
-            <div className="flex flex-col items-end gap-1">
-              <Button
-                onClick={handleDone}
-                disabled={needsProof || uploading}
-              >
-                {uploading ? (
-                  <><Upload size={16} className="animate-pulse" /> Uploading...</>
-                ) : (
-                  'Done!'
-                )}
-              </Button>
-              {needsProof && (
-                <p className="text-xs text-amber-600 font-medium">Upload proof first</p>
-              )}
-            </div>
-          )}
-          {task.status === 'completed' && (
-            <span className="text-sm font-semibold text-success">Already completed</span>
-          )}
-        </div>
-      </div>
-    )
-  }
-
-  // Screen 2: Post-Task Feedback
   return (
     <div className="space-y-6 max-w-lg mx-auto">
-      <h2 className="text-2xl font-extrabold text-text-primary">{task.title}</h2>
-      <p className="text-sm text-text-muted">Great job completing this task!</p>
+      <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-sm text-text-secondary hover:text-primary cursor-pointer">
+        <ArrowLeft size={16} /> Back
+      </button>
 
-      {/* Mood Selection */}
+      <h2 className="text-2xl font-extrabold text-text-primary">{task.title}</h2>
+
+      {/* Scheduled Time */}
+      {task.assigned_time && (
+        <div className="flex items-center gap-2 text-sm text-text-secondary">
+          <Clock size={16} className="text-primary" />
+          <span>
+            Scheduled for{' '}
+            {new Date(`2000-01-01T${task.assigned_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+          </span>
+        </div>
+      )}
+
+      {/* Description */}
       <Card>
-        <p className="text-sm font-bold text-text-primary mb-4">How did I feel doing this task?</p>
-        <div className="grid grid-cols-4 gap-3">
-          {MOODS.map(({ key, emoji, label }) => (
-            <button
-              key={key}
-              onClick={() => setSelectedMood(key)}
-              className={`flex flex-col items-center gap-1 p-3 rounded-2xl transition-all cursor-pointer ${
-                selectedMood === key
-                  ? 'bg-primary-container ring-2 ring-primary scale-105'
-                  : 'bg-surface-alt hover:bg-surface-container'
-              }`}
-            >
-              <span className="text-2xl">{emoji}</span>
-              <span className="text-[10px] font-semibold text-text-secondary">{label}</span>
-            </button>
-          ))}
+        <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">
+          Description
+        </p>
+        <div className="text-sm text-text-secondary leading-relaxed">
+          <Linkify text={task.description || 'No description provided.'} />
         </div>
       </Card>
 
-      {/* Note */}
-      <Card>
-        <p className="text-sm font-bold text-text-primary mb-3">Is there anything I want to say?</p>
-        <textarea
-          className="w-full px-4 py-3 rounded-xl border border-border text-sm bg-surface-alt text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-surface-card resize-none"
-          rows={4}
-          placeholder="Write anything you'd like to share..."
-          value={feedbackNote}
-          onChange={(e) => setFeedbackNote(e.target.value)}
-        />
-      </Card>
+      {task.details && (
+        <Card>
+          <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">
+            Additional Instructions
+          </p>
+          <div className="text-sm text-text-secondary leading-relaxed">
+            <Linkify text={task.details} />
+          </div>
+        </Card>
+      )}
+
+      {task.resource_url && (
+        <Card>
+          <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">
+            Resources
+          </p>
+          <div className="text-sm text-text-secondary leading-relaxed">
+            <Linkify text={task.resource_url} />
+          </div>
+        </Card>
+      )}
+
+      {/* Proof of Completion Upload */}
+      {task.requires_proof && !isCompleted && (
+        <Card>
+          <div className="flex items-center gap-2 mb-3">
+            <CheckSquare size={16} className="text-amber-600" />
+            <p className="text-sm font-bold text-amber-700">
+              Photo proof required to complete
+            </p>
+          </div>
+
+          {proofPreview ? (
+            <div className="relative">
+              <img
+                src={proofPreview}
+                alt="Proof preview"
+                className="w-full rounded-xl object-cover max-h-64"
+              />
+              <button
+                onClick={clearProof}
+                className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 text-white hover:bg-black/70 cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          ) : (
+            <div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={handleFileSelect}
+                className="hidden"
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full flex flex-col items-center gap-3 p-8 rounded-xl border-2 border-dashed border-border hover:border-primary/40 hover:bg-surface-alt transition-colors cursor-pointer"
+              >
+                <div className="p-3 rounded-full bg-primary-container">
+                  <Camera size={24} className="text-primary" />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-semibold text-text-primary">Take or upload a photo</p>
+                  <p className="text-xs text-text-muted mt-1">Tap to open camera or choose from gallery</p>
+                </div>
+              </button>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* Show existing proof if already completed */}
+      {task.proof_url && (
+        <Card>
+          <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">
+            Proof Submitted
+          </p>
+          <img
+            src={task.proof_url}
+            alt="Proof of completion"
+            className="w-full rounded-xl object-cover max-h-64"
+          />
+        </Card>
+      )}
+
+      {/* Mood & Feedback -- only show if not yet completed */}
+      {!isCompleted && (
+        <>
+          <Card>
+            <p className="text-sm font-bold text-text-primary mb-4">How do I feel about this task?</p>
+            <div className="grid grid-cols-4 gap-3">
+              {MOODS.map(({ key, emoji, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setSelectedMood(key)}
+                  className={`flex flex-col items-center gap-1 p-3 rounded-2xl transition-all cursor-pointer ${
+                    selectedMood === key
+                      ? 'bg-primary-container ring-2 ring-primary scale-105'
+                      : 'bg-surface-alt hover:bg-surface-container'
+                  }`}
+                >
+                  <span className="text-2xl">{emoji}</span>
+                  <span className="text-[10px] font-semibold text-text-secondary">{label}</span>
+                </button>
+              ))}
+            </div>
+          </Card>
+
+          <Card>
+            <p className="text-sm font-bold text-text-primary mb-3">Any comments?</p>
+            <textarea
+              className="w-full px-4 py-3 rounded-xl border border-border text-sm bg-surface-alt text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-surface-card resize-none"
+              rows={3}
+              placeholder="Write anything you'd like to share..."
+              value={feedbackNote}
+              onChange={(e) => setFeedbackNote(e.target.value)}
+            />
+          </Card>
+        </>
+      )}
 
       {/* Bottom Buttons */}
-      <div className="flex items-center justify-between pt-4">
-        <Button variant="ghost" onClick={handleGoHome}>
+      <div className="flex items-center justify-between pt-4 pb-8">
+        <Button variant="ghost" onClick={() => navigate('/patient/schedule')}>
           <Home size={16} /> Home
         </Button>
+        {!isCompleted && (
+          <div className="flex flex-col items-end gap-1">
+            <Button
+              onClick={handleComplete}
+              disabled={needsProof || submitting}
+            >
+              {submitting ? (
+                <><Upload size={16} className="animate-pulse" /> Completing...</>
+              ) : (
+                'Complete'
+              )}
+            </Button>
+            {needsProof && (
+              <p className="text-xs text-amber-600 font-medium">Upload proof first</p>
+            )}
+          </div>
+        )}
+        {isCompleted && (
+          <span className="text-sm font-semibold text-success">Already completed</span>
+        )}
       </div>
     </div>
   )
