@@ -301,14 +301,16 @@ export default function TaskAssignmentPage() {
                             <Badge color={a.status}>{a.status.replace('_', ' ')}</Badge>
                           </td>
                           <td className="px-4 py-3">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={(e) => { e.stopPropagation(); handleDelete(a.id) }}
-                              title="Delete assignment"
-                            >
-                              <Trash2 size={14} className="text-danger" />
-                            </Button>
+                            {a.status !== 'completed' && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => { e.stopPropagation(); handleDelete(a.id) }}
+                                title="Delete assignment"
+                              >
+                                <Trash2 size={14} className="text-danger" />
+                              </Button>
+                            )}
                           </td>
                         </tr>
                       ))}

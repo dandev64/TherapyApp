@@ -294,7 +294,7 @@ export default function SchedulePage() {
                 return (
                   <div
                     key={task.id}
-                    className="relative pl-6 cursor-pointer rounded-xl p-3 -ml-3 hover:bg-primary-container/30 transition-colors"
+                    className="relative pl-9 cursor-pointer rounded-xl p-3 -ml-3 hover:bg-primary-container/30 transition-colors"
                     onClick={() => navigate(`/patient/task/${task.id}`)}
                   >
                     <div className="absolute left-3 top-4">
