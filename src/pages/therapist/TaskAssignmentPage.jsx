@@ -330,11 +330,6 @@ export default function TaskAssignmentPage() {
                     onClick={() => setSelectedTask(a)}
                   >
                     <td className="px-4 py-3">
-                      {i === 0 && (
-                        <p className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-0.5">
-                          {new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                        </p>
-                      )}
                       <p className="font-semibold text-text-primary">{a.title}</p>
                       <p className="text-xs text-text-muted sm:hidden">{a.profiles?.full_name}</p>
                     </td>
