@@ -300,8 +300,6 @@ export default function TaskAssignmentPage() {
               <option key={p.id} value={p.id}>{p.full_name}</option>
             ))}
           </select>
-          {(filterDate || filterStatus || filterPatient) && (
-          )}
         </div>
 
         {/* Table */}
