@@ -7,7 +7,12 @@ import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
 import Select from '../../components/ui/Select'
 import Badge from '../../components/ui/Badge'
-import { Plus, CheckSquare, Trash2 } from 'lucide-react'
+import { Plus, CheckSquare, Trash2, Camera, MessageSquare } from 'lucide-react'
+
+const MOOD_EMOJI = {
+  excited: '🤩', happy: '😊', calm: '😌', scared: '😨',
+  anxious: '😰', angry: '😠', tired: '😴', sad: '😢',
+}
 
 export default function TaskAssignmentPage() {
   const { profile } = useAuth()
@@ -56,13 +61,26 @@ export default function TaskAssignmentPage() {
   async function loadRecentAssignments() {
     const { data, error: err } = await supabase
       .from('task_assignments')
-      .select('id, title, assigned_date, assigned_time, status, requires_proof, patient_id, profiles!task_assignments_patient_id_fkey(full_name)')
+      .select('id, title, assigned_date, assigned_time, status, requires_proof, proof_url, patient_id, profiles!task_assignments_patient_id_fkey(full_name)')
       .eq('therapist_id', profile.id)
       .order('created_at', { ascending: false })
       .limit(20)
     if (err) { setError('Failed to load assignments.'); setPageLoading(false); return }
     setError(null)
-    setRecentAssignments(data || [])
+
+    const taskIds = (data || []).filter((t) => t.status === 'completed').map((t) => t.id)
+    let fbMap = {}
+    if (taskIds.length > 0) {
+      const { data: fbData } = await supabase
+        .from('task_feedback')
+        .select('task_assignment_id, mood, note')
+        .in('task_assignment_id', taskIds)
+      ;(fbData || []).forEach((fb) => {
+        fbMap[fb.task_assignment_id] = fb
+      })
+    }
+
+    setRecentAssignments((data || []).map((t) => ({ ...t, feedback: fbMap[t.id] || null })))
     setPageLoading(false)
   }
 
@@ -271,6 +289,30 @@ export default function TaskAssignmentPage() {
                     </Button>
                   </div>
                 </div>
+
+                {/* Patient inputs for completed tasks */}
+                {a.status === 'completed' && (a.feedback || a.proof_url) && (
+                  <div className="border-t border-border mt-3 pt-2 space-y-1.5">
+                    {a.feedback && (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm">{MOOD_EMOJI[a.feedback.mood] || ''}</span>
+                        <span className="text-xs text-text-secondary capitalize">{a.feedback.mood}</span>
+                      </div>
+                    )}
+                    {a.feedback?.note && (
+                      <div className="flex items-start gap-1.5">
+                        <MessageSquare size={12} className="text-text-muted mt-0.5 shrink-0" />
+                        <p className="text-xs text-text-secondary">{a.feedback.note}</p>
+                      </div>
+                    )}
+                    {a.proof_url && (
+                      <a href={a.proof_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-primary hover:underline">
+                        <Camera size={12} />
+                        View proof photo
+                      </a>
+                    )}
+                  </div>
+                )}
               </Card>
             ))
           )}

@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import { ChevronLeft, ChevronRight, CheckCircle } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CheckCircle, Camera, MessageSquare } from 'lucide-react'
+
+const MOOD_EMOJI = {
+  excited: '🤩', happy: '😊', calm: '😌', scared: '😨',
+  anxious: '😰', angry: '😠', tired: '😴', sad: '😢',
+}
 
 function toDateStr(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -17,6 +22,7 @@ export default function ReadOnlyCalendar({ patientId, therapistId }) {
   })
   const [selectedDate, setSelectedDate] = useState(toDateStr(new Date()))
   const [tasks, setTasks] = useState([])
+  const [feedbackMap, setFeedbackMap] = useState({})
   const [remarks, setRemarks] = useState({})
   const [loading, setLoading] = useState(true)
 
@@ -45,13 +51,24 @@ export default function ReadOnlyCalendar({ patientId, therapistId }) {
         .eq('therapist_id', therapistId)
         .gte('date', startOfMonth)
         .lte('date', endOfMonth),
-    ]).then(([tasksRes, remarksRes]) => {
+      supabase
+        .from('task_feedback')
+        .select('task_assignment_id, mood, note, created_at')
+        .eq('patient_id', patientId)
+        .gte('created_at', new Date(year, month, 1).toISOString())
+        .lte('created_at', new Date(year, month + 1, 0, 23, 59, 59).toISOString()),
+    ]).then(([tasksRes, remarksRes, feedbackRes]) => {
       setTasks(tasksRes.data || [])
       const remarksMap = {}
       ;(remarksRes.data || []).forEach((r) => {
         remarksMap[r.date] = r
       })
       setRemarks(remarksMap)
+      const fbMap = {}
+      ;(feedbackRes.data || []).forEach((fb) => {
+        fbMap[fb.task_assignment_id] = fb
+      })
+      setFeedbackMap(fbMap)
       setLoading(false)
     })
   }, [patientId, year, month])
@@ -210,6 +227,7 @@ export default function ReadOnlyCalendar({ patientId, therapistId }) {
               <div className="mt-5 space-y-3">
                 {realTasks.map((task) => {
                   const isDone = task.status === 'completed'
+                  const fb = feedbackMap[task.id]
                   return (
                     <div key={task.id} className="relative pl-6">
                       <div className="absolute left-0 top-1">
@@ -227,6 +245,33 @@ export default function ReadOnlyCalendar({ patientId, therapistId }) {
                           ? new Date(`2000-01-01T${task.assigned_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
                           : task.assigned_time_of_day}
                       </p>
+
+                      {/* Patient inputs */}
+                      {isDone && (
+                        <div className="mt-2 space-y-1.5">
+                          {fb && (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-sm">{MOOD_EMOJI[fb.mood] || ''}</span>
+                              <span className="text-xs text-text-secondary capitalize">{fb.mood}</span>
+                            </div>
+                          )}
+                          {fb?.note && (
+                            <div className="flex items-start gap-1.5">
+                              <MessageSquare size={12} className="text-text-muted mt-0.5 shrink-0" />
+                              <p className="text-xs text-text-secondary">{fb.note}</p>
+                            </div>
+                          )}
+                          {task.proof_url && (
+                            <a href={task.proof_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-primary hover:underline">
+                              <Camera size={12} />
+                              View proof photo
+                            </a>
+                          )}
+                          {task.resource_url && (
+                            <p className="text-xs text-text-muted italic truncate">Resources: {task.resource_url}</p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )
                 })}

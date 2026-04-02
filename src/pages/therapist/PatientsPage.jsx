@@ -7,7 +7,12 @@ import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
 import Modal from '../../components/ui/Modal'
 import Badge from '../../components/ui/Badge'
-import { UserPlus, Search, Calendar, ChevronRight } from 'lucide-react'
+import { UserPlus, Search, Calendar, ChevronRight, Camera, MessageSquare } from 'lucide-react'
+
+const MOOD_EMOJI = {
+  excited: '🤩', happy: '😊', calm: '😌', scared: '😨',
+  anxious: '😰', angry: '😠', tired: '😴', sad: '😢',
+}
 
 export default function PatientsPage() {
   const { profile } = useAuth()
@@ -102,14 +107,26 @@ export default function PatientsPage() {
   async function viewHistory(patient) {
     setSelectedPatient(patient)
     setPatientHistory([])
-    const { data } = await supabase
-      .from('task_assignments')
-      .select('id, title, assigned_date, status')
-      .eq('patient_id', patient.id)
-      .order('assigned_date', { ascending: false })
-      .order('created_at', { ascending: false })
-      .limit(30)
-    setPatientHistory(data || [])
+    const [tasksRes, feedbackRes] = await Promise.all([
+      supabase
+        .from('task_assignments')
+        .select('id, title, description, assigned_date, assigned_time, status, resource_url, requires_proof, proof_url')
+        .eq('patient_id', patient.id)
+        .order('assigned_date', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(30),
+      supabase
+        .from('task_feedback')
+        .select('task_assignment_id, mood, note')
+        .eq('patient_id', patient.id)
+        .order('created_at', { ascending: false })
+        .limit(30),
+    ])
+    const fbMap = {}
+    ;(feedbackRes.data || []).forEach((fb) => {
+      if (!fbMap[fb.task_assignment_id]) fbMap[fb.task_assignment_id] = fb
+    })
+    setPatientHistory((tasksRes.data || []).map((t) => ({ ...t, feedback: fbMap[t.id] || null })))
   }
 
   const filtered = patients.filter((p) =>
@@ -247,20 +264,56 @@ export default function PatientsPage() {
             patientHistory.map((task) => (
               <div
                 key={task.id}
-                className="flex items-center justify-between p-3 rounded-xl bg-surface"
+                className="p-3 rounded-xl bg-surface space-y-2"
               >
-                <div>
-                  <p className="text-sm font-semibold text-text-primary">
-                    {task.title}
-                  </p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xs text-text-muted flex items-center gap-1">
-                      <Calendar size={12} />
-                      {task.assigned_date}
-                    </span>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-text-primary">
+                      {task.title}
+                    </p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs text-text-muted flex items-center gap-1">
+                        <Calendar size={12} />
+                        {task.assigned_date}
+                        {task.assigned_time && (
+                          <> · {new Date(`2000-01-01T${task.assigned_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</>
+                        )}
+                      </span>
+                    </div>
                   </div>
+                  <Badge color={task.status}>{task.status.replace('_', ' ')}</Badge>
                 </div>
-                <Badge color={task.status}>{task.status.replace('_', ' ')}</Badge>
+
+                {task.description && (
+                  <p className="text-xs text-text-secondary">{task.description}</p>
+                )}
+                {task.resource_url && (
+                  <p className="text-xs text-text-muted italic">Resources: {task.resource_url}</p>
+                )}
+
+                {/* Patient inputs */}
+                {task.status === 'completed' && (task.feedback || task.proof_url) && (
+                  <div className="border-t border-border pt-2 space-y-1.5">
+                    {task.feedback && (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm">{MOOD_EMOJI[task.feedback.mood] || ''}</span>
+                        <span className="text-xs text-text-secondary capitalize">{task.feedback.mood}</span>
+                      </div>
+                    )}
+                    {task.feedback?.note && (
+                      <div className="flex items-start gap-1.5">
+                        <MessageSquare size={12} className="text-text-muted mt-0.5 shrink-0" />
+                        <p className="text-xs text-text-secondary">{task.feedback.note}</p>
+                      </div>
+                    )}
+                    {task.proof_url && (
+                      <a href={task.proof_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-primary hover:underline">
+                        <Camera size={12} />
+                        View proof photo
+                      </a>
+                    )}
+                  </div>
+                )}
               </div>
             ))
           )}
