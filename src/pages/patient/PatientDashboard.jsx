@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useCachedState, hasCache } from '../../hooks/useCachedState'
 import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus'
 import { calculateStreak } from '../../utils/streak'
+import { getTimeOfDay } from '../../utils/time'
 import Card from '../../components/ui/Card'
 import Badge from '../../components/ui/Badge'
 import Button from '../../components/ui/Button'
@@ -70,7 +71,7 @@ export default function PatientDashboard() {
     ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
     const { data, error: err } = await supabase
       .from('task_assignments')
-      .select('assigned_date, status, is_rest_day')
+      .select('assigned_date, status')
       .eq('patient_id', profile.id)
       .gte('assigned_date', ninetyDaysAgo.toISOString().split('T')[0])
       .order('assigned_date', { ascending: false })
@@ -79,8 +80,8 @@ export default function PatientDashboard() {
 
   const streak = calculateStreak(allTasks)
 
-  const total = tasks.filter((t) => !t.is_rest_day).length
-  const completed = tasks.filter((t) => !t.is_rest_day && t.status === 'completed').length
+  const total = tasks.length
+  const completed = tasks.filter((t) => t.status === 'completed').length
   const progress = total > 0 ? Math.round((completed / total) * 100) : 0
   const remaining = total - completed
   const progressColor =
@@ -90,7 +91,6 @@ export default function PatientDashboard() {
     : 'from-red-500 to-rose-400'
 
   function getTimeBucket(task) {
-    if (task.assigned_time_of_day) return task.assigned_time_of_day
     if (task.assigned_time) {
       const hour = parseInt(task.assigned_time.split(':')[0])
       if (hour < 12) return 'morning'
@@ -211,7 +211,7 @@ export default function PatientDashboard() {
                   const config = statusConfig[task.status]
                   const StatusIcon = config.icon
                   return (
-                    <Card key={task.id} hover className={`${task.status !== 'completed' && !task.is_rest_day ? '!border-red-300 !bg-red-50/30' : ''}`} onClick={() => navigate(`/patient/task/${task.id}`)}>
+                    <Card key={task.id} hover className={`${task.status !== 'completed' ? '!border-red-300 !bg-red-50/30' : ''}`} onClick={() => navigate(`/patient/task/${task.id}`)}>
                       <div className="flex items-center gap-4">
                         <div
                           className={`shrink-0 ${
@@ -324,11 +324,4 @@ export default function PatientDashboard() {
 
     </div>
   )
-}
-
-function getTimeOfDay() {
-  const h = new Date().getHours()
-  if (h < 12) return 'morning'
-  if (h < 17) return 'afternoon'
-  return 'evening'
 }

@@ -64,7 +64,7 @@ export default function PatientDetailPage() {
         .single(),
       supabase
         .from('task_assignments')
-        .select('assigned_date, status, is_rest_day')
+        .select('assigned_date, status')
         .eq('patient_id', patientId)
         .eq('therapist_id', profile.id)
         .gte('assigned_date', ninetyDaysAgoStr)
@@ -121,14 +121,8 @@ export default function PatientDetailPage() {
       description: assignForm.description || null,
       assigned_date: assignForm.assigned_date,
       assigned_time: assignForm.assigned_time,
-      assigned_time_of_day: null,
-      template_id: null,
-      duration_minutes: null,
-      therapy_type: null,
       resource_url: assignForm.resource_url || null,
       requires_proof: assignForm.requires_proof,
-      is_rest_day: false,
-      details: null,
     })
 
     if (err) { setAssigning(false); return }
@@ -146,9 +140,8 @@ export default function PatientDetailPage() {
   }
 
   // Stats
-  const realTasks = allTasks.filter((t) => !t.is_rest_day)
-  const totalCompleted = realTasks.filter((t) => t.status === 'completed').length
-  const totalAssigned = realTasks.length
+  const totalCompleted = allTasks.filter((t) => t.status === 'completed').length
+  const totalAssigned = allTasks.length
   const consistency = totalAssigned > 0 ? Math.round((totalCompleted / totalAssigned) * 100) : 0
   const streak = calculateStreak(allTasks)
 
@@ -158,7 +151,7 @@ export default function PatientDetailPage() {
     const d = new Date()
     d.setDate(d.getDate() - i)
     const dateStr = toDateStr(d)
-    const dayTasks = realTasks.filter((t) => t.assigned_date === dateStr)
+    const dayTasks = allTasks.filter((t) => t.assigned_date === dateStr)
     const dayCompleted = dayTasks.filter((t) => t.status === 'completed').length
     const pct = dayTasks.length > 0 ? Math.round((dayCompleted / dayTasks.length) * 100) : null
     dailyData.push({

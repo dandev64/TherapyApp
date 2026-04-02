@@ -39,7 +39,7 @@ export default function ProgressPage() {
       // All task assignments ever (for streak + consistency)
       supabase
         .from('task_assignments')
-        .select('assigned_date, status, is_rest_day')
+        .select('assigned_date, status')
         .eq('patient_id', profile.id)
         .order('assigned_date', { ascending: false }),
       // Feedback from last 30 days
@@ -73,9 +73,8 @@ export default function ProgressPage() {
   const streak = calculateStreak(allTasks)
 
   // Consistency calculation
-  const realTasks = allTasks.filter((t) => !t.is_rest_day)
-  const totalCompleted = realTasks.filter((t) => t.status === 'completed').length
-  const totalAssigned = realTasks.length
+  const totalCompleted = allTasks.filter((t) => t.status === 'completed').length
+  const totalAssigned = allTasks.length
   const consistency = totalAssigned > 0 ? ((totalCompleted / totalAssigned) * 100).toFixed(1) : '0.0'
 
   // Mood frequency chart data

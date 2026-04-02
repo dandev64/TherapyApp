@@ -58,10 +58,10 @@ SELECT cron.schedule(
   $$
 );
 
--- Patient reminder: every hour from 12pm-9pm UTC
+-- Patient reminder: every 15 minutes (sends 1 hour before each task's assigned_time)
 SELECT cron.schedule(
   'patient-task-reminder',
-  '0 12-21 * * *',
+  '*/15 * * * *',
   $$
   SELECT net.http_post(
     url := 'https://YOUR_PROJECT_REF.supabase.co/functions/v1/send-email-reminders',

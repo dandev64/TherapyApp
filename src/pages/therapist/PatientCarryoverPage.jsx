@@ -55,13 +55,13 @@ export default function PatientCarryoverPage() {
     const [todayBatchRes, allBatchRes] = await Promise.all([
       supabase
         .from('task_assignments')
-        .select('patient_id, status, is_rest_day')
+        .select('patient_id, status')
         .eq('therapist_id', profile.id)
         .in('patient_id', patientIds)
         .eq('assigned_date', today),
       supabase
         .from('task_assignments')
-        .select('patient_id, assigned_date, status, is_rest_day')
+        .select('patient_id, assigned_date, status')
         .eq('therapist_id', profile.id)
         .in('patient_id', patientIds)
         .gte('assigned_date', ninetyDaysAgoStr)
@@ -80,11 +80,10 @@ export default function PatientCarryoverPage() {
     })
 
     const patientDetails = (assignments || []).map((a) => {
-      const todayTasks = (todayByPatient[a.patient_id] || []).filter((t) => !t.is_rest_day)
+      const todayTasks = todayByPatient[a.patient_id] || []
       const allTasks = allByPatient[a.patient_id] || []
-      const realAll = allTasks.filter((t) => !t.is_rest_day)
-      const totalCompleted = realAll.filter((t) => t.status === 'completed').length
-      const consistency = realAll.length > 0 ? Math.round((totalCompleted / realAll.length) * 100) : 0
+      const totalCompleted = allTasks.filter((t) => t.status === 'completed').length
+      const consistency = allTasks.length > 0 ? Math.round((totalCompleted / allTasks.length) * 100) : 0
 
       return {
         ...a.profiles,

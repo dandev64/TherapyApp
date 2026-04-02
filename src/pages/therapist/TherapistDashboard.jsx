@@ -8,6 +8,7 @@ import PatientMoodChart, { MOOD_CONFIG } from '../../components/therapist/Patien
 import Card from '../../components/ui/Card'
 import { BarChart, Bar, XAxis, YAxis, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import { Users, ClipboardCheck, Target, FileText, Heart, AlertTriangle, Flame, TrendingUp } from 'lucide-react'
+import { getTimeOfDay } from '../../utils/time'
 
 export default function TherapistDashboard() {
   const { profile } = useAuth()
@@ -80,13 +81,13 @@ export default function TherapistDashboard() {
     const [todayBatchRes, allBatchRes] = await Promise.all([
       supabase
         .from('task_assignments')
-        .select('patient_id, status, is_rest_day')
+        .select('patient_id, status')
         .eq('therapist_id', profile.id)
         .in('patient_id', patientIds)
         .eq('assigned_date', today),
       supabase
         .from('task_assignments')
-        .select('patient_id, assigned_date, status, is_rest_day')
+        .select('patient_id, assigned_date, status')
         .eq('therapist_id', profile.id)
         .in('patient_id', patientIds)
         .gte('assigned_date', ninetyDaysAgoStr)
@@ -105,11 +106,10 @@ export default function TherapistDashboard() {
     })
 
     const patientDetails = patients.map((p) => {
-      const todayTasks = (todayByPatient[p.patient_id] || []).filter((t) => !t.is_rest_day)
+      const todayTasks = todayByPatient[p.patient_id] || []
       const allTasks = allByPatient[p.patient_id] || []
-      const realAll = allTasks.filter((t) => !t.is_rest_day)
-      const totalCompleted = realAll.filter((t) => t.status === 'completed').length
-      const consistency = realAll.length > 0 ? Math.round((totalCompleted / realAll.length) * 100) : 0
+      const totalCompleted = allTasks.filter((t) => t.status === 'completed').length
+      const consistency = allTasks.length > 0 ? Math.round((totalCompleted / allTasks.length) * 100) : 0
 
       return {
         ...p.profiles,
@@ -127,7 +127,7 @@ export default function TherapistDashboard() {
     if (patientIds.length > 0) {
       const { data: recentTasks } = await supabase
         .from('task_assignments')
-        .select('assigned_date, status, is_rest_day')
+        .select('assigned_date, status')
         .eq('therapist_id', profile.id)
         .in('patient_id', patientIds)
         .gte('assigned_date', fourteenDaysAgoStr)
@@ -135,7 +135,6 @@ export default function TherapistDashboard() {
 
       const byDate = {}
       ;(recentTasks || []).forEach((t) => {
-        if (t.is_rest_day) return
         if (!byDate[t.assigned_date]) byDate[t.assigned_date] = { total: 0, completed: 0 }
         byDate[t.assigned_date].total++
         if (t.status === 'completed') byDate[t.assigned_date].completed++
@@ -411,11 +410,4 @@ export default function TherapistDashboard() {
       )}
     </div>
   )
-}
-
-function getTimeOfDay() {
-  const h = new Date().getHours()
-  if (h < 12) return 'morning'
-  if (h < 17) return 'afternoon'
-  return 'evening'
 }

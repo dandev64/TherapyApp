@@ -98,9 +98,7 @@ export default function ReadOnlyCalendar({ patientId, therapistId }) {
 
   // Selected day detail
   const selectedTasks = tasksByDate[selectedDate] || []
-  const realTasks = selectedTasks.filter((t) => !t.is_rest_day)
-  const isRestDay = selectedTasks.some((t) => t.is_rest_day) && realTasks.length === 0
-  const completedCount = realTasks.filter((t) => t.status === 'completed').length
+  const completedCount = selectedTasks.filter((t) => t.status === 'completed').length
   const selDateObj = new Date(selectedDate + 'T00:00:00')
   const selDayName = FULL_DAYS[selDateObj.getDay()]
   const selDayNum = selDateObj.getDate()
@@ -142,14 +140,12 @@ export default function ReadOnlyCalendar({ patientId, therapistId }) {
               {days.map((day) => {
                 const dateStr = toDateStr(new Date(year, month, day))
                 const dayTasks = tasksByDate[dateStr] || []
-                const dayRealTasks = dayTasks.filter((t) => !t.is_rest_day)
-                const dayIsRest = dayTasks.some((t) => t.is_rest_day) && dayRealTasks.length === 0
-                const dayCompleted = dayRealTasks.filter((t) => t.status === 'completed').length
-                const dayTotal = dayRealTasks.length
+                const dayCompleted = dayTasks.filter((t) => t.status === 'completed').length
+                const dayTotal = dayTasks.length
                 const allDone = dayTotal > 0 && dayCompleted === dayTotal
                 const isToday = dateStr === todayStr
                 const isSelected = dateStr === selectedDate
-                const hasTherapy = dayRealTasks.some((t) => t.therapy_type)
+                const hasTherapy = dayTasks.some((t) => t.therapy_type)
 
                 return (
                   <button
@@ -159,8 +155,7 @@ export default function ReadOnlyCalendar({ patientId, therapistId }) {
                       ${isToday ? 'bg-primary-container ring-2 ring-primary ring-offset-2' : ''}
                       ${isSelected && !isToday ? 'bg-primary/10 ring-2 ring-primary/40' : ''}
                       ${!isToday && !isSelected && allDone ? 'bg-secondary-container/20' : ''}
-                      ${!isToday && !isSelected && dayIsRest ? 'bg-surface-container/50' : ''}
-                      ${!isToday && !isSelected && !allDone && !dayIsRest ? 'bg-surface-container-lowest hover:bg-primary-container/20' : ''}
+                      ${!isToday && !isSelected && !allDone ? 'bg-surface-container-lowest hover:bg-primary-container/20' : ''}
                     `}
                   >
                     <div>
@@ -172,10 +167,7 @@ export default function ReadOnlyCalendar({ patientId, therapistId }) {
                       )}
                     </div>
                     <div>
-                      {dayIsRest && (
-                        <span className="text-outline text-[10px]">😴</span>
-                      )}
-                      {hasTherapy && !dayIsRest && (
+                      {hasTherapy && (
                         <span className="inline-block px-1 sm:px-1.5 py-0.5 bg-primary/10 text-primary text-[8px] sm:text-[10px] font-bold rounded-full">
                           therapy
                         </span>
@@ -186,7 +178,7 @@ export default function ReadOnlyCalendar({ patientId, therapistId }) {
                             {dayTotal} task{dayTotal !== 1 ? 's' : ''}
                           </span>
                           <div className="flex gap-0.5 sm:hidden">
-                            {dayRealTasks.slice(0, 4).map((t, i) => (
+                            {dayTasks.slice(0, 4).map((t, i) => (
                               <div
                                 key={i}
                                 className={`w-1.5 h-1.5 rounded-full ${t.status === 'completed' ? 'bg-secondary' : 'bg-secondary-container'}`}
@@ -197,7 +189,7 @@ export default function ReadOnlyCalendar({ patientId, therapistId }) {
                       )}
                       {dayTotal > 0 && (
                         <div className="hidden sm:flex gap-0.5 mt-0.5">
-                          {dayRealTasks.map((t, i) => (
+                          {dayTasks.map((t, i) => (
                             <div
                               key={i}
                               className={`w-1.5 h-1.5 rounded-full ${t.status === 'completed' ? 'bg-secondary' : 'bg-secondary-container'}`}
@@ -218,17 +210,13 @@ export default function ReadOnlyCalendar({ patientId, therapistId }) {
             <h3 className="text-2xl font-extrabold text-text-primary mt-1">
               {selDayName} {selDayNum}
             </h3>
-            {isRestDay ? (
-              <p className="text-sm text-outline mt-1">😴 Rest day</p>
-            ) : (
-              <p className="text-secondary font-medium text-sm mt-1">
-                {completedCount} of {realTasks.length} completed
-              </p>
-            )}
+            <p className="text-secondary font-medium text-sm mt-1">
+              {completedCount} of {selectedTasks.length} completed
+            </p>
 
-            {realTasks.length > 0 && (
+            {selectedTasks.length > 0 && (
               <div className="mt-5 space-y-3">
-                {realTasks.map((task) => {
+                {selectedTasks.map((task) => {
                   const isDone = task.status === 'completed'
                   const fb = feedbackMap[task.id]
                   return (
@@ -252,7 +240,7 @@ export default function ReadOnlyCalendar({ patientId, therapistId }) {
                           <p className="text-sm text-on-surface-variant">
                             {task.assigned_time
                               ? new Date(`2000-01-01T${task.assigned_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-                              : task.assigned_time_of_day}
+                              : '—'}
                           </p>
                           {isDone && fb && (
                             <span className="text-xs text-text-secondary">{MOOD_EMOJI[fb.mood] || ''} {fb.mood}</span>
@@ -266,7 +254,7 @@ export default function ReadOnlyCalendar({ patientId, therapistId }) {
               </div>
             )}
 
-            {realTasks.length === 0 && !isRestDay && (
+            {selectedTasks.length === 0 && (
               <p className="text-sm text-outline mt-5">No tasks assigned for this day.</p>
             )}
 

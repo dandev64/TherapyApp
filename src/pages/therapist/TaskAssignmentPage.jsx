@@ -102,14 +102,8 @@ export default function TaskAssignmentPage() {
       description: form.description || null,
       assigned_date: form.assigned_date,
       assigned_time: form.assigned_time,
-      assigned_time_of_day: null,
-      template_id: null,
-      duration_minutes: null,
-      therapy_type: null,
       resource_url: form.resource_url || null,
       requires_proof: form.requires_proof,
-      is_rest_day: false,
-      details: null,
     })
 
     setLoading(false)

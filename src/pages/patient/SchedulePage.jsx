@@ -87,9 +87,7 @@ export default function SchedulePage() {
   }, [tasks])
 
   const selectedTasks = tasksByDate[selectedDate] || []
-  const realTasks = selectedTasks.filter((t) => !t.is_rest_day)
-  const isRestDay = selectedTasks.some((t) => t.is_rest_day) && realTasks.length === 0
-  const completedCount = realTasks.filter((t) => t.status === 'completed').length
+  const completedCount = selectedTasks.filter((t) => t.status === 'completed').length
 
   // Calendar grid calculations
   const { year, month } = currentMonth
@@ -202,14 +200,12 @@ export default function SchedulePage() {
             {days.map((day) => {
               const dateStr = toDateStr(new Date(year, month, day))
               const dayTasks = tasksByDate[dateStr] || []
-              const dayRealTasks = dayTasks.filter((t) => !t.is_rest_day)
-              const dayIsRest = dayTasks.some((t) => t.is_rest_day) && dayRealTasks.length === 0
-              const dayCompleted = dayRealTasks.filter((t) => t.status === 'completed').length
-              const dayTotal = dayRealTasks.length
+              const dayCompleted = dayTasks.filter((t) => t.status === 'completed').length
+              const dayTotal = dayTasks.length
               const allDone = dayTotal > 0 && dayCompleted === dayTotal
               const isToday = dateStr === todayStr
               const isSelected = dateStr === selectedDate
-              const hasTherapy = dayRealTasks.some((t) => t.therapy_type)
+              const hasTherapy = dayTasks.some((t) => t.therapy_type)
 
               return (
                 <button
@@ -219,8 +215,7 @@ export default function SchedulePage() {
                     ${isToday ? 'bg-primary-container ring-2 ring-primary ring-offset-2' : ''}
                     ${isSelected && !isToday ? 'bg-primary/10 ring-2 ring-primary/40' : ''}
                     ${!isToday && !isSelected && allDone ? 'bg-secondary-container/20' : ''}
-                    ${!isToday && !isSelected && dayIsRest ? 'bg-surface-container/50' : ''}
-                    ${!isToday && !isSelected && !allDone && !dayIsRest ? 'bg-surface-container-lowest hover:bg-primary-container/20' : ''}
+                    ${!isToday && !isSelected && !allDone ? 'bg-surface-container-lowest hover:bg-primary-container/20' : ''}
                   `}
                 >
                   <div>
@@ -232,10 +227,7 @@ export default function SchedulePage() {
                     )}
                   </div>
                   <div>
-                    {dayIsRest && (
-                      <span className="text-outline text-[10px]">😴</span>
-                    )}
-                    {hasTherapy && !dayIsRest && (
+                    {hasTherapy && (
                       <span className="inline-block px-1 sm:px-1.5 py-0.5 bg-primary/10 text-primary text-[8px] sm:text-[10px] font-bold rounded-full">
                         therapy
                       </span>
@@ -246,7 +238,7 @@ export default function SchedulePage() {
                           {dayTotal} task{dayTotal !== 1 ? 's' : ''}
                         </span>
                         <div className="flex gap-0.5 sm:hidden">
-                          {dayRealTasks.slice(0, 4).map((t, i) => (
+                          {dayTasks.slice(0, 4).map((t, i) => (
                             <div
                               key={i}
                               className={`w-1.5 h-1.5 rounded-full ${t.status === 'completed' ? 'bg-secondary' : 'bg-secondary-container'}`}
@@ -257,7 +249,7 @@ export default function SchedulePage() {
                     )}
                     {dayTotal > 0 && (
                       <div className="hidden sm:flex gap-0.5 mt-0.5">
-                        {dayRealTasks.map((t, i) => (
+                        {dayTasks.map((t, i) => (
                           <div
                             key={i}
                             className={`w-1.5 h-1.5 rounded-full ${t.status === 'completed' ? 'bg-secondary' : 'bg-secondary-container'}`}
@@ -278,18 +270,14 @@ export default function SchedulePage() {
           <h3 className="text-3xl font-extrabold text-text-primary mt-1">
             {selDayName} {selDayNum}
           </h3>
-          {isRestDay ? (
-            <p className="text-sm text-outline mt-1">😴 Rest day</p>
-          ) : (
-            <p className="text-secondary font-medium text-sm mt-1">
-              {completedCount} of {realTasks.length} completed
-            </p>
-          )}
+          <p className="text-secondary font-medium text-sm mt-1">
+            {completedCount} of {selectedTasks.length} completed
+          </p>
 
           {/* Task Timeline */}
-          {realTasks.length > 0 && (
+          {selectedTasks.length > 0 && (
             <div className="mt-6 space-y-3">
-              {realTasks.map((task) => {
+              {selectedTasks.map((task) => {
                 const isDone = task.status === 'completed'
                 return (
                   <div
@@ -317,7 +305,7 @@ export default function SchedulePage() {
                         <p className="text-sm text-on-surface-variant">
                           {task.assigned_time
                             ? new Date(`2000-01-01T${task.assigned_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-                            : task.assigned_time_of_day}
+                            : '—'}
                         </p>
                       </div>
                       <ChevronRight size={14} className="text-text-muted shrink-0" />
@@ -328,7 +316,7 @@ export default function SchedulePage() {
             </div>
           )}
 
-          {realTasks.length === 0 && !isRestDay && (
+          {selectedTasks.length === 0 && (
             <p className="text-sm text-outline mt-6">No tasks assigned for this day.</p>
           )}
 
@@ -352,10 +340,10 @@ export default function SchedulePage() {
           </div>
 
           {/* Start Tasks Button */}
-          {realTasks.length > 0 && realTasks.some((t) => t.status !== 'completed') && (
+          {selectedTasks.length > 0 && selectedTasks.some((t) => t.status !== 'completed') && (
             <button
               onClick={() => {
-                const next = realTasks.find((t) => t.status !== 'completed')
+                const next = selectedTasks.find((t) => t.status !== 'completed')
                 if (next) navigate(`/patient/task/${next.id}`)
               }}
               className="w-full mt-6 bg-primary text-on-primary rounded-full py-3 font-bold text-sm hover:opacity-90 transition-opacity cursor-pointer"

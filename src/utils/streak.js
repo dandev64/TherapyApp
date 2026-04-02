@@ -5,7 +5,6 @@ function toLocalDateStr(date) {
 export function calculateStreak(taskAssignments) {
   const byDate = {}
   taskAssignments.forEach((t) => {
-    if (t.is_rest_day) return
     if (!byDate[t.assigned_date]) byDate[t.assigned_date] = { total: 0, completed: 0 }
     byDate[t.assigned_date].total++
     if (t.status === 'completed') byDate[t.assigned_date].completed++
@@ -52,7 +51,7 @@ export function calculateStreak(taskAssignments) {
 export function getTodayProgress(taskAssignments) {
   const todayStr = toLocalDateStr(new Date())
   const todayTasks = taskAssignments.filter(
-    (t) => t.assigned_date === todayStr && !t.is_rest_day
+    (t) => t.assigned_date === todayStr
   )
   const total = todayTasks.length
   const completed = todayTasks.filter((t) => t.status === 'completed').length
