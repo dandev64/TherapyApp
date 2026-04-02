@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from 'recharts'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -7,7 +7,6 @@ import { calculateStreak } from '../../utils/streak'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
-import Select from '../../components/ui/Select'
 import Modal from '../../components/ui/Modal'
 import ReadOnlyCalendar from '../../components/therapist/ReadOnlyCalendar'
 import PatientMoodChart from '../../components/therapist/PatientMoodChart'
@@ -15,21 +14,6 @@ import PatientFeedbackList from '../../components/therapist/PatientFeedbackList'
 import {
   ArrowLeft, Flame, Target, CheckCircle, Calendar, ClipboardList, MessageSquare, Send,
 } from 'lucide-react'
-
-const WEEKDAYS = [
-  { key: 'monday', label: 'Mon' },
-  { key: 'tuesday', label: 'Tue' },
-  { key: 'wednesday', label: 'Wed' },
-  { key: 'thursday', label: 'Thu' },
-  { key: 'friday', label: 'Fri' },
-  { key: 'saturday', label: 'Sat' },
-]
-
-const timeSlots = [
-  { value: 'morning', label: 'Morning' },
-  { value: 'afternoon', label: 'Afternoon' },
-  { value: 'evening', label: 'Evening' },
-]
 
 function toDateStr(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -49,14 +33,13 @@ export default function PatientDetailPage() {
 
   // Assign task state
   const [showAssign, setShowAssign] = useState(false)
-  const [templates, setTemplates] = useState([])
   const [assignForm, setAssignForm] = useState({
-    template_id: '',
-    start_date: new Date().toISOString().split('T')[0],
-    end_date: '',
-    repeat_days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
-    assigned_time_of_day: 'morning',
-    details: '',
+    title: '',
+    description: '',
+    assigned_date: new Date().toISOString().split('T')[0],
+    assigned_time: '09:00',
+    resource_url: '',
+    requires_proof: false,
   })
   const [assigning, setAssigning] = useState(false)
 
@@ -114,73 +97,44 @@ export default function PatientDetailPage() {
     setLoading(false)
   }
 
-  async function openAssignModal() {
-    const { data } = await supabase
-      .from('task_templates')
-      .select('id, title, description, duration_minutes, therapy_type')
-      .eq('therapist_id', profile.id)
-      .order('created_at', { ascending: false })
-    setTemplates(data || [])
+  function openAssignModal() {
     setAssignForm({
-      template_id: data?.[0]?.id || '',
-      start_date: new Date().toISOString().split('T')[0],
-      end_date: '',
-      repeat_days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
-      assigned_time_of_day: 'morning',
-      details: '',
+      title: '',
+      description: '',
+      assigned_date: new Date().toISOString().split('T')[0],
+      assigned_time: '09:00',
+      resource_url: '',
+      requires_proof: false,
     })
     setShowAssign(true)
   }
 
   async function handleAssign(e) {
     e.preventDefault()
-    if (!assignForm.template_id || !assignForm.start_date || !assignForm.end_date || assignForm.repeat_days.length === 0) return
+    if (!assignForm.title || !assignForm.assigned_date || !assignForm.assigned_time) return
     setAssigning(true)
 
-    const rows = []
-    const start = new Date(assignForm.start_date + 'T00:00:00')
-    const end = new Date(assignForm.end_date + 'T00:00:00')
-    const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
-    const selectedTemplate = templates.find((t) => t.id === assignForm.template_id)
+    const { error: err } = await supabase.from('task_assignments').insert({
+      patient_id: patientId,
+      therapist_id: profile.id,
+      title: assignForm.title,
+      description: assignForm.description || null,
+      assigned_date: assignForm.assigned_date,
+      assigned_time: assignForm.assigned_time,
+      assigned_time_of_day: null,
+      template_id: null,
+      duration_minutes: null,
+      therapy_type: null,
+      resource_url: assignForm.resource_url || null,
+      requires_proof: assignForm.requires_proof,
+      is_rest_day: false,
+      details: null,
+    })
 
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      const dayName = DAY_NAMES[d.getDay()]
-      const dateStr = toDateStr(d)
-
-      if (dayName === 'sunday') continue
-
-      rows.push({
-        template_id: assignForm.template_id,
-        patient_id: patientId,
-        therapist_id: profile.id,
-        assigned_date: dateStr,
-        assigned_time_of_day: assignForm.assigned_time_of_day,
-        is_rest_day: !assignForm.repeat_days.includes(dayName),
-        title: selectedTemplate?.title || null,
-        description: selectedTemplate?.description || null,
-        duration_minutes: selectedTemplate?.duration_minutes || null,
-        therapy_type: selectedTemplate?.therapy_type || null,
-        details: assignForm.details || null,
-      })
-    }
-
-    if (rows.length > 0) {
-      const { error: err } = await supabase.from('task_assignments').insert(rows)
-      if (err) { setAssigning(false); return }
-    }
-
+    if (err) { setAssigning(false); return }
     setAssigning(false)
     setShowAssign(false)
     loadAll()
-  }
-
-  function toggleDay(day) {
-    setAssignForm((prev) => ({
-      ...prev,
-      repeat_days: prev.repeat_days.includes(day)
-        ? prev.repeat_days.filter((d) => d !== day)
-        : [...prev.repeat_days, day],
-    }))
   }
 
   if (loading) {
@@ -394,96 +348,66 @@ export default function PatientDetailPage() {
       <Modal
         isOpen={showAssign}
         onClose={() => setShowAssign(false)}
-        title={`Assign Task to ${patient?.full_name}`}
+        title={`New Task for ${patient?.full_name}`}
       >
         <form onSubmit={handleAssign} className="space-y-4">
-          {templates.length === 0 ? (
-            <div className="text-center py-4">
-              <p className="text-sm text-text-muted">
-                No templates yet.
-              </p>
-              <Link to="/therapist/templates" className="text-sm text-primary font-bold hover:underline mt-1 inline-block">
-                Create a template
-              </Link>
-            </div>
-          ) : (
-            <>
-              <Select
-                label="Task Template"
-                value={assignForm.template_id}
-                onChange={(e) => setAssignForm({ ...assignForm, template_id: e.target.value })}
-                options={templates.map((t) => ({ value: t.id, label: `${t.title} (${t.therapy_type})` }))}
-              />
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-semibold text-text-secondary">Details (optional)</label>
-                <textarea
-                  className="w-full px-4 py-3 rounded-xl border border-border text-sm bg-surface-alt text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-white resize-none"
-                  rows={2}
-                  placeholder="Additional instructions or links..."
-                  value={assignForm.details}
-                  onChange={(e) => setAssignForm({ ...assignForm, details: e.target.value })}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <Input
-                  label="Start Date"
-                  type="date"
-                  value={assignForm.start_date}
-                  onChange={(e) => setAssignForm({ ...assignForm, start_date: e.target.value })}
-                  required
-                />
-                <Input
-                  label="End Date"
-                  type="date"
-                  value={assignForm.end_date}
-                  onChange={(e) => setAssignForm({ ...assignForm, end_date: e.target.value })}
-                  required
-                />
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm font-semibold text-text-secondary">Repeat Days</label>
-                  <span className="text-xs text-text-muted">
-                    {assignForm.repeat_days.length} of {WEEKDAYS.length} selected
-                  </span>
-                </div>
-                <div className="flex gap-2">
-                  {WEEKDAYS.map(({ key, label }) => {
-                    const selected = assignForm.repeat_days.includes(key)
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => toggleDay(key)}
-                        className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer border-2 ${
-                          selected
-                            ? 'bg-primary text-on-primary border-primary shadow-sm'
-                            : 'bg-surface-card text-text-muted border-dashed border-border hover:border-primary/40 hover:text-text-secondary'
-                        }`}
-                      >
-                        {label}
-                        <div className={`text-[10px] font-medium mt-0.5 ${selected ? 'text-on-primary/70' : 'text-text-muted/60'}`}>
-                          {selected ? '✓ On' : 'Off'}
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
-                <p className="text-xs text-text-muted mt-1.5">
-                  Unselected days will be marked as rest days
-                </p>
-              </div>
-              <Select
-                label="Time of Day"
-                value={assignForm.assigned_time_of_day}
-                onChange={(e) => setAssignForm({ ...assignForm, assigned_time_of_day: e.target.value })}
-                options={timeSlots}
-              />
-              <Button type="submit" disabled={assigning || !assignForm.end_date} className="w-full">
-                {assigning ? 'Creating Schedule...' : 'Save Schedule'}
-              </Button>
-            </>
-          )}
+          <Input
+            label="Title"
+            placeholder="e.g. Practice vowel sounds for 10 minutes"
+            value={assignForm.title}
+            onChange={(e) => setAssignForm({ ...assignForm, title: e.target.value })}
+            required
+          />
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-semibold text-text-secondary">Description</label>
+            <textarea
+              className="w-full px-4 py-3 rounded-xl border border-border text-sm bg-surface-alt text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-surface-card resize-none"
+              rows={3}
+              placeholder="Describe the task..."
+              value={assignForm.description}
+              onChange={(e) => setAssignForm({ ...assignForm, description: e.target.value })}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Date"
+              type="date"
+              value={assignForm.assigned_date}
+              onChange={(e) => setAssignForm({ ...assignForm, assigned_date: e.target.value })}
+              required
+            />
+            <Input
+              label="Time"
+              type="time"
+              value={assignForm.assigned_time}
+              onChange={(e) => setAssignForm({ ...assignForm, assigned_time: e.target.value })}
+              required
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-semibold text-text-secondary">Resources (guides, video links, or instructions)</label>
+            <textarea
+              className="w-full px-4 py-3 rounded-xl border border-border text-sm bg-surface-alt text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-surface-card resize-none"
+              rows={2}
+              placeholder="e.g. https://youtube.com/watch?v=... or describe the resource"
+              value={assignForm.resource_url}
+              onChange={(e) => setAssignForm({ ...assignForm, resource_url: e.target.value })}
+            />
+          </div>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={assignForm.requires_proof}
+              onChange={(e) => setAssignForm({ ...assignForm, requires_proof: e.target.checked })}
+              className="w-4 h-4 rounded border-border text-primary focus:ring-primary/20 cursor-pointer"
+            />
+            <span className="text-sm font-semibold text-text-secondary">
+              Require proof of completion
+            </span>
+          </label>
+          <Button type="submit" disabled={assigning || !assignForm.title} className="w-full">
+            {assigning ? 'Assigning...' : 'Assign Task'}
+          </Button>
         </form>
       </Modal>
     </div>

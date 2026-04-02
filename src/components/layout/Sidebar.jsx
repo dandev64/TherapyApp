@@ -24,7 +24,7 @@ const navItems = {
   therapist: [
     { to: '/therapist', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/therapist/patients', icon: Users, label: 'Patients' },
-    { to: '/therapist/templates', icon: ClipboardList, label: 'Task Templates' },
+    { to: '/therapist/assignments', icon: ClipboardList, label: 'Task Assignment' },
     { to: '/therapist/notes', icon: FileText, label: 'Caregiver Notes' },
     { to: '/therapist/notifications', icon: Bell, label: 'Notifications' },
     { to: '/therapist/profile', icon: User, label: 'Profile' },

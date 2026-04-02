@@ -160,6 +160,23 @@ export default function TaskDetailPage() {
           </Card>
         )}
 
+        {task.resource_url && (
+          <Card>
+            <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">
+              Resources
+            </p>
+            <div className="text-sm text-text-secondary leading-relaxed">
+              <Linkify text={task.resource_url} />
+            </div>
+          </Card>
+        )}
+
+        {task.requires_proof && (
+          <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-700 font-medium">
+            Your therapist has requested proof of completion for this task.
+          </div>
+        )}
+
         {/* Stopwatch */}
         <Card className="text-center">
           <div className="flex items-center justify-center gap-3 mb-4">

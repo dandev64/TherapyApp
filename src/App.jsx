@@ -10,7 +10,7 @@ import SignUpPage from './pages/auth/SignUpPage'
 import TherapistDashboard from './pages/therapist/TherapistDashboard'
 import PatientCarryoverPage from './pages/therapist/PatientCarryoverPage'
 import PatientDetailPage from './pages/therapist/PatientDetailPage'
-import TaskTemplatesPage from './pages/therapist/TaskTemplatesPage'
+import TaskAssignmentPage from './pages/therapist/TaskAssignmentPage'
 import TherapistNotesPage from './pages/therapist/TherapistNotesPage'
 import NotificationsPage from './pages/therapist/NotificationsPage'
 import TherapistProfilePage from './pages/therapist/TherapistProfilePage'
@@ -64,7 +64,7 @@ export default function App() {
             <Route index element={<TherapistDashboard />} />
             <Route path="patients" element={<PatientCarryoverPage />} />
             <Route path="patients/:patientId" element={<PatientDetailPage />} />
-            <Route path="templates" element={<TaskTemplatesPage />} />
+            <Route path="assignments" element={<TaskAssignmentPage />} />
             <Route path="notes" element={<TherapistNotesPage />} />
             <Route path="notifications" element={<NotificationsPage />} />
             <Route path="profile" element={<TherapistProfilePage />} />

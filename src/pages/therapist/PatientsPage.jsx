@@ -104,7 +104,7 @@ export default function PatientsPage() {
     setPatientHistory([])
     const { data } = await supabase
       .from('task_assignments')
-      .select('id, title, therapy_type, assigned_date, status')
+      .select('id, title, assigned_date, status')
       .eq('patient_id', patient.id)
       .order('assigned_date', { ascending: false })
       .order('created_at', { ascending: false })
@@ -254,9 +254,6 @@ export default function PatientsPage() {
                     {task.title}
                   </p>
                   <div className="flex items-center gap-2 mt-1">
-                    <Badge color={task.therapy_type}>
-                      {task.therapy_type}
-                    </Badge>
                     <span className="text-xs text-text-muted flex items-center gap-1">
                       <Calendar size={12} />
                       {task.assigned_date}

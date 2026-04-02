@@ -223,7 +223,9 @@ export default function ReadOnlyCalendar({ patientId, therapistId }) {
                         {task.title}
                       </p>
                       <p className="text-sm text-on-surface-variant">
-                        {task.assigned_time_of_day} &middot; {task.duration_minutes} min
+                        {task.assigned_time
+                          ? new Date(`2000-01-01T${task.assigned_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+                          : task.assigned_time_of_day}
                       </p>
                     </div>
                   )

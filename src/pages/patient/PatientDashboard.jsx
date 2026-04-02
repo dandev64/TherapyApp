@@ -20,6 +20,7 @@ import {
   Trophy,
   Flame,
   AlertTriangle,
+  CheckSquare,
 } from 'lucide-react'
 
 const timeIcons = {
@@ -99,10 +100,21 @@ export default function PatientDashboard() {
     : progress > 0 ? 'from-amber-500 to-yellow-400'
     : 'from-red-500 to-rose-400'
 
+  function getTimeBucket(task) {
+    if (task.assigned_time_of_day) return task.assigned_time_of_day
+    if (task.assigned_time) {
+      const hour = parseInt(task.assigned_time.split(':')[0])
+      if (hour < 12) return 'morning'
+      if (hour < 17) return 'afternoon'
+      return 'evening'
+    }
+    return 'morning'
+  }
+
   const grouped = {
-    morning: tasks.filter((t) => t.assigned_time_of_day === 'morning'),
-    afternoon: tasks.filter((t) => t.assigned_time_of_day === 'afternoon'),
-    evening: tasks.filter((t) => t.assigned_time_of_day === 'evening'),
+    morning: tasks.filter((t) => getTimeBucket(t) === 'morning'),
+    afternoon: tasks.filter((t) => getTimeBucket(t) === 'afternoon'),
+    evening: tasks.filter((t) => getTimeBucket(t) === 'evening'),
   }
 
   if (loading) {
@@ -239,15 +251,22 @@ export default function PatientDashboard() {
                               {task.description}
                             </p>
                           )}
-                          <div className="flex items-center gap-2 mt-1.5">
-                            <Badge color={task.therapy_type}>
-                              {task.therapy_type}
-                            </Badge>
-                            <span className="text-xs text-text-muted flex items-center gap-1">
-                              <Clock size={11} />
-                              {task.duration_minutes} min
-                            </span>
-                          </div>
+                          {(task.assigned_time || task.requires_proof) && (
+                            <div className="flex items-center gap-2 mt-1.5">
+                              {task.assigned_time && (
+                                <span className="text-xs text-text-muted flex items-center gap-1">
+                                  <Clock size={11} />
+                                  {new Date(`2000-01-01T${task.assigned_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                                </span>
+                              )}
+                              {task.requires_proof && (
+                                <span className="text-xs text-primary flex items-center gap-1">
+                                  <CheckSquare size={11} />
+                                  Proof required
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
 
                         {config.next && (
@@ -335,26 +354,32 @@ export default function PatientDashboard() {
               </div>
             )}
 
-            {selectedTask.details && (
+            {selectedTask.resource_url && (
               <div>
                 <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1">
-                  Additional Instructions
+                  Resources
                 </p>
-                <p className="text-sm text-text-primary leading-relaxed">
-                  {selectedTask.details}
+                <p className="text-sm text-text-primary leading-relaxed whitespace-pre-wrap">
+                  {selectedTask.resource_url}
                 </p>
               </div>
             )}
 
-            <div className="flex items-center gap-3">
-              <Badge color={selectedTask.therapy_type}>
-                {selectedTask.therapy_type}
-              </Badge>
-              <span className="text-sm text-text-muted flex items-center gap-1">
-                <Clock size={14} />
-                {selectedTask.duration_minutes} min
-              </span>
-            </div>
+            {selectedTask.assigned_time && (
+              <div className="flex items-center gap-2">
+                <Clock size={14} className="text-text-muted" />
+                <span className="text-sm text-text-muted">
+                  {new Date(`2000-01-01T${selectedTask.assigned_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                </span>
+              </div>
+            )}
+
+            {selectedTask.requires_proof && (
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-700 font-medium flex items-center gap-2">
+                <CheckSquare size={16} />
+                Proof of completion required
+              </div>
+            )}
 
             {statusConfig[selectedTask.status]?.next && (
               <Button
