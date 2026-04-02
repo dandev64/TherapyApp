@@ -22,6 +22,7 @@ import TaskDetailPage from './pages/patient/TaskDetailPage'
 import ProgressPage from './pages/patient/ProgressPage'
 import PatientProfilePage from './pages/patient/PatientProfilePage'
 import MessagesPage from './pages/patient/MessagesPage'
+import PatientMessagesInbox from './pages/patient/PatientMessagesInbox'
 import CaregiverDashboard from './pages/caregiver/CaregiverDashboard'
 import CaregiverNotesPage from './pages/caregiver/CaregiverNotesPage'
 
@@ -88,6 +89,7 @@ export default function App() {
             <Route path="progress" element={<ProgressPage />} />
             <Route path="notifications" element={<NotificationsPage />} />
             <Route path="profile" element={<PatientProfilePage />} />
+            <Route path="messages" element={<PatientMessagesInbox />} />
             <Route path="messages/:recipientId" element={<MessagesPage />} />
           </Route>
 

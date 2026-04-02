@@ -34,6 +34,7 @@ const navItems = {
     { to: '/patient', icon: LayoutDashboard, label: 'Home' },
     { to: '/patient/schedule', icon: CalendarDays, label: 'Schedule' },
     { to: '/patient/progress', icon: TrendingUp, label: 'Progress' },
+    { to: '/patient/messages', icon: MessageSquare, label: 'Messages' },
     { to: '/patient/notifications', icon: Bell, label: 'Notifications' },
     { to: '/patient/profile', icon: User, label: 'Profile' },
   ],
