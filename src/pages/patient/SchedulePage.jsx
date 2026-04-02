@@ -294,29 +294,34 @@ export default function SchedulePage() {
                 return (
                   <div
                     key={task.id}
-                    className="relative pl-6 cursor-pointer hover:opacity-80 transition-opacity"
+                    className="relative pl-6 cursor-pointer rounded-xl p-3 -ml-3 hover:bg-primary-container/30 transition-colors"
                     onClick={() => navigate(`/patient/task/${task.id}`)}
                   >
-                    <div className="absolute left-0 top-1">
+                    <div className="absolute left-3 top-4">
                       {isDone ? (
                         <CheckCircle size={16} className="text-secondary" style={{ fill: 'currentColor', stroke: 'var(--color-surface)' }} />
                       ) : (
-                        <div className="w-4 h-4 rounded-full border-2 border-primary/20 hover:border-primary transition-colors" />
+                        <div className="w-4 h-4 rounded-full border-2 border-primary/20" />
                       )}
                     </div>
-                    <p className={`text-sm font-bold ${isDone ? 'text-text-muted line-through' : 'text-text-primary'}`}>
-                      {task.title}
-                    </p>
-                    {task.description && (
-                      <p className="text-xs text-text-secondary mt-0.5 line-clamp-1">
-                        {task.description}
-                      </p>
-                    )}
-                    <p className="text-sm text-on-surface-variant">
-                      {task.assigned_time
-                        ? new Date(`2000-01-01T${task.assigned_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-                        : task.assigned_time_of_day}
-                    </p>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className={`text-sm font-bold ${isDone ? 'text-text-muted line-through' : 'text-text-primary'}`}>
+                          {task.title}
+                        </p>
+                        {task.description && (
+                          <p className="text-xs text-text-secondary mt-0.5 line-clamp-1">
+                            {task.description}
+                          </p>
+                        )}
+                        <p className="text-sm text-on-surface-variant">
+                          {task.assigned_time
+                            ? new Date(`2000-01-01T${task.assigned_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+                            : task.assigned_time_of_day}
+                        </p>
+                      </div>
+                      <ChevronRight size={14} className="text-text-muted shrink-0" />
+                    </div>
                   </div>
                 )
               })}

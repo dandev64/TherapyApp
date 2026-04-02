@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCachedState, hasCache } from '../../hooks/useCachedState'
@@ -7,7 +7,8 @@ import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
 import Select from '../../components/ui/Select'
 import Badge from '../../components/ui/Badge'
-import { Plus, CheckSquare, Trash2, Camera, MessageSquare } from 'lucide-react'
+import Modal from '../../components/ui/Modal'
+import { Plus, CheckSquare, Trash2, MessageSquare, Clock } from 'lucide-react'
 
 const MOOD_EMOJI = {
   excited: '🤩', happy: '😊', calm: '😌', scared: '😨',
@@ -32,6 +33,7 @@ export default function TaskAssignmentPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [successMsg, setSuccessMsg] = useState('')
+  const [selectedTask, setSelectedTask] = useState(null)
 
   function showSuccess(msg) {
     setSuccessMsg(msg)
@@ -61,7 +63,7 @@ export default function TaskAssignmentPage() {
   async function loadRecentAssignments() {
     const { data, error: err } = await supabase
       .from('task_assignments')
-      .select('id, title, assigned_date, assigned_time, status, requires_proof, proof_url, patient_id, profiles!task_assignments_patient_id_fkey(full_name)')
+      .select('id, title, description, assigned_date, assigned_time, status, requires_proof, proof_url, resource_url, patient_id, profiles!task_assignments_patient_id_fkey(full_name)')
       .eq('therapist_id', profile.id)
       .order('created_at', { ascending: false })
       .limit(20)
@@ -134,6 +136,15 @@ export default function TaskAssignmentPage() {
     const date = new Date(2000, 0, 1, parseInt(h), parseInt(m))
     return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
   }
+
+  const groupedByDate = useMemo(() => {
+    const groups = {}
+    recentAssignments.forEach((a) => {
+      if (!groups[a.assigned_date]) groups[a.assigned_date] = []
+      groups[a.assigned_date].push(a)
+    })
+    return Object.entries(groups).sort(([a], [b]) => b.localeCompare(a))
+  }, [recentAssignments])
 
   if (pageLoading) {
     return (
@@ -249,75 +260,142 @@ export default function TaskAssignmentPage() {
 
       <div>
         <h3 className="text-lg font-bold text-text-primary mb-4">Recent Assignments</h3>
-        <div className="grid gap-4 sm:grid-cols-2">
-          {recentAssignments.length === 0 ? (
-            <Card className="sm:col-span-2">
-              <p className="text-sm text-text-muted text-center py-8">
-                No assignments yet. Create one to get started.
-              </p>
-            </Card>
-          ) : (
-            recentAssignments.map((a) => (
-              <Card key={a.id}>
-                <div className="flex items-start justify-between mb-2">
-                  <div>
-                    <h4 className="text-sm font-bold text-text-primary">{a.title}</h4>
-                    <p className="text-xs text-text-secondary mt-1">
-                      {a.profiles?.full_name}
-                    </p>
-                  </div>
-                  <Badge color={a.status === 'completed' ? 'success' : a.status === 'in_progress' ? 'warning' : 'default'}>
-                    {a.status}
-                  </Badge>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-text-muted">
-                    {new Date(a.assigned_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                    {a.assigned_time && ` at ${formatTime(a.assigned_time)}`}
-                  </span>
-                  <div className="flex items-center gap-1">
-                    {a.requires_proof && (
-                      <CheckSquare size={14} className="text-primary" title="Proof required" />
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDelete(a.id)}
-                      title="Delete assignment"
-                    >
-                      <Trash2 size={14} className="text-danger" />
-                    </Button>
-                  </div>
-                </div>
+        {recentAssignments.length === 0 ? (
+          <Card>
+            <p className="text-sm text-text-muted text-center py-8">
+              No assignments yet. Create one to get started.
+            </p>
+          </Card>
+        ) : (
+          <div className="space-y-6">
+            {groupedByDate.map(([date, tasks]) => (
+              <div key={date}>
+                <p className="text-sm font-bold text-text-secondary mb-2">
+                  {new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+                </p>
+                <Card className="!p-0 overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-surface-alt/50">
+                        <th className="text-left px-4 py-2.5 text-xs font-bold text-text-muted uppercase tracking-wider">Task</th>
+                        <th className="text-left px-4 py-2.5 text-xs font-bold text-text-muted uppercase tracking-wider hidden sm:table-cell">Patient</th>
+                        <th className="text-left px-4 py-2.5 text-xs font-bold text-text-muted uppercase tracking-wider hidden md:table-cell">Time</th>
+                        <th className="text-left px-4 py-2.5 text-xs font-bold text-text-muted uppercase tracking-wider">Status</th>
+                        <th className="px-4 py-2.5 w-10"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tasks.map((a) => (
+                        <tr
+                          key={a.id}
+                          className="border-b border-border last:border-0 cursor-pointer hover:bg-primary-container/10 transition-colors"
+                          onClick={() => setSelectedTask(a)}
+                        >
+                          <td className="px-4 py-3">
+                            <p className="font-semibold text-text-primary">{a.title}</p>
+                            <p className="text-xs text-text-muted sm:hidden">{a.profiles?.full_name}</p>
+                          </td>
+                          <td className="px-4 py-3 text-text-secondary hidden sm:table-cell">{a.profiles?.full_name}</td>
+                          <td className="px-4 py-3 text-text-secondary hidden md:table-cell">{formatTime(a.assigned_time)}</td>
+                          <td className="px-4 py-3">
+                            <Badge color={a.status}>{a.status.replace('_', ' ')}</Badge>
+                          </td>
+                          <td className="px-4 py-3">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => { e.stopPropagation(); handleDelete(a.id) }}
+                              title="Delete assignment"
+                            >
+                              <Trash2 size={14} className="text-danger" />
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </Card>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
-                {/* Patient inputs for completed tasks */}
-                {a.status === 'completed' && (a.feedback || a.proof_url) && (
-                  <div className="border-t border-border mt-3 pt-2 space-y-1.5">
-                    {a.feedback && (
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-sm">{MOOD_EMOJI[a.feedback.mood] || ''}</span>
-                        <span className="text-xs text-text-secondary capitalize">{a.feedback.mood}</span>
+      {/* Task Detail Modal */}
+      <Modal
+        isOpen={!!selectedTask}
+        onClose={() => setSelectedTask(null)}
+        title={selectedTask?.title}
+      >
+        {selectedTask && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Badge color={selectedTask.status}>{selectedTask.status.replace('_', ' ')}</Badge>
+              {selectedTask.requires_proof && (
+                <span className="flex items-center gap-1 text-xs text-primary font-medium">
+                  <CheckSquare size={12} /> Proof required
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-4 text-sm text-text-secondary">
+              <span>{selectedTask.profiles?.full_name}</span>
+              <span className="flex items-center gap-1">
+                <Clock size={14} />
+                {new Date(selectedTask.assigned_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                {selectedTask.assigned_time && ` at ${formatTime(selectedTask.assigned_time)}`}
+              </span>
+            </div>
+
+            {selectedTask.description && (
+              <div>
+                <p className="text-xs font-bold text-text-muted uppercase tracking-wider mb-1">Description</p>
+                <p className="text-sm text-text-primary">{selectedTask.description}</p>
+              </div>
+            )}
+
+            {selectedTask.resource_url && (
+              <div>
+                <p className="text-xs font-bold text-text-muted uppercase tracking-wider mb-1">Resources</p>
+                <p className="text-sm text-text-secondary break-all">{selectedTask.resource_url}</p>
+              </div>
+            )}
+
+            {/* Patient completion data */}
+            {selectedTask.status === 'completed' && (
+              <div className="border-t border-border pt-4 space-y-3">
+                <p className="text-xs font-bold text-text-muted uppercase tracking-wider">Patient Response</p>
+
+                {selectedTask.feedback ? (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">{MOOD_EMOJI[selectedTask.feedback.mood] || ''}</span>
+                      <span className="text-sm font-semibold text-text-primary capitalize">{selectedTask.feedback.mood}</span>
+                    </div>
+                    {selectedTask.feedback.note && (
+                      <div className="flex items-start gap-2">
+                        <MessageSquare size={14} className="text-text-muted mt-0.5 shrink-0" />
+                        <p className="text-sm text-text-secondary">{selectedTask.feedback.note}</p>
                       </div>
                     )}
-                    {a.feedback?.note && (
-                      <div className="flex items-start gap-1.5">
-                        <MessageSquare size={12} className="text-text-muted mt-0.5 shrink-0" />
-                        <p className="text-xs text-text-secondary">{a.feedback.note}</p>
-                      </div>
-                    )}
-                    {a.proof_url && (
-                      <a href={a.proof_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-primary hover:underline">
-                        <Camera size={12} />
-                        View proof photo
-                      </a>
-                    )}
+                  </>
+                ) : (
+                  <p className="text-sm text-text-muted italic">No feedback submitted</p>
+                )}
+
+                {selectedTask.proof_url && (
+                  <div>
+                    <p className="text-xs font-bold text-text-muted uppercase tracking-wider mb-2">Proof Photo</p>
+                    <a href={selectedTask.proof_url} target="_blank" rel="noopener noreferrer">
+                      <img src={selectedTask.proof_url} alt="Proof" className="w-full max-w-xs rounded-xl border border-border" />
+                    </a>
                   </div>
                 )}
-              </Card>
-            ))
-          )}
-        </div>
-      </div>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }

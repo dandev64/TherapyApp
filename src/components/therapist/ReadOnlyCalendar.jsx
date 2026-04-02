@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import { ChevronLeft, ChevronRight, CheckCircle, Camera, MessageSquare } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CheckCircle, Camera, MessageSquare, Clock, CheckSquare } from 'lucide-react'
+import Modal from '../ui/Modal'
+import Badge from '../ui/Badge'
 
 const MOOD_EMOJI = {
   excited: '🤩', happy: '😊', calm: '😌', scared: '😨',
@@ -25,6 +27,7 @@ export default function ReadOnlyCalendar({ patientId, therapistId }) {
   const [feedbackMap, setFeedbackMap] = useState({})
   const [remarks, setRemarks] = useState({})
   const [loading, setLoading] = useState(true)
+  const [selectedTask, setSelectedTask] = useState(null)
 
   const todayStr = toDateStr(new Date())
   const { year, month } = currentMonth
@@ -229,49 +232,34 @@ export default function ReadOnlyCalendar({ patientId, therapistId }) {
                   const isDone = task.status === 'completed'
                   const fb = feedbackMap[task.id]
                   return (
-                    <div key={task.id} className="relative pl-6">
-                      <div className="absolute left-0 top-1">
+                    <div
+                      key={task.id}
+                      className="relative pl-6 cursor-pointer rounded-xl p-2 -ml-2 hover:bg-primary-container/20 transition-colors"
+                      onClick={() => setSelectedTask(task)}
+                    >
+                      <div className="absolute left-0 top-3">
                         {isDone ? (
                           <CheckCircle size={16} className="text-secondary" style={{ fill: 'currentColor', stroke: 'var(--color-surface)' }} />
                         ) : (
                           <div className="w-4 h-4 rounded-full border-2 border-primary/20" />
                         )}
                       </div>
-                      <p className={`text-sm font-bold ${isDone ? 'text-text-muted line-through' : 'text-text-primary'}`}>
-                        {task.title}
-                      </p>
-                      <p className="text-sm text-on-surface-variant">
-                        {task.assigned_time
-                          ? new Date(`2000-01-01T${task.assigned_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-                          : task.assigned_time_of_day}
-                      </p>
-
-                      {/* Patient inputs */}
-                      {isDone && (
-                        <div className="mt-2 space-y-1.5">
-                          {fb && (
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-sm">{MOOD_EMOJI[fb.mood] || ''}</span>
-                              <span className="text-xs text-text-secondary capitalize">{fb.mood}</span>
-                            </div>
-                          )}
-                          {fb?.note && (
-                            <div className="flex items-start gap-1.5">
-                              <MessageSquare size={12} className="text-text-muted mt-0.5 shrink-0" />
-                              <p className="text-xs text-text-secondary">{fb.note}</p>
-                            </div>
-                          )}
-                          {task.proof_url && (
-                            <a href={task.proof_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-primary hover:underline">
-                              <Camera size={12} />
-                              View proof photo
-                            </a>
-                          )}
-                          {task.resource_url && (
-                            <p className="text-xs text-text-muted italic truncate">Resources: {task.resource_url}</p>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className={`text-sm font-bold ${isDone ? 'text-text-muted line-through' : 'text-text-primary'}`}>
+                            {task.title}
+                          </p>
+                          <p className="text-sm text-on-surface-variant">
+                            {task.assigned_time
+                              ? new Date(`2000-01-01T${task.assigned_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+                              : task.assigned_time_of_day}
+                          </p>
+                          {isDone && fb && (
+                            <span className="text-xs text-text-secondary">{MOOD_EMOJI[fb.mood] || ''} {fb.mood}</span>
                           )}
                         </div>
-                      )}
+                        <ChevronRight size={14} className="text-text-muted shrink-0" />
+                      </div>
                     </div>
                   )
                 })}
@@ -291,6 +279,83 @@ export default function ReadOnlyCalendar({ patientId, therapistId }) {
           </div>
         </div>
       )}
+
+      {/* Task Detail Modal */}
+      <Modal
+        isOpen={!!selectedTask}
+        onClose={() => setSelectedTask(null)}
+        title={selectedTask?.title}
+      >
+        {selectedTask && (() => {
+          const fb = feedbackMap[selectedTask.id]
+          return (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Badge color={selectedTask.status}>{selectedTask.status.replace('_', ' ')}</Badge>
+                {selectedTask.requires_proof && (
+                  <span className="flex items-center gap-1 text-xs text-primary font-medium">
+                    <CheckSquare size={12} /> Proof required
+                  </span>
+                )}
+              </div>
+
+              {selectedTask.assigned_time && (
+                <div className="flex items-center gap-2 text-sm text-text-secondary">
+                  <Clock size={14} />
+                  {new Date(`2000-01-01T${selectedTask.assigned_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                </div>
+              )}
+
+              {selectedTask.description && (
+                <div>
+                  <p className="text-xs font-bold text-text-muted uppercase tracking-wider mb-1">Description</p>
+                  <p className="text-sm text-text-primary">{selectedTask.description}</p>
+                </div>
+              )}
+
+              {selectedTask.resource_url && (
+                <div>
+                  <p className="text-xs font-bold text-text-muted uppercase tracking-wider mb-1">Resources</p>
+                  <p className="text-sm text-text-secondary break-all">{selectedTask.resource_url}</p>
+                </div>
+              )}
+
+              {/* Patient completion data */}
+              {selectedTask.status === 'completed' && (
+                <div className="border-t border-border pt-4 space-y-3">
+                  <p className="text-xs font-bold text-text-muted uppercase tracking-wider">Patient Response</p>
+
+                  {fb ? (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">{MOOD_EMOJI[fb.mood] || ''}</span>
+                        <span className="text-sm font-semibold text-text-primary capitalize">{fb.mood}</span>
+                      </div>
+                      {fb.note && (
+                        <div className="flex items-start gap-2">
+                          <MessageSquare size={14} className="text-text-muted mt-0.5 shrink-0" />
+                          <p className="text-sm text-text-secondary">{fb.note}</p>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-sm text-text-muted italic">No feedback submitted</p>
+                  )}
+
+                  {selectedTask.proof_url && (
+                    <div>
+                      <p className="text-xs font-bold text-text-muted uppercase tracking-wider mb-2">Proof Photo</p>
+                      <a href={selectedTask.proof_url} target="_blank" rel="noopener noreferrer">
+                        <img src={selectedTask.proof_url} alt="Proof" className="w-full max-w-xs rounded-xl border border-border" />
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })()}
+      </Modal>
     </div>
   )
 }
