@@ -6,6 +6,15 @@ function isYouTubeUrl(url) {
   return url.includes('youtube.com') || url.includes('youtu.be')
 }
 
+function isSafeUrl(url) {
+  try {
+    const parsed = new URL(url)
+    return ['http:', 'https:'].includes(parsed.protocol)
+  } catch {
+    return false
+  }
+}
+
 export function Linkify({ text, className = '' }) {
   if (!text) return null
   const parts = text.split(URL_REGEX)
@@ -13,7 +22,7 @@ export function Linkify({ text, className = '' }) {
   return (
     <span className={className}>
       {parts.map((part, i) => {
-        if (part && part.match(URL_REGEX)) {
+        if (part && part.match(URL_REGEX) && isSafeUrl(part)) {
           if (isYouTubeUrl(part)) {
             return (
               <a

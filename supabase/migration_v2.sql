@@ -122,6 +122,10 @@ CREATE POLICY "View own notifications" ON public.notifications FOR SELECT TO aut
 CREATE POLICY "Update own notifications" ON public.notifications FOR UPDATE TO authenticated
   USING (recipient_id = auth.uid());
 
+-- Only security definer functions (triggers) can insert notifications
+CREATE POLICY "System insert notifications" ON public.notifications FOR INSERT TO authenticated
+  WITH CHECK (false);
+
 
 -- ============================================
 -- 3. Indexes for performance
@@ -163,6 +167,9 @@ BEGIN
   );
 
   RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+  RAISE LOG 'notify_task_comment error: %', SQLERRM;
+  RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -192,6 +199,9 @@ BEGIN
     );
   END IF;
 
+  RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+  RAISE LOG 'notify_new_message error: %', SQLERRM;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -226,7 +236,8 @@ BEGIN
     FROM public.notifications
     WHERE patient_id = NEW.patient_id
       AND type = 'task_completed'
-      AND content LIKE '%' || NEW.assigned_date::text || '%';
+      AND created_at::date = CURRENT_DATE
+      AND recipient_id = NEW.therapist_id;
 
     IF v_existing = 0 THEN
       SELECT full_name INTO v_patient_name
@@ -244,6 +255,9 @@ BEGIN
   END IF;
 
   RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+  RAISE LOG 'notify_all_tasks_completed error: %', SQLERRM;
+  RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -256,6 +270,11 @@ CREATE OR REPLACE TRIGGER on_task_status_updated
 CREATE OR REPLACE FUNCTION public.check_overdue_tasks(p_therapist_id uuid)
 RETURNS void AS $$
 BEGIN
+  -- Only allow therapists to check their own overdue tasks
+  IF auth.uid() != p_therapist_id THEN
+    RAISE EXCEPTION 'Unauthorized: can only check your own patients';
+  END IF;
+
   INSERT INTO public.notifications (recipient_id, type, patient_id, content)
   SELECT DISTINCT
     p_therapist_id,
@@ -272,7 +291,10 @@ BEGIN
       SELECT 1 FROM public.notifications n
       WHERE n.patient_id = ta.patient_id
         AND n.type = 'task_overdue'
-        AND n.content LIKE '%' || ta.assigned_date::text || '%'
+        AND n.recipient_id = p_therapist_id
+        AND n.created_at::date >= ta.assigned_date
     );
+EXCEPTION WHEN OTHERS THEN
+  RAISE LOG 'check_overdue_tasks error: %', SQLERRM;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

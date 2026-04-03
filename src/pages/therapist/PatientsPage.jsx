@@ -47,19 +47,25 @@ export default function PatientsPage() {
     if (err) { setError('Failed to load patients.'); setLoading(false); return }
     setError(null)
 
-    const patientDetails = await Promise.all(
-      (assignments || []).map(async (a) => {
-        const { data: tasks } = await supabase
+    const patientIds = (assignments || []).map((a) => a.patient_id)
+    const { data: allTodayTasks } = patientIds.length > 0
+      ? await supabase
           .from('task_assignments')
-          .select('status')
-          .eq('patient_id', a.patient_id)
+          .select('patient_id, status')
+          .in('patient_id', patientIds)
           .eq('assigned_date', today)
+      : { data: [] }
 
-        const total = tasks?.length || 0
-        const done = tasks?.filter((t) => t.status === 'completed').length || 0
-        return { ...a.profiles, totalTasks: total, completedTasks: done }
-      })
-    )
+    const tasksByPatient = {}
+    ;(allTodayTasks || []).forEach((t) => {
+      if (!tasksByPatient[t.patient_id]) tasksByPatient[t.patient_id] = []
+      tasksByPatient[t.patient_id].push(t)
+    })
+
+    const patientDetails = (assignments || []).map((a) => {
+      const tasks = tasksByPatient[a.patient_id] || []
+      return { ...a.profiles, totalTasks: tasks.length, completedTasks: tasks.filter((t) => t.status === 'completed').length }
+    })
     setPatients(patientDetails)
     setLoading(false)
   }

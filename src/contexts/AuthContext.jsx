@@ -51,7 +51,12 @@ export function AuthProvider({ children }) {
       .single()
       .then(({ data, error }) => {
         if (cancelled) return
-        if (error) console.error('Profile fetch error:', error)
+        if (error) {
+          console.error('Profile fetch error:', error)
+          setProfile(null)
+          setLoading(false)
+          return
+        }
         setProfile(data)
         setLoading(false)
       })
@@ -80,11 +85,15 @@ export function AuthProvider({ children }) {
 
   async function refreshProfile() {
     if (!user) return
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', user.id)
       .single()
+    if (error) {
+      console.error('Profile refresh error:', error)
+      return
+    }
     if (data) setProfile(data)
   }
 

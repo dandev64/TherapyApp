@@ -41,10 +41,12 @@ export default function PatientDetailPage() {
 
   useEffect(() => {
     if (!profile || !patientId) return
-    loadAll()
+    let cancelled = false
+    loadAll(cancelled)
+    return () => { cancelled = true }
   }, [profile, patientId])
 
-  async function loadAll() {
+  async function loadAll(cancelled = false) {
     const thirtyDaysAgo = new Date()
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
     const thirtyDaysAgoStr = thirtyDaysAgo.toISOString()
@@ -85,6 +87,7 @@ export default function PatientDetailPage() {
         .limit(20),
     ])
 
+    if (cancelled) return
     setPatient(patientRes.data)
     setAllTasks(tasksRes.data || [])
     setFeedback(feedbackRes.data || [])
@@ -163,6 +166,7 @@ export default function PatientDetailPage() {
       <div className="flex items-center gap-4">
         <button
           onClick={() => navigate('/therapist/patients')}
+          aria-label="Back to patients"
           className="p-2 rounded-xl hover:bg-surface-alt transition-colors cursor-pointer text-text-secondary"
         >
           <ArrowLeft size={20} />

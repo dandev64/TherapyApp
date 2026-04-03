@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -24,10 +24,12 @@ export default function TherapistDashboard() {
 
   useEffect(() => {
     if (!profile) return
-    loadDashboard()
+    let cancelled = false
+    loadDashboard(cancelled)
+    return () => { cancelled = true }
   }, [profile])
 
-  async function loadDashboard() {
+  async function loadDashboard(cancelled = false) {
     const today = new Date().toISOString().split('T')[0]
     const weekAgo = new Date()
     weekAgo.setDate(weekAgo.getDate() - 7)
@@ -182,6 +184,7 @@ export default function TherapistDashboard() {
       ? Math.round(patientDetails.reduce((sum, p) => sum + p.consistency, 0) / patientDetails.length)
       : 0
 
+    if (cancelled) return
     setStats({
       patients: patients.length,
       todayTasks: tasks.length,
@@ -193,12 +196,12 @@ export default function TherapistDashboard() {
     setLoading(false)
   }
 
-  const statCards = [
+  const statCards = useMemo(() => [
     { label: 'Patients', value: stats.patients, icon: Users, bgColor: 'bg-primary-container', color: 'text-primary' },
     { label: "Today's Tasks", value: `${stats.completedToday}/${stats.todayTasks}`, icon: ClipboardCheck, bgColor: 'bg-secondary-container', color: 'text-secondary' },
     { label: 'Avg Consistency', value: `${stats.avgConsistency}%`, icon: Target, bgColor: 'bg-success-bg', color: 'text-success' },
     { label: 'Caregiver Notes', value: stats.notes, icon: FileText, bgColor: 'bg-tertiary-container', color: 'text-tertiary' },
-  ]
+  ], [stats])
 
   const topMoodInfo = topMood ? MOOD_CONFIG[topMood] : null
 

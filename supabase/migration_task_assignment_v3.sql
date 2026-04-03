@@ -38,7 +38,7 @@ ON CONFLICT (id) DO NOTHING;
 CREATE POLICY "Patients can upload proof photos"
   ON storage.objects FOR INSERT
   TO authenticated
-  WITH CHECK (bucket_id = 'task-proofs');
+  WITH CHECK (bucket_id = 'task-proofs' AND (storage.foldername(name))[1] = auth.uid()::text);
 
 -- Authenticated users can view proof photos
 CREATE POLICY "Authenticated users can view proof photos"

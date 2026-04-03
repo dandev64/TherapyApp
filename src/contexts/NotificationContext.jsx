@@ -21,7 +21,11 @@ export function NotificationProvider({ children }) {
       .select('*', { count: 'exact', head: true })
       .eq('recipient_id', currentProfile.id)
       .is('read_at', null)
-    if (!error) setUnreadCount(count || 0)
+    if (error) {
+      console.error('Failed to fetch unread count:', error)
+      return
+    }
+    setUnreadCount(count || 0)
   }
 
   // Fetch initial unread count + re-fetch on tab focus

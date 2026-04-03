@@ -46,13 +46,14 @@ export default function PatientDashboard() {
   const refreshKey = useRefreshOnFocus()
 
   useEffect(() => {
-    if (profile) {
-      loadTasks()
-      loadStreakData()
-    }
+    if (!profile) return
+    let cancelled = false
+    loadTasks(cancelled)
+    loadStreakData(cancelled)
+    return () => { cancelled = true }
   }, [profile, refreshKey])
 
-  async function loadTasks() {
+  async function loadTasks(cancelled = false) {
     const today = new Date().toISOString().split('T')[0]
     const { data, error: err } = await supabase
       .from('task_assignments')
@@ -60,13 +61,14 @@ export default function PatientDashboard() {
       .eq('patient_id', profile.id)
       .eq('assigned_date', today)
       .order('created_at', { ascending: true })
+    if (cancelled) return
     if (err) { setError('Failed to load tasks. Please try again.'); setLoading(false); return }
     setError(null)
     setTasks(data || [])
     setLoading(false)
   }
 
-  async function loadStreakData() {
+  async function loadStreakData(cancelled = false) {
     const ninetyDaysAgo = new Date()
     ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
     const { data, error: err } = await supabase
@@ -75,6 +77,7 @@ export default function PatientDashboard() {
       .eq('patient_id', profile.id)
       .gte('assigned_date', ninetyDaysAgo.toISOString().split('T')[0])
       .order('assigned_date', { ascending: false })
+    if (cancelled) return
     if (!err) setAllTasks(data || [])
   }
 

@@ -40,6 +40,7 @@ export default function TherapistNotesPage() {
       .select('*, profiles!caregiver_notes_caregiver_id_fkey(full_name), patient:profiles!caregiver_notes_patient_id_fkey(full_name)')
       .in('patient_id', patientIds)
       .order('created_at', { ascending: false })
+      .limit(100)
 
     if (err) { setError('Failed to load notes.'); setLoading(false); return }
     setError(null)

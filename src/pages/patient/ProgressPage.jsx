@@ -66,6 +66,9 @@ export default function ProgressPage() {
       setFeedback(feedbackRes.data || [])
       setRemarks(remarksRes.data || [])
       setLoading(false)
+    }).catch(() => {
+      setError('Failed to load progress data. Please try again.')
+      setLoading(false)
     })
   }, [profile, refreshKey])
 

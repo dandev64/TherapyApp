@@ -2,6 +2,8 @@ export function toDateStr(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
+const MS_PER_DAY = 86400000
+
 export function calculateStreak(taskAssignments) {
   const byDate = {}
   taskAssignments.forEach((t) => {
@@ -24,7 +26,7 @@ export function calculateStreak(taskAssignments) {
 
     if (!day) {
       // No tasks assigned — doesn't break streak, but stop after 90 days
-      if ((today - d) / 86400000 > 90) break
+      if ((today - d) / MS_PER_DAY > 90) break
       d.setDate(d.getDate() - 1)
       continue
     }

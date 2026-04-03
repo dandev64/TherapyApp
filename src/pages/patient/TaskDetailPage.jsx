@@ -37,16 +37,23 @@ export default function TaskDetailPage() {
   const fileInputRef = useRef(null)
 
   useEffect(() => {
-    loadTask()
+    let cancelled = false
+    loadTask(cancelled)
+    return () => { cancelled = true }
   }, [id])
 
-  async function loadTask() {
+  async function loadTask(cancelled = false) {
     const { data, error } = await supabase
       .from('task_assignments')
       .select('*')
       .eq('id', id)
       .single()
-    if (error) console.error('Failed to load task:', error.message)
+    if (cancelled) return
+    if (error) {
+      console.error('Failed to load task:', error.message)
+      setLoading(false)
+      return
+    }
     setTask(data)
     setLoading(false)
 
@@ -59,9 +66,15 @@ export default function TaskDetailPage() {
     }
   }
 
+  const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']
+
   function handleFileSelect(e) {
     const file = e.target.files?.[0]
     if (!file) return
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      alert('Please upload an image file (JPEG, PNG, or WebP).')
+      return
+    }
     setProofFile(file)
     const reader = new FileReader()
     reader.onload = (ev) => setProofPreview(ev.target.result)
@@ -234,8 +247,9 @@ export default function TaskDetailPage() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
                 capture="environment"
+                aria-label="Upload proof photo"
                 onChange={handleFileSelect}
                 className="hidden"
               />

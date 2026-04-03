@@ -108,10 +108,10 @@ export default function ReadOnlyCalendar({ patientId, therapistId }) {
           {MONTHS[month]} {year}
         </h4>
         <div className="flex items-center gap-1 bg-surface-container rounded-full px-1.5 py-1">
-          <button onClick={prevMonth} className="p-1.5 rounded-full hover:bg-surface-alt transition-colors cursor-pointer">
+          <button onClick={prevMonth} aria-label="Previous month" className="p-1.5 rounded-full hover:bg-surface-alt transition-colors cursor-pointer">
             <ChevronLeft size={16} />
           </button>
-          <button onClick={nextMonth} className="p-1.5 rounded-full hover:bg-surface-alt transition-colors cursor-pointer">
+          <button onClick={nextMonth} aria-label="Next month" className="p-1.5 rounded-full hover:bg-surface-alt transition-colors cursor-pointer">
             <ChevronRight size={16} />
           </button>
         </div>
@@ -148,6 +148,8 @@ export default function ReadOnlyCalendar({ patientId, therapistId }) {
                   <button
                     key={day}
                     onClick={() => setSelectedDate(dateStr)}
+                    aria-label={`${MONTHS[month]} ${day}, ${dayTotal} task${dayTotal !== 1 ? 's' : ''}${isToday ? ', today' : ''}`}
+                    aria-pressed={isSelected}
                     className={`rounded-2xl p-1.5 sm:p-3 aspect-square flex flex-col justify-between transition-all cursor-pointer group text-left
                       ${isToday ? 'bg-primary-container ring-2 ring-primary ring-offset-2' : ''}
                       ${isSelected && !isToday ? 'bg-primary/10 ring-2 ring-primary/40' : ''}
