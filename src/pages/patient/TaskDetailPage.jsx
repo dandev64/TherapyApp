@@ -133,12 +133,13 @@ export default function TaskDetailPage() {
 
     // Save feedback if mood was selected
     if (selectedMood) {
-      await supabase.from('task_feedback').insert({
+      const { error: fbErr } = await supabase.from('task_feedback').insert({
         task_assignment_id: id,
         patient_id: profile.id,
         mood: selectedMood,
         note: feedbackNote.trim() || null,
       })
+      if (fbErr) console.error('Failed to save feedback:', fbErr)
     }
 
     setSubmitting(false)

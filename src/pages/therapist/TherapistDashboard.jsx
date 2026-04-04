@@ -122,6 +122,8 @@ export default function TherapistDashboard() {
       }
     })
 
+    if (cancelled) return
+
     setEnrichedPatients(patientDetails)
     setPatientsWithoutTasks(patientDetails.filter((p) => p.totalToday === 0))
 
@@ -134,6 +136,8 @@ export default function TherapistDashboard() {
         .in('patient_id', patientIds)
         .gte('assigned_date', fourteenDaysAgoStr)
         .lte('assigned_date', today)
+
+      if (cancelled) return
 
       const byDate = {}
       ;(recentTasks || []).forEach((t) => {
@@ -167,6 +171,8 @@ export default function TherapistDashboard() {
         .in('patient_id', patientIds)
         .gte('created_at', weekAgo.toISOString())
 
+      if (cancelled) return
+
       setMoodFeedback(fbData || [])
 
       if (fbData && fbData.length > 0) {
@@ -184,7 +190,6 @@ export default function TherapistDashboard() {
       ? Math.round(patientDetails.reduce((sum, p) => sum + p.consistency, 0) / patientDetails.length)
       : 0
 
-    if (cancelled) return
     setStats({
       patients: patients.length,
       todayTasks: tasks.length,

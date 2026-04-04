@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNotifications } from '../../contexts/NotificationContext'
 import { useCachedState, hasCache } from '../../hooks/useCachedState'
+import { formatRelativeTime } from '../../utils/time'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import { Bell, CheckCircle, AlertTriangle, MessageSquare, Mail, X, Send } from 'lucide-react'
@@ -29,15 +30,17 @@ export default function NotificationsPage() {
 
   useEffect(() => {
     if (!profile) return
+    let cancelled = false
 
     async function init() {
       if (profile.role === 'therapist') {
         await supabase.rpc('check_overdue_tasks', { p_therapist_id: profile.id })
       }
-      loadNotifications()
+      if (!cancelled) loadNotifications(cancelled)
     }
 
     init()
+    return () => { cancelled = true }
   }, [profile])
 
   // Live: prepend new notifications as they arrive via Realtime
@@ -63,7 +66,7 @@ export default function NotificationsPage() {
     return () => supabase.removeChannel(channel)
   }, [profile?.id])
 
-  async function loadNotifications() {
+  async function loadNotifications(cancelled) {
     const { data } = await supabase
       .from('notifications')
       .select('id, content, type, patient_id, reference_id, created_at')
@@ -71,6 +74,7 @@ export default function NotificationsPage() {
       .is('read_at', null)
       .order('created_at', { ascending: false })
       .limit(50)
+    if (cancelled) return
     setNotifications(data || [])
     setLoading(false)
   }
@@ -142,17 +146,6 @@ export default function NotificationsPage() {
     }
   }
 
-  function formatTime(dateStr) {
-    const d = new Date(dateStr)
-    const now = new Date()
-    const diffMs = now - d
-    const diffMins = Math.floor(diffMs / 60000)
-    if (diffMins < 1) return 'just now'
-    if (diffMins < 60) return `${diffMins}m ago`
-    const diffHours = Math.floor(diffMins / 60)
-    if (diffHours < 24) return `${diffHours}h ago`
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-  }
 
   if (loading) {
     return (
@@ -193,7 +186,7 @@ export default function NotificationsPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-text-primary">{n.content}</p>
-                    <p className="text-xs text-text-muted mt-1">{formatTime(n.created_at)}</p>
+                    <p className="text-xs text-text-muted mt-1">{formatRelativeTime(n.created_at)}</p>
 
                     {/* Reply section for task_comment and new_message */}
                     {(n.type === 'task_comment' || n.type === 'new_message') && (
@@ -203,6 +196,7 @@ export default function NotificationsPage() {
                             <input
                               type="text"
                               placeholder="Write a reply..."
+                              aria-label="Write a reply"
                               value={replyText}
                               onChange={(e) => setReplyText(e.target.value)}
                               onKeyDown={(e) => {

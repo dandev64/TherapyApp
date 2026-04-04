@@ -14,60 +14,64 @@ export default function TherapistMessagesInbox() {
   const [search, setSearch] = useState('')
 
   useEffect(() => {
-    if (profile) loadConversations()
-  }, [profile])
+    if (!profile) return
+    let cancelled = false
 
-  async function loadConversations() {
-    // Get all assigned patients
-    const { data: assignments } = await supabase
-      .from('patient_assignments')
-      .select('patient_id, profiles!patient_assignments_patient_id_fkey(id, full_name, email)')
-      .eq('assigned_to', profile.id)
-      .eq('relationship', 'therapist')
+    async function loadConversations() {
+      // Get all assigned patients
+      const { data: assignments } = await supabase
+        .from('patient_assignments')
+        .select('patient_id, profiles!patient_assignments_patient_id_fkey(id, full_name, email)')
+        .eq('assigned_to', profile.id)
+        .eq('relationship', 'therapist')
 
-    if (!assignments || assignments.length === 0) {
-      setConversations([])
+      if (!assignments || assignments.length === 0) {
+        if (!cancelled) { setConversations([]); setLoading(false) }
+        return
+      }
+
+      const patientIds = assignments.map((a) => a.patient_id)
+
+      // Get latest message for each conversation
+      const { data: msgs } = await supabase
+        .from('messages')
+        .select('id, sender_id, recipient_id, content, created_at, read_at')
+        .or(
+          `and(sender_id.eq.${profile.id},recipient_id.in.(${patientIds.join(',')})),and(sender_id.in.(${patientIds.join(',')}),recipient_id.eq.${profile.id})`
+        )
+        .order('created_at', { ascending: false })
+
+      // Group by patient and get latest + unread count
+      const byPatient = {}
+      ;(msgs || []).forEach((m) => {
+        const pid = m.sender_id === profile.id ? m.recipient_id : m.sender_id
+        if (!byPatient[pid]) byPatient[pid] = { latest: m, unread: 0 }
+        if (m.recipient_id === profile.id && !m.read_at) byPatient[pid].unread++
+      })
+
+      const convos = assignments.map((a) => ({
+        patient: a.profiles,
+        latest: byPatient[a.patient_id]?.latest || null,
+        unread: byPatient[a.patient_id]?.unread || 0,
+      }))
+
+      // Sort: unread first, then by latest message time
+      convos.sort((a, b) => {
+        if (a.unread > 0 && b.unread === 0) return -1
+        if (b.unread > 0 && a.unread === 0) return 1
+        const aTime = a.latest?.created_at || ''
+        const bTime = b.latest?.created_at || ''
+        return bTime.localeCompare(aTime)
+      })
+
+      if (cancelled) return
+      setConversations(convos)
       setLoading(false)
-      return
     }
 
-    const patientIds = assignments.map((a) => a.patient_id)
-
-    // Get latest message for each conversation
-    const { data: msgs } = await supabase
-      .from('messages')
-      .select('id, sender_id, recipient_id, content, created_at, read_at')
-      .or(
-        `and(sender_id.eq.${profile.id},recipient_id.in.(${patientIds.join(',')})),and(sender_id.in.(${patientIds.join(',')}),recipient_id.eq.${profile.id})`
-      )
-      .order('created_at', { ascending: false })
-
-    // Group by patient and get latest + unread count
-    const byPatient = {}
-    ;(msgs || []).forEach((m) => {
-      const pid = m.sender_id === profile.id ? m.recipient_id : m.sender_id
-      if (!byPatient[pid]) byPatient[pid] = { latest: m, unread: 0 }
-      if (m.recipient_id === profile.id && !m.read_at) byPatient[pid].unread++
-    })
-
-    const convos = assignments.map((a) => ({
-      patient: a.profiles,
-      latest: byPatient[a.patient_id]?.latest || null,
-      unread: byPatient[a.patient_id]?.unread || 0,
-    }))
-
-    // Sort: unread first, then by latest message time
-    convos.sort((a, b) => {
-      if (a.unread > 0 && b.unread === 0) return -1
-      if (b.unread > 0 && a.unread === 0) return 1
-      const aTime = a.latest?.created_at || ''
-      const bTime = b.latest?.created_at || ''
-      return bTime.localeCompare(aTime)
-    })
-
-    setConversations(convos)
-    setLoading(false)
-  }
+    loadConversations()
+    return () => { cancelled = true }
+  }, [profile])
 
   const filtered = conversations.filter((c) =>
     c.patient?.full_name?.toLowerCase().includes(search.toLowerCase())

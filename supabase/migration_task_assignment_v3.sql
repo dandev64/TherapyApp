@@ -30,8 +30,8 @@ ALTER TABLE public.task_assignments
 
 -- 6. Create storage bucket for proof photos
 INSERT INTO storage.buckets (id, name, public)
-VALUES ('task-proofs', 'task-proofs', true)
-ON CONFLICT (id) DO NOTHING;
+VALUES ('task-proofs', 'task-proofs', false)
+ON CONFLICT (id) DO UPDATE SET public = false;
 
 -- 7. Storage policies for task-proofs bucket
 -- Patients can upload proof photos
@@ -40,11 +40,21 @@ CREATE POLICY "Patients can upload proof photos"
   TO authenticated
   WITH CHECK (bucket_id = 'task-proofs' AND (storage.foldername(name))[1] = auth.uid()::text);
 
--- Authenticated users can view proof photos
-CREATE POLICY "Authenticated users can view proof photos"
+-- Only the photo owner or their assigned therapist can view proof photos
+CREATE POLICY "Owner or therapist can view proof photos"
   ON storage.objects FOR SELECT
   TO authenticated
-  USING (bucket_id = 'task-proofs');
+  USING (
+    bucket_id = 'task-proofs'
+    AND (
+      (storage.foldername(name))[1] = auth.uid()::text
+      OR EXISTS (
+        SELECT 1 FROM public.patient_assignments
+        WHERE patient_id = (storage.foldername(name))[1]::uuid
+          AND assigned_to = auth.uid()
+      )
+    )
+  );
 
 -- Patients can delete their own proof photos
 CREATE POLICY "Users can delete own proof photos"

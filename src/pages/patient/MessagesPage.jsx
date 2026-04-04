@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNotifications } from '../../contexts/NotificationContext'
+import { formatMessageTime, formatMessageDate } from '../../utils/time'
 import Button from '../../components/ui/Button'
 import { Send, ArrowLeft } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
 
 export default function MessagesPage() {
   const { recipientId } = useParams()
@@ -129,19 +129,6 @@ export default function MessagesPage() {
     setSending(false)
   }
 
-  function formatTime(dateStr) {
-    return new Date(dateStr).toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-    })
-  }
-
-  function formatDate(dateStr) {
-    return new Date(dateStr).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-    })
-  }
 
   if (loading) {
     return (
@@ -155,7 +142,7 @@ export default function MessagesPage() {
   const grouped = []
   let lastDate = null
   messages.forEach((m) => {
-    const d = formatDate(m.created_at)
+    const d = formatMessageDate(m.created_at)
     if (d !== lastDate) {
       grouped.push({ type: 'date', label: d })
       lastDate = d
@@ -167,7 +154,7 @@ export default function MessagesPage() {
     <div className="flex flex-col h-[calc(100vh-8rem)]">
       {/* Header */}
       <div className="flex items-center gap-3 pb-4 border-b border-border-light mb-4">
-        <button onClick={() => navigate(-1)} className="text-text-secondary hover:text-primary cursor-pointer">
+        <button onClick={() => navigate(-1)} aria-label="Go back" className="text-text-secondary hover:text-primary cursor-pointer">
           <ArrowLeft size={20} />
         </button>
         <div className="w-10 h-10 rounded-xl bg-primary-container flex items-center justify-center text-primary font-bold text-sm">
@@ -209,7 +196,7 @@ export default function MessagesPage() {
               >
                 <p>{m.content}</p>
                 <p className={`text-[10px] mt-1 ${isMine ? 'text-on-primary/60' : 'text-text-muted'}`}>
-                  {formatTime(m.created_at)}
+                  {formatMessageTime(m.created_at)}
                 </p>
               </div>
             </div>
@@ -223,6 +210,7 @@ export default function MessagesPage() {
         <input
           type="text"
           placeholder="Type a message..."
+          aria-label="Type a message"
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {

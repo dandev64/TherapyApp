@@ -17,27 +17,36 @@ export default function PatientProfilePage() {
 
   useEffect(() => {
     if (!profile) return
+    let cancelled = false
     setForm({ full_name: profile.full_name || '', condition: profile.condition || '' })
-    loadTherapist()
-  }, [profile])
 
-  async function loadTherapist() {
-    const { data } = await supabase
-      .from('patient_assignments')
-      .select('assigned_to, profiles!patient_assignments_assigned_to_fkey(id, full_name, role)')
-      .eq('patient_id', profile.id)
-      .eq('relationship', 'therapist')
-      .limit(1)
-      .single()
-    if (data?.profiles) setTherapist(data.profiles)
-  }
+    async function loadTherapist() {
+      const { data, error } = await supabase
+        .from('patient_assignments')
+        .select('assigned_to, profiles!patient_assignments_assigned_to_fkey(id, full_name, role)')
+        .eq('patient_id', profile.id)
+        .eq('relationship', 'therapist')
+        .limit(1)
+        .single()
+      if (error) { console.error('Failed to load therapist:', error); return }
+      if (!cancelled && data?.profiles) setTherapist(data.profiles)
+    }
+
+    loadTherapist()
+    return () => { cancelled = true }
+  }, [profile])
 
   async function handleSave() {
     setSaving(true)
-    await supabase
+    const { error } = await supabase
       .from('profiles')
       .update({ full_name: form.full_name, condition: form.condition || null })
       .eq('id', profile.id)
+    if (error) {
+      alert('Failed to save profile. Please try again.')
+      setSaving(false)
+      return
+    }
     setSaving(false)
     setEditing(false)
     refreshProfile()

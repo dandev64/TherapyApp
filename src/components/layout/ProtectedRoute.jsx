@@ -21,8 +21,8 @@ export default function ProtectedRoute({ allowedRoles, children }) {
         <div className="bg-surface-card rounded-2xl border border-border-light p-8 max-w-md text-center">
           <p className="text-lg font-semibold text-text-primary mb-2">Profile not found</p>
           <p className="text-sm text-text-secondary mb-4">
-            Your profile couldn&apos;t be loaded. This usually means the database trigger
-            didn&apos;t run. Check that you ran the full schema.sql in Supabase.
+            Unable to load your profile. Please try refreshing the page or contact support
+            if the issue persists.
           </p>
           <button
             onClick={() => window.location.reload()}

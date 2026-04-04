@@ -14,60 +14,64 @@ export default function PatientMessagesInbox() {
   const [search, setSearch] = useState('')
 
   useEffect(() => {
-    if (profile) loadConversations()
-  }, [profile])
+    if (!profile) return
+    let cancelled = false
 
-  async function loadConversations() {
-    // Get all assigned therapists
-    const { data: assignments } = await supabase
-      .from('patient_assignments')
-      .select('assigned_to, profiles!patient_assignments_assigned_to_fkey(id, full_name, email)')
-      .eq('patient_id', profile.id)
-      .eq('relationship', 'therapist')
+    async function loadConversations() {
+      // Get all assigned therapists
+      const { data: assignments } = await supabase
+        .from('patient_assignments')
+        .select('assigned_to, profiles!patient_assignments_assigned_to_fkey(id, full_name, email)')
+        .eq('patient_id', profile.id)
+        .eq('relationship', 'therapist')
 
-    if (!assignments || assignments.length === 0) {
-      setConversations([])
+      if (!assignments || assignments.length === 0) {
+        if (!cancelled) { setConversations([]); setLoading(false) }
+        return
+      }
+
+      const therapistIds = assignments.map((a) => a.assigned_to)
+
+      // Get latest message for each conversation
+      const { data: msgs } = await supabase
+        .from('messages')
+        .select('id, sender_id, recipient_id, content, created_at, read_at')
+        .or(
+          `and(sender_id.eq.${profile.id},recipient_id.in.(${therapistIds.join(',')})),and(sender_id.in.(${therapistIds.join(',')}),recipient_id.eq.${profile.id})`
+        )
+        .order('created_at', { ascending: false })
+
+      // Group by therapist and get latest + unread count
+      const byTherapist = {}
+      ;(msgs || []).forEach((m) => {
+        const tid = m.sender_id === profile.id ? m.recipient_id : m.sender_id
+        if (!byTherapist[tid]) byTherapist[tid] = { latest: m, unread: 0 }
+        if (m.recipient_id === profile.id && !m.read_at) byTherapist[tid].unread++
+      })
+
+      const convos = assignments.map((a) => ({
+        therapist: a.profiles,
+        latest: byTherapist[a.assigned_to]?.latest || null,
+        unread: byTherapist[a.assigned_to]?.unread || 0,
+      }))
+
+      // Sort: unread first, then by latest message time
+      convos.sort((a, b) => {
+        if (a.unread > 0 && b.unread === 0) return -1
+        if (b.unread > 0 && a.unread === 0) return 1
+        const aTime = a.latest?.created_at || ''
+        const bTime = b.latest?.created_at || ''
+        return bTime.localeCompare(aTime)
+      })
+
+      if (cancelled) return
+      setConversations(convos)
       setLoading(false)
-      return
     }
 
-    const therapistIds = assignments.map((a) => a.assigned_to)
-
-    // Get latest message for each conversation
-    const { data: msgs } = await supabase
-      .from('messages')
-      .select('id, sender_id, recipient_id, content, created_at, read_at')
-      .or(
-        `and(sender_id.eq.${profile.id},recipient_id.in.(${therapistIds.join(',')})),and(sender_id.in.(${therapistIds.join(',')}),recipient_id.eq.${profile.id})`
-      )
-      .order('created_at', { ascending: false })
-
-    // Group by therapist and get latest + unread count
-    const byTherapist = {}
-    ;(msgs || []).forEach((m) => {
-      const tid = m.sender_id === profile.id ? m.recipient_id : m.sender_id
-      if (!byTherapist[tid]) byTherapist[tid] = { latest: m, unread: 0 }
-      if (m.recipient_id === profile.id && !m.read_at) byTherapist[tid].unread++
-    })
-
-    const convos = assignments.map((a) => ({
-      therapist: a.profiles,
-      latest: byTherapist[a.assigned_to]?.latest || null,
-      unread: byTherapist[a.assigned_to]?.unread || 0,
-    }))
-
-    // Sort: unread first, then by latest message time
-    convos.sort((a, b) => {
-      if (a.unread > 0 && b.unread === 0) return -1
-      if (b.unread > 0 && a.unread === 0) return 1
-      const aTime = a.latest?.created_at || ''
-      const bTime = b.latest?.created_at || ''
-      return bTime.localeCompare(aTime)
-    })
-
-    setConversations(convos)
-    setLoading(false)
-  }
+    loadConversations()
+    return () => { cancelled = true }
+  }, [profile])
 
   const filtered = conversations.filter((c) =>
     c.therapist?.full_name?.toLowerCase().includes(search.toLowerCase())
