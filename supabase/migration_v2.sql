@@ -171,7 +171,7 @@ EXCEPTION WHEN OTHERS THEN
   RAISE LOG 'notify_task_comment error: %', SQLERRM;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
 CREATE OR REPLACE TRIGGER on_task_feedback_created
   AFTER INSERT ON public.task_feedback
@@ -204,7 +204,7 @@ EXCEPTION WHEN OTHERS THEN
   RAISE LOG 'notify_new_message error: %', SQLERRM;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
 CREATE OR REPLACE TRIGGER on_message_created
   AFTER INSERT ON public.messages
@@ -259,7 +259,7 @@ EXCEPTION WHEN OTHERS THEN
   RAISE LOG 'notify_all_tasks_completed error: %', SQLERRM;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
 CREATE OR REPLACE TRIGGER on_task_status_updated
   AFTER UPDATE OF status ON public.task_assignments
@@ -297,4 +297,4 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   RAISE LOG 'check_overdue_tasks error: %', SQLERRM;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';

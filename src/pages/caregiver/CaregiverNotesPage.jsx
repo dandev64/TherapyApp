@@ -29,12 +29,6 @@ export default function CaregiverNotesPage() {
   const [replyLoading, setReplyLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  useEffect(() => {
-    if (profile) {
-      Promise.all([loadNotes(), loadPatients()]).then(() => setPageLoading(false))
-    }
-  }, [profile])
-
   async function loadPatients() {
     const { data } = await supabase
       .from('patient_assignments')
@@ -52,6 +46,14 @@ export default function CaregiverNotesPage() {
       .order('created_at', { ascending: false })
     setNotes(data || [])
   }
+
+  /* eslint-disable react-hooks/exhaustive-deps */
+  useEffect(() => {
+    if (profile) {
+      Promise.all([loadNotes(), loadPatients()]).then(() => setPageLoading(false))
+    }
+  }, [profile])
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   async function handleCreate(e) {
     e.preventDefault()

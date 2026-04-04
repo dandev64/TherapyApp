@@ -14,9 +14,8 @@ export default function CaregiverDashboard() {
   const [loading, setLoading] = useState(() => !hasCache('caregiver-patients'))
   const [error, setError] = useState(null)
 
-  useEffect(() => {
-    if (profile) loadData()
-  }, [profile])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (profile) loadData() }, [profile])
 
   async function loadData() {
     const today = new Date().toISOString().split('T')[0]

@@ -39,13 +39,6 @@ export default function PatientDetailPage() {
   })
   const [assigning, setAssigning] = useState(false)
 
-  useEffect(() => {
-    if (!profile || !patientId) return
-    let cancelled = false
-    loadAll(cancelled)
-    return () => { cancelled = true }
-  }, [profile, patientId])
-
   async function loadAll(cancelled = false) {
     const thirtyDaysAgo = new Date()
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
@@ -95,6 +88,15 @@ export default function PatientDetailPage() {
     setRemarks(remarksRes.data || [])
     setLoading(false)
   }
+
+  /* eslint-disable react-hooks/exhaustive-deps */
+  useEffect(() => {
+    if (!profile || !patientId) return
+    let cancelled = false
+    loadAll(cancelled)
+    return () => { cancelled = true }
+  }, [profile, patientId])
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   function openAssignModal() {
     setAssignForm({

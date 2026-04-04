@@ -29,6 +29,7 @@ export function NotificationProvider({ children }) {
   }
 
   // Fetch initial unread count + re-fetch on tab focus
+  /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (!profile) {
       setUnreadCount(0)
@@ -43,8 +44,20 @@ export function NotificationProvider({ children }) {
 
     return () => document.removeEventListener('visibilitychange', onFocus)
   }, [profile?.id])
+  /* eslint-enable react-hooks/exhaustive-deps */
+
+  function showToast(message, type, notification) {
+    const id = ++toastIdRef.current
+    setToasts((prev) => [...prev, { id, message, type, notification }])
+    const timer = setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id))
+      delete toastTimers.current[id]
+    }, 5000)
+    toastTimers.current[id] = timer
+  }
 
   // Subscribe to real-time notification inserts (works when Realtime is enabled in Supabase)
+  /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (!profile) return
 
@@ -67,16 +80,7 @@ export function NotificationProvider({ children }) {
 
     return () => supabase.removeChannel(channel)
   }, [profile?.id])
-
-  function showToast(message, type, notification) {
-    const id = ++toastIdRef.current
-    setToasts((prev) => [...prev, { id, message, type, notification }])
-    const timer = setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id))
-      delete toastTimers.current[id]
-    }, 5000)
-    toastTimers.current[id] = timer
-  }
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   function dismissToast(id) {
     if (toastTimers.current[id]) {
@@ -103,6 +107,7 @@ export function NotificationProvider({ children }) {
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useNotifications() {
   return useContext(NotificationContext)
 }

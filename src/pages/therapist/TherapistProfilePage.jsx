@@ -16,12 +16,6 @@ export default function TherapistProfilePage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  useEffect(() => {
-    if (!profile) return
-    setName(profile.full_name || '')
-    loadPatientCount()
-  }, [profile])
-
   async function loadPatientCount() {
     const { count } = await supabase
       .from('patient_assignments')
@@ -30,6 +24,17 @@ export default function TherapistProfilePage() {
       .eq('relationship', 'therapist')
     setPatientCount(count || 0)
   }
+
+  /* eslint-disable react-hooks/exhaustive-deps */
+  useEffect(() => {
+    if (!profile) return
+    async function init() {
+      setName(profile.full_name || '')
+      await loadPatientCount()
+    }
+    init()
+  }, [profile])
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   async function handleSave() {
     setSaving(true)

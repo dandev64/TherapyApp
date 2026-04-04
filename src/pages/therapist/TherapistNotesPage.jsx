@@ -17,10 +17,6 @@ export default function TherapistNotesPage() {
   const [replyLoading, setReplyLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  useEffect(() => {
-    if (profile) loadNotes()
-  }, [profile])
-
   async function loadNotes() {
     // Get patient IDs assigned to this therapist
     const { data: assignments } = await supabase
@@ -47,6 +43,9 @@ export default function TherapistNotesPage() {
     setNotes(data || [])
     setLoading(false)
   }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (profile) loadNotes() }, [profile])
 
   async function loadReplies(noteId) {
     const { data } = await supabase

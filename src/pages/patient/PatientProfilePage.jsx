@@ -18,9 +18,9 @@ export default function PatientProfilePage() {
   useEffect(() => {
     if (!profile) return
     let cancelled = false
-    setForm({ full_name: profile.full_name || '', condition: profile.condition || '' })
 
-    async function loadTherapist() {
+    async function init() {
+      setForm({ full_name: profile.full_name || '', condition: profile.condition || '' })
       const { data, error } = await supabase
         .from('patient_assignments')
         .select('assigned_to, profiles!patient_assignments_assigned_to_fkey(id, full_name, role)')
@@ -32,7 +32,7 @@ export default function PatientProfilePage() {
       if (!cancelled && data?.profiles) setTherapist(data.profiles)
     }
 
-    loadTherapist()
+    init()
     return () => { cancelled = true }
   }, [profile])
 

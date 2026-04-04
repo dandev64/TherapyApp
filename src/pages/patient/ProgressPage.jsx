@@ -28,12 +28,12 @@ export default function ProgressPage() {
   const [error, setError] = useState(null)
   const refreshKey = useRefreshOnFocus()
 
+  /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (!profile) return
 
     const thirtyDaysAgo = new Date()
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-    const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0]
 
     Promise.all([
       // All task assignments ever (for streak + consistency)
@@ -71,6 +71,7 @@ export default function ProgressPage() {
       setLoading(false)
     })
   }, [profile, refreshKey])
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Streak calculation
   const streak = calculateStreak(allTasks)

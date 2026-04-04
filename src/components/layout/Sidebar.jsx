@@ -81,6 +81,7 @@ export default function Sidebar() {
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-1">
+        {/* eslint-disable-next-line no-unused-vars */}
         {items.map(({ to, icon: Icon, label }) => (
           <NavLink
             key={to}

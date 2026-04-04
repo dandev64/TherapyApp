@@ -43,13 +43,6 @@ export default function TaskAssignmentPage() {
     setTimeout(() => setSuccessMsg(''), 3000)
   }
 
-  useEffect(() => {
-    if (profile) {
-      loadPatients()
-      loadRecentAssignments()
-    }
-  }, [profile])
-
   async function loadPatients() {
     const { data } = await supabase
       .from('patient_assignments')
@@ -89,6 +82,15 @@ export default function TaskAssignmentPage() {
     setRecentAssignments((data || []).map((t) => ({ ...t, feedback: fbMap[t.id] || null })))
     setPageLoading(false)
   }
+
+  /* eslint-disable react-hooks/exhaustive-deps */
+  useEffect(() => {
+    if (profile) {
+      loadPatients()
+      loadRecentAssignments()
+    }
+  }, [profile])
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   async function handleAssign(e) {
     e.preventDefault()
@@ -316,8 +318,8 @@ export default function TaskAssignmentPage() {
                 </td>
               </tr>
             ) : (
-              groupedByDate.map(([date, tasks]) => (
-                tasks.map((a, i) => (
+              groupedByDate.map(([, tasks]) => (
+                tasks.map((a) => (
                   <tr
                     key={a.id}
                     className="border-b border-border last:border-0 cursor-pointer hover:bg-primary-container/10 transition-colors"

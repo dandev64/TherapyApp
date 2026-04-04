@@ -33,10 +33,6 @@ export default function PatientsPage() {
     setTimeout(() => setSuccessMsg(''), 3000)
   }
 
-  useEffect(() => {
-    if (profile) loadPatients()
-  }, [profile])
-
   async function loadPatients() {
     const today = new Date().toISOString().split('T')[0]
     const { data: assignments, error: err } = await supabase
@@ -69,6 +65,9 @@ export default function PatientsPage() {
     setPatients(patientDetails)
     setLoading(false)
   }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (profile) loadPatients() }, [profile])
 
   async function handleAddPatient(e) {
     e.preventDefault()

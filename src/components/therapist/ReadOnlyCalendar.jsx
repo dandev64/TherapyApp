@@ -31,11 +31,13 @@ export default function ReadOnlyCalendar({ patientId, therapistId }) {
 
   useEffect(() => {
     if (!patientId) return
-    setLoading(true)
-    const startOfMonth = toDateStr(new Date(year, month, 1))
-    const endOfMonth = toDateStr(new Date(year, month + 1, 0))
+    let cancelled = false
+    async function load() {
+      setLoading(true)
+      const startOfMonth = toDateStr(new Date(year, month, 1))
+      const endOfMonth = toDateStr(new Date(year, month + 1, 0))
 
-    Promise.all([
+      const [tasksRes, remarksRes, feedbackRes] = await Promise.all([
       supabase
         .from('task_assignments')
         .select('*')
@@ -57,7 +59,8 @@ export default function ReadOnlyCalendar({ patientId, therapistId }) {
         .eq('patient_id', patientId)
         .gte('created_at', new Date(year, month, 1).toISOString())
         .lte('created_at', new Date(year, month + 1, 0, 23, 59, 59).toISOString()),
-    ]).then(([tasksRes, remarksRes, feedbackRes]) => {
+    ])
+      if (cancelled) return
       setTasks(tasksRes.data || [])
       const remarksMap = {}
       ;(remarksRes.data || []).forEach((r) => {
@@ -70,8 +73,10 @@ export default function ReadOnlyCalendar({ patientId, therapistId }) {
       })
       setFeedbackMap(fbMap)
       setLoading(false)
-    })
-  }, [patientId, year, month])
+    }
+    load()
+    return () => { cancelled = true }
+  }, [patientId, therapistId, year, month])
 
   const tasksByDate = useMemo(() => {
     const grouped = {}

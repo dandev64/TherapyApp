@@ -40,6 +40,7 @@ export function AuthProvider({ children }) {
   }, [])
 
   // Fetch profile reactively when user id changes
+  /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (!user) return
     let cancelled = false
@@ -63,6 +64,7 @@ export function AuthProvider({ children }) {
 
     return () => { cancelled = true }
   }, [user?.id])
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   async function signUp({ email, password, fullName, role }) {
     const { data, error } = await supabase.auth.signUp({
@@ -113,6 +115,7 @@ export function AuthProvider({ children }) {
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const context = useContext(AuthContext)
   if (!context) {

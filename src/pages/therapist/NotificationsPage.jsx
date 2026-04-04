@@ -28,6 +28,20 @@ export default function NotificationsPage() {
   const [replyText, setReplyText] = useState('')
   const [replySending, setReplySending] = useState(false)
 
+  async function loadNotifications(cancelled) {
+    const { data } = await supabase
+      .from('notifications')
+      .select('id, content, type, patient_id, reference_id, created_at')
+      .eq('recipient_id', profile.id)
+      .is('read_at', null)
+      .order('created_at', { ascending: false })
+      .limit(50)
+    if (cancelled) return
+    setNotifications(data || [])
+    setLoading(false)
+  }
+
+  /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (!profile) return
     let cancelled = false
@@ -65,19 +79,7 @@ export default function NotificationsPage() {
 
     return () => supabase.removeChannel(channel)
   }, [profile?.id])
-
-  async function loadNotifications(cancelled) {
-    const { data } = await supabase
-      .from('notifications')
-      .select('id, content, type, patient_id, reference_id, created_at')
-      .eq('recipient_id', profile.id)
-      .is('read_at', null)
-      .order('created_at', { ascending: false })
-      .limit(50)
-    if (cancelled) return
-    setNotifications(data || [])
-    setLoading(false)
-  }
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   async function dismissNotification(id) {
     const { data, error } = await supabase
@@ -139,7 +141,7 @@ export default function NotificationsPage() {
 
       // Mark notification as read (removes it from the list)
       await dismissNotification(notification.id)
-    } catch (err) {
+    } catch {
       alert('Failed to send reply. Please try again.')
     } finally {
       setReplySending(false)

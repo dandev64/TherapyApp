@@ -19,41 +19,6 @@ export default function TherapistMessagesPage() {
   const [loading, setLoading] = useState(true)
   const bottomRef = useRef(null)
 
-  useEffect(() => {
-    if (!profile || !patientId) return
-    loadPatient()
-    loadMessages()
-
-    // Subscribe to new messages via Realtime
-    const channel = supabase
-      .channel(`chat-${patientId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-        },
-        (payload) => {
-          const msg = payload.new
-          const isForMe = msg.sender_id === patientId && msg.recipient_id === profile.id
-          if (isForMe) {
-            setMessages((prev) =>
-              prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]
-            )
-            markAsRead(msg.id)
-          }
-        }
-      )
-      .subscribe()
-
-    return () => supabase.removeChannel(channel)
-  }, [profile, patientId])
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
-
   async function loadPatient() {
     const { data } = await supabase
       .from('profiles')
@@ -107,6 +72,43 @@ export default function TherapistMessagesPage() {
       .eq('reference_id', msgId)
     refreshCount()
   }
+
+  /* eslint-disable react-hooks/exhaustive-deps */
+  useEffect(() => {
+    if (!profile || !patientId) return
+    loadPatient()
+    loadMessages()
+
+    // Subscribe to new messages via Realtime
+    const channel = supabase
+      .channel(`chat-${patientId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+        },
+        (payload) => {
+          const msg = payload.new
+          const isForMe = msg.sender_id === patientId && msg.recipient_id === profile.id
+          if (isForMe) {
+            setMessages((prev) =>
+              prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]
+            )
+            markAsRead(msg.id)
+          }
+        }
+      )
+      .subscribe()
+
+    return () => supabase.removeChannel(channel)
+  }, [profile, patientId])
+  /* eslint-enable react-hooks/exhaustive-deps */
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
 
   async function handleSend() {
     if (!text.trim()) return

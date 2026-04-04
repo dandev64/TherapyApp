@@ -8,18 +8,17 @@ import Button from '../../components/ui/Button'
 export default function LoginPage() {
   const { user, profile, signIn } = useAuth()
   const navigate = useNavigate()
-
-  // Already logged in — redirect to dashboard
-  if (user && profile) {
-    return <Navigate to={`/${profile.role}`} replace />
-  }
-
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [resetSent, setResetSent] = useState(false)
   const [resetLoading, setResetLoading] = useState(false)
+
+  // Already logged in — redirect to dashboard
+  if (user && profile) {
+    return <Navigate to={`/${profile.role}`} replace />
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()

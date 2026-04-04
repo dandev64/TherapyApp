@@ -19,41 +19,6 @@ export default function MessagesPage() {
   const [loading, setLoading] = useState(true)
   const bottomRef = useRef(null)
 
-  useEffect(() => {
-    if (!profile || !recipientId) return
-    loadRecipient()
-    loadMessages()
-
-    // Subscribe to new messages via Realtime
-    const channel = supabase
-      .channel(`chat-${recipientId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-        },
-        (payload) => {
-          const msg = payload.new
-          const isForMe = msg.sender_id === recipientId && msg.recipient_id === profile.id
-          if (isForMe) {
-            setMessages((prev) =>
-              prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]
-            )
-            markAsRead(msg.id)
-          }
-        }
-      )
-      .subscribe()
-
-    return () => supabase.removeChannel(channel)
-  }, [profile, recipientId])
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
-
   async function loadRecipient() {
     const { data } = await supabase
       .from('profiles')
@@ -110,6 +75,43 @@ export default function MessagesPage() {
       .eq('reference_id', msgId)
     refreshCount()
   }
+
+  /* eslint-disable react-hooks/exhaustive-deps */
+  useEffect(() => {
+    if (!profile || !recipientId) return
+    loadRecipient()
+    loadMessages()
+
+    // Subscribe to new messages via Realtime
+    const channel = supabase
+      .channel(`chat-${recipientId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+        },
+        (payload) => {
+          const msg = payload.new
+          const isForMe = msg.sender_id === recipientId && msg.recipient_id === profile.id
+          if (isForMe) {
+            setMessages((prev) =>
+              prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]
+            )
+            markAsRead(msg.id)
+          }
+        }
+      )
+      .subscribe()
+
+    return () => supabase.removeChannel(channel)
+  }, [profile, recipientId])
+  /* eslint-enable react-hooks/exhaustive-deps */
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
 
   async function handleSend() {
     if (!text.trim()) return

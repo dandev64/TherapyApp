@@ -45,14 +45,6 @@ export default function PatientDashboard() {
   const [error, setError] = useState(null)
   const refreshKey = useRefreshOnFocus()
 
-  useEffect(() => {
-    if (!profile) return
-    let cancelled = false
-    loadTasks(cancelled)
-    loadStreakData(cancelled)
-    return () => { cancelled = true }
-  }, [profile, refreshKey])
-
   async function loadTasks(cancelled = false) {
     const today = new Date().toISOString().split('T')[0]
     const { data, error: err } = await supabase
@@ -80,6 +72,16 @@ export default function PatientDashboard() {
     if (cancelled) return
     if (!err) setAllTasks(data || [])
   }
+
+  /* eslint-disable react-hooks/exhaustive-deps */
+  useEffect(() => {
+    if (!profile) return
+    let cancelled = false
+    loadTasks(cancelled)
+    loadStreakData(cancelled)
+    return () => { cancelled = true }
+  }, [profile, refreshKey])
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   const streak = calculateStreak(allTasks)
 

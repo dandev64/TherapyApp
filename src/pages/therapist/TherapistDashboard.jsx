@@ -22,13 +22,6 @@ export default function TherapistDashboard() {
   const [loading, setLoading] = useState(() => !hasCache('therapist-dash-stats'))
   const [error, setError] = useState(null)
 
-  useEffect(() => {
-    if (!profile) return
-    let cancelled = false
-    loadDashboard(cancelled)
-    return () => { cancelled = true }
-  }, [profile])
-
   async function loadDashboard(cancelled = false) {
     const today = new Date().toISOString().split('T')[0]
     const weekAgo = new Date()
@@ -201,6 +194,15 @@ export default function TherapistDashboard() {
     setLoading(false)
   }
 
+  /* eslint-disable react-hooks/exhaustive-deps */
+  useEffect(() => {
+    if (!profile) return
+    let cancelled = false
+    loadDashboard(cancelled)
+    return () => { cancelled = true }
+  }, [profile])
+  /* eslint-enable react-hooks/exhaustive-deps */
+
   const statCards = useMemo(() => [
     { label: 'Patients', value: stats.patients, icon: Users, bgColor: 'bg-primary-container', color: 'text-primary' },
     { label: "Today's Tasks", value: `${stats.completedToday}/${stats.todayTasks}`, icon: ClipboardCheck, bgColor: 'bg-secondary-container', color: 'text-secondary' },
@@ -277,6 +279,7 @@ export default function TherapistDashboard() {
       )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* eslint-disable-next-line no-unused-vars */}
         {statCards.map(({ label, value, icon: Icon, bgColor, color }) => (
           <Card key={label}>
             <div className="flex items-center gap-4">

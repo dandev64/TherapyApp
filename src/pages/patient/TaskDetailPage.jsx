@@ -36,12 +36,6 @@ export default function TaskDetailPage() {
   const [proofPreview, setProofPreview] = useState(null)
   const fileInputRef = useRef(null)
 
-  useEffect(() => {
-    let cancelled = false
-    loadTask(cancelled)
-    return () => { cancelled = true }
-  }, [id])
-
   async function loadTask(cancelled = false) {
     const { data, error } = await supabase
       .from('task_assignments')
@@ -65,6 +59,14 @@ export default function TaskDetailPage() {
         .eq('id', id)
     }
   }
+
+  /* eslint-disable react-hooks/exhaustive-deps */
+  useEffect(() => {
+    let cancelled = false
+    loadTask(cancelled)
+    return () => { cancelled = true }
+  }, [id])
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']
 

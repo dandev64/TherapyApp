@@ -31,6 +31,7 @@ export default function SchedulePage() {
   const todayStr = toDateStr(new Date())
 
   // Load tasks for the visible month
+  /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (!profile) return
     const { year, month } = currentMonth
@@ -67,6 +68,7 @@ export default function SchedulePage() {
       setLoading(false)
     })
   }, [profile, currentMonth, refreshKey])
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Update remark text when selected date changes
   useEffect(() => {

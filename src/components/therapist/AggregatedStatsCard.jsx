@@ -67,6 +67,7 @@ export default function AggregatedStatsCard({ patients, weeklyFeedback }) {
         )}
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {/* eslint-disable-next-line no-unused-vars */}
         {stats.map(({ label, value, icon: Icon, bgColor, color }) => (
           <div key={label} className="flex items-center gap-3">
             <div className={`p-2 rounded-xl ${bgColor} ${color}`}>
