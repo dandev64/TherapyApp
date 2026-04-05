@@ -19,7 +19,7 @@ const TYPE_CONFIG = {
 
 export default function NotificationsPage() {
   const { profile } = useAuth()
-  const { decrementCount } = useNotifications()
+  const { decrementCount, showToast } = useNotifications()
   const navigate = useNavigate()
   const cacheKey = `${profile?.role}-notifications`
   const [notifications, setNotifications] = useCachedState(cacheKey, [])
@@ -27,6 +27,9 @@ export default function NotificationsPage() {
   const [replyingTo, setReplyingTo] = useState(null)
   const [replyText, setReplyText] = useState('')
   const [replySending, setReplySending] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const NOTIF_PAGE_SIZE = 50
 
   async function loadNotifications(cancelled) {
     const { data } = await supabase
@@ -35,10 +38,28 @@ export default function NotificationsPage() {
       .eq('recipient_id', profile.id)
       .is('read_at', null)
       .order('created_at', { ascending: false })
-      .limit(50)
+      .limit(NOTIF_PAGE_SIZE)
     if (cancelled) return
     setNotifications(data || [])
+    setHasMore((data || []).length === NOTIF_PAGE_SIZE)
     setLoading(false)
+  }
+
+  async function loadMoreNotifications() {
+    if (!notifications.length || loadingMore) return
+    setLoadingMore(true)
+    const oldest = notifications[notifications.length - 1]
+    const { data } = await supabase
+      .from('notifications')
+      .select('id, content, type, patient_id, reference_id, created_at')
+      .eq('recipient_id', profile.id)
+      .is('read_at', null)
+      .lt('created_at', oldest.created_at)
+      .order('created_at', { ascending: false })
+      .limit(NOTIF_PAGE_SIZE)
+    setNotifications((prev) => [...prev, ...(data || [])])
+    setHasMore((data || []).length === NOTIF_PAGE_SIZE)
+    setLoadingMore(false)
   }
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -89,12 +110,12 @@ export default function NotificationsPage() {
       .select()
 
     if (error) {
-      alert(`Failed to dismiss: ${error.message}`)
+      showToast(`Failed to dismiss: ${error.message}`, 'task_overdue')
       return
     }
 
     if (!data || data.length === 0) {
-      alert('Dismiss failed: You might not have permission to update this notification.')
+      showToast('Dismiss failed: You might not have permission to update this notification.', 'task_overdue')
       return
     }
 
@@ -142,7 +163,7 @@ export default function NotificationsPage() {
       // Mark notification as read (removes it from the list)
       await dismissNotification(notification.id)
     } catch {
-      alert('Failed to send reply. Please try again.')
+      showToast('Failed to send reply. Please try again.', 'task_overdue')
     } finally {
       setReplySending(false)
     }
@@ -177,7 +198,8 @@ export default function NotificationsPage() {
             </div>
           </Card>
         ) : (
-          notifications.map((n) => {
+          <>
+          {notifications.map((n) => {
             const config = TYPE_CONFIG[n.type] || TYPE_CONFIG.task_completed
             const Icon = config.icon
             return (
@@ -268,7 +290,19 @@ export default function NotificationsPage() {
                 </div>
               </Card>
             )
-          })
+          })}
+          {hasMore && (
+            <div className="text-center py-3">
+              <button
+                onClick={loadMoreNotifications}
+                disabled={loadingMore}
+                className="text-sm font-semibold text-primary hover:underline cursor-pointer disabled:opacity-50"
+              >
+                {loadingMore ? 'Loading...' : 'Load more notifications'}
+              </button>
+            </div>
+          )}
+          </>
         )}
       </div>
     </div>

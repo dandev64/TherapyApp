@@ -10,13 +10,16 @@ import { Send, ArrowLeft } from 'lucide-react'
 export default function MessagesPage() {
   const { recipientId } = useParams()
   const { profile } = useAuth()
-  const { refreshCount } = useNotifications()
+  const { refreshCount, showToast } = useNotifications()
   const navigate = useNavigate()
   const [messages, setMessages] = useState([])
   const [recipient, setRecipient] = useState(null)
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [hasOlderMessages, setHasOlderMessages] = useState(false)
+  const [loadingOlder, setLoadingOlder] = useState(false)
+  const MESSAGE_PAGE_SIZE = 50
   const bottomRef = useRef(null)
 
   async function loadRecipient() {
@@ -36,10 +39,13 @@ export default function MessagesPage() {
       .or(
         `and(sender_id.eq.${profile.id},recipient_id.eq.${recipientId}),and(sender_id.eq.${recipientId},recipient_id.eq.${profile.id})`
       )
-      .order('created_at', { ascending: true })
+      .order('created_at', { ascending: false })
+      .limit(MESSAGE_PAGE_SIZE)
 
     if (error) console.error('Failed to load messages:', error.message)
-    setMessages(data || [])
+    const sorted = (data || []).reverse()
+    setMessages(sorted)
+    setHasOlderMessages((data || []).length === MESSAGE_PAGE_SIZE)
     setLoading(false)
 
     // Mark unread messages as read
@@ -115,6 +121,25 @@ export default function MessagesPage() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  async function loadOlderMessages() {
+    if (!messages.length || loadingOlder) return
+    setLoadingOlder(true)
+    const oldest = messages[0]
+    const { data } = await supabase
+      .from('messages')
+      .select('id, sender_id, recipient_id, content, created_at, read_at')
+      .or(
+        `and(sender_id.eq.${profile.id},recipient_id.eq.${recipientId}),and(sender_id.eq.${recipientId},recipient_id.eq.${profile.id})`
+      )
+      .lt('created_at', oldest.created_at)
+      .order('created_at', { ascending: false })
+      .limit(MESSAGE_PAGE_SIZE)
+    const sorted = (data || []).reverse()
+    setMessages((prev) => [...sorted, ...prev])
+    setHasOlderMessages((data || []).length === MESSAGE_PAGE_SIZE)
+    setLoadingOlder(false)
+  }
+
   async function handleSend() {
     if (!text.trim()) return
     setSending(true)
@@ -130,7 +155,7 @@ export default function MessagesPage() {
 
     if (error) {
       console.error('Failed to send message:', error.message)
-      alert('Failed to send message. Please try again.')
+      showToast('Failed to send message. Please try again.', 'task_overdue')
       setSending(false)
       return
     }
@@ -178,6 +203,17 @@ export default function MessagesPage() {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto space-y-3 pb-4">
+        {hasOlderMessages && (
+          <div className="text-center py-2">
+            <button
+              onClick={loadOlderMessages}
+              disabled={loadingOlder}
+              className="text-xs font-semibold text-primary hover:underline cursor-pointer disabled:opacity-50"
+            >
+              {loadingOlder ? 'Loading...' : 'Load older messages'}
+            </button>
+          </div>
+        )}
         {grouped.length === 0 && (
           <p className="text-sm text-text-muted text-center py-12">
             No messages yet. Start a conversation!

@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { useNotifications } from '../../contexts/NotificationContext'
 import { Linkify } from '../../utils/linkify'
+import { compressImage } from '../../utils/imageCompress'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import { Home, ArrowLeft, Camera, Upload, X, CheckSquare, Clock } from 'lucide-react'
@@ -21,6 +23,7 @@ const MOODS = [
 export default function TaskDetailPage() {
   const { id } = useParams()
   const { profile } = useAuth()
+  const { showToast } = useNotifications()
   const navigate = useNavigate()
 
   const [task, setTask] = useState(null)
@@ -34,6 +37,7 @@ export default function TaskDetailPage() {
   // Proof upload state
   const [proofFile, setProofFile] = useState(null)
   const [proofPreview, setProofPreview] = useState(null)
+  const [proofSignedUrl, setProofSignedUrl] = useState(null)
   const fileInputRef = useRef(null)
 
   async function loadTask(cancelled = false) {
@@ -49,6 +53,15 @@ export default function TaskDetailPage() {
       return
     }
     setTask(data)
+
+    // Generate signed URL for existing proof photo
+    if (data?.proof_url) {
+      const { data: signedData } = await supabase.storage
+        .from('task-proofs')
+        .createSignedUrl(data.proof_url, 3600)
+      if (!cancelled && signedData?.signedUrl) setProofSignedUrl(signedData.signedUrl)
+    }
+
     setLoading(false)
 
     // Auto-mark as in_progress if still pending
@@ -70,17 +83,18 @@ export default function TaskDetailPage() {
 
   const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']
 
-  function handleFileSelect(e) {
+  async function handleFileSelect(e) {
     const file = e.target.files?.[0]
     if (!file) return
     if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-      alert('Please upload an image file (JPEG, PNG, or WebP).')
+      showToast('Please upload an image file (JPEG, PNG, or WebP).', 'task_overdue')
       return
     }
-    setProofFile(file)
+    const compressed = await compressImage(file)
+    setProofFile(compressed)
     const reader = new FileReader()
     reader.onload = (ev) => setProofPreview(ev.target.result)
-    reader.readAsDataURL(file)
+    reader.readAsDataURL(compressed)
   }
 
   function clearProof() {
@@ -105,16 +119,13 @@ export default function TaskDetailPage() {
         .upload(filePath, proofFile, { upsert: true })
 
       if (uploadErr) {
-        alert('Failed to upload proof photo. Please try again.')
+        showToast('Failed to upload proof photo. Please try again.', 'task_overdue')
         setSubmitting(false)
         return
       }
 
-      const { data: urlData } = supabase.storage
-        .from('task-proofs')
-        .getPublicUrl(filePath)
-
-      proofUrl = urlData.publicUrl
+      // Store the file path (not a public URL) so we can generate signed URLs on demand
+      proofUrl = filePath
     }
 
     // Mark task as completed
@@ -128,7 +139,7 @@ export default function TaskDetailPage() {
       .eq('id', id)
 
     if (taskErr) {
-      alert('Failed to complete task. Please try again.')
+      showToast('Failed to complete task. Please try again.', 'task_overdue')
       setSubmitting(false)
       return
     }
@@ -274,15 +285,16 @@ export default function TaskDetailPage() {
       )}
 
       {/* Show existing proof if already completed */}
-      {task.proof_url && (
+      {task.proof_url && proofSignedUrl && (
         <Card>
           <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">
             Proof Submitted
           </p>
           <img
-            src={task.proof_url}
+            src={proofSignedUrl}
             alt="Proof of completion"
             className="w-full rounded-xl object-cover max-h-64"
+            loading="lazy"
           />
         </Card>
       )}

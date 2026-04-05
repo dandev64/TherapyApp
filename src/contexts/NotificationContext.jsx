@@ -100,7 +100,7 @@ export function NotificationProvider({ children }) {
 
   return (
     <NotificationContext.Provider
-      value={{ unreadCount, decrementCount, refreshCount, toasts, dismissToast }}
+      value={{ unreadCount, decrementCount, refreshCount, toasts, showToast, dismissToast }}
     >
       {children}
     </NotificationContext.Provider>

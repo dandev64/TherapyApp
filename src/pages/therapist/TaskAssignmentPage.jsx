@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCachedState, hasCache } from '../../hooks/useCachedState'
@@ -34,6 +34,9 @@ export default function TaskAssignmentPage() {
   const [error, setError] = useState(null)
   const [successMsg, setSuccessMsg] = useState('')
   const [selectedTask, setSelectedTask] = useState(null)
+  const [proofSignedUrl, setProofSignedUrl] = useState(null)
+  const PAGE_SIZE = 50
+  const [hasMoreAssignments, setHasMoreAssignments] = useState(true)
   const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0])
   const [filterStatus, setFilterStatus] = useState('')
   const [filterPatient, setFilterPatient] = useState('')
@@ -56,16 +59,19 @@ export default function TaskAssignmentPage() {
     }
   }
 
-  async function loadRecentAssignments() {
+  async function loadRecentAssignments(append = false) {
+    const offset = append ? recentAssignments.length : 0
     const { data, error: err } = await supabase
       .from('task_assignments')
       .select('id, title, description, assigned_date, assigned_time, status, requires_proof, proof_url, resource_url, patient_id, profiles!task_assignments_patient_id_fkey(full_name)')
       .eq('therapist_id', profile.id)
       .order('assigned_date', { ascending: false })
       .order('created_at', { ascending: false })
-      .limit(100)
+      .range(offset, offset + PAGE_SIZE - 1)
     if (err) { setError('Failed to load assignments.'); setPageLoading(false); return }
     setError(null)
+
+    setHasMoreAssignments((data || []).length === PAGE_SIZE)
 
     const taskIds = (data || []).filter((t) => t.status === 'completed').map((t) => t.id)
     let fbMap = {}
@@ -79,7 +85,12 @@ export default function TaskAssignmentPage() {
       })
     }
 
-    setRecentAssignments((data || []).map((t) => ({ ...t, feedback: fbMap[t.id] || null })))
+    const mapped = (data || []).map((t) => ({ ...t, feedback: fbMap[t.id] || null }))
+    if (append) {
+      setRecentAssignments((prev) => [...prev, ...mapped])
+    } else {
+      setRecentAssignments(mapped)
+    }
     setPageLoading(false)
   }
 
@@ -136,6 +147,17 @@ export default function TaskAssignmentPage() {
     const date = new Date(2000, 0, 1, parseInt(h), parseInt(m))
     return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
   }
+
+  const openTaskDetail = useCallback(async (task) => {
+    setSelectedTask(task)
+    setProofSignedUrl(null)
+    if (task.proof_url) {
+      const { data } = await supabase.storage
+        .from('task-proofs')
+        .createSignedUrl(task.proof_url, 3600)
+      if (data?.signedUrl) setProofSignedUrl(data.signedUrl)
+    }
+  }, [])
 
   const filteredAssignments = useMemo(() => {
     return recentAssignments.filter((a) => {
@@ -325,7 +347,7 @@ export default function TaskAssignmentPage() {
                   <tr
                     key={a.id}
                     className="border-b border-border last:border-0 cursor-pointer hover:bg-primary-container/10 transition-colors"
-                    onClick={() => setSelectedTask(a)}
+                    onClick={() => openTaskDetail(a)}
                   >
                     <td className="px-4 py-3">
                       <p className="font-semibold text-text-primary">{a.title}</p>
@@ -359,6 +381,16 @@ export default function TaskAssignmentPage() {
             )}
           </tbody>
         </table>
+        {hasMoreAssignments && filteredAssignments.length > 0 && (
+          <div className="px-4 py-3 border-t border-border text-center">
+            <button
+              onClick={() => loadRecentAssignments(true)}
+              className="text-sm font-semibold text-primary hover:underline cursor-pointer"
+            >
+              Load more
+            </button>
+          </div>
+        )}
       </Card>
 
       {/* Task Detail Modal */}
@@ -423,11 +455,11 @@ export default function TaskAssignmentPage() {
                   <p className="text-sm text-text-muted italic">No feedback submitted</p>
                 )}
 
-                {selectedTask.proof_url && (
+                {selectedTask.proof_url && proofSignedUrl && (
                   <div>
                     <p className="text-xs font-bold text-text-muted uppercase tracking-wider mb-2">Proof Photo</p>
-                    <a href={selectedTask.proof_url} target="_blank" rel="noopener noreferrer">
-                      <img src={selectedTask.proof_url} alt="Proof" className="w-full max-w-xs rounded-xl border border-border" />
+                    <a href={proofSignedUrl} target="_blank" rel="noopener noreferrer">
+                      <img src={proofSignedUrl} alt="Proof" className="w-full max-w-xs rounded-xl border border-border" loading="lazy" />
                     </a>
                   </div>
                 )}

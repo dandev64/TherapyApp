@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { useNotifications } from '../../contexts/NotificationContext'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
@@ -9,6 +10,7 @@ import { MessageSquare, LogOut, Edit3, Check } from 'lucide-react'
 
 export default function PatientProfilePage() {
   const { profile, signOut, refreshProfile } = useAuth()
+  const { showToast } = useNotifications()
   const navigate = useNavigate()
   const [therapist, setTherapist] = useState(null)
   const [editing, setEditing] = useState(false)
@@ -43,7 +45,7 @@ export default function PatientProfilePage() {
       .update({ full_name: form.full_name, condition: form.condition || null })
       .eq('id', profile.id)
     if (error) {
-      alert('Failed to save profile. Please try again.')
+      showToast('Failed to save profile. Please try again.', 'task_overdue')
       setSaving(false)
       return
     }
