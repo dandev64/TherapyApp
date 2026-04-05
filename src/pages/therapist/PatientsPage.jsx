@@ -25,6 +25,7 @@ export default function PatientsPage() {
   const [addLoading, setAddLoading] = useState(false)
   const [selectedPatient, setSelectedPatient] = useState(null)
   const [patientHistory, setPatientHistory] = useState([])
+  const [proofUrls, setProofUrls] = useState({})
   const [error, setError] = useState(null)
   const [successMsg, setSuccessMsg] = useState('')
 
@@ -132,6 +133,23 @@ export default function PatientsPage() {
       if (!fbMap[fb.task_assignment_id]) fbMap[fb.task_assignment_id] = fb
     })
     setPatientHistory((tasksRes.data || []).map((t) => ({ ...t, feedback: fbMap[t.id] || null })))
+
+    // Generate signed URLs for proof photos
+    const tasksWithProof = (tasksRes.data || []).filter((t) => t.proof_url)
+    const urls = {}
+    await Promise.all(
+      tasksWithProof.map(async (t) => {
+        if (t.proof_url.startsWith('http')) {
+          urls[t.id] = t.proof_url
+        } else {
+          const { data: signed } = await supabase.storage
+            .from('task-proofs')
+            .createSignedUrl(t.proof_url, 3600)
+          if (signed?.signedUrl) urls[t.id] = signed.signedUrl
+        }
+      })
+    )
+    setProofUrls(urls)
   }
 
   const filtered = patients.filter((p) =>
@@ -311,11 +329,19 @@ export default function PatientsPage() {
                         <p className="text-xs text-text-secondary">{task.feedback.note}</p>
                       </div>
                     )}
-                    {task.proof_url && (
-                      <a href={task.proof_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-primary hover:underline">
+                    {task.proof_url && proofUrls[task.id] && (
+                      <img
+                        src={proofUrls[task.id]}
+                        alt="Proof of completion"
+                        className="w-full rounded-xl object-cover max-h-48 mt-1"
+                        loading="lazy"
+                      />
+                    )}
+                    {task.proof_url && !proofUrls[task.id] && (
+                      <div className="flex items-center gap-1.5 text-xs text-text-muted">
                         <Camera size={12} />
-                        View proof photo
-                      </a>
+                        Loading proof photo...
+                      </div>
                     )}
                   </div>
                 )}

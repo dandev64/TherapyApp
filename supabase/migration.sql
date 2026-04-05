@@ -260,6 +260,13 @@ $$;
 -- 8. RLS TIGHTENING
 -- ============================================
 
+-- Helper: returns the role of the current user without triggering RLS on profiles
+-- (querying profiles from within a profiles policy causes infinite recursion)
+CREATE OR REPLACE FUNCTION public.current_user_role()
+RETURNS text AS $$
+  SELECT role FROM public.profiles WHERE id = auth.uid();
+$$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '';
+
 -- Profiles: therapists see all, patients/caregivers see only themselves + connected users
 DROP POLICY IF EXISTS "Profiles are viewable by authenticated users" ON public.profiles;
 DROP POLICY IF EXISTS "Profiles are viewable by connected users"     ON public.profiles;
@@ -269,10 +276,7 @@ CREATE POLICY "Profiles are viewable by connected users"
   TO authenticated
   USING (
     id = auth.uid()
-    OR EXISTS (
-      SELECT 1 FROM public.profiles AS me
-      WHERE me.id = auth.uid() AND me.role = 'therapist'
-    )
+    OR public.current_user_role() = 'therapist'
     OR EXISTS (
       SELECT 1 FROM public.patient_assignments
       WHERE (patient_id = profiles.id AND assigned_to = auth.uid())
@@ -288,10 +292,7 @@ CREATE POLICY "Therapists can create assignments"
   TO authenticated
   WITH CHECK (
     assigned_to = auth.uid()
-    AND EXISTS (
-      SELECT 1 FROM public.profiles
-      WHERE id = auth.uid() AND role = 'therapist'
-    )
+    AND public.current_user_role() = 'therapist'
   );
 
 DROP POLICY IF EXISTS "Therapists can delete assignments" ON public.patient_assignments;
@@ -301,10 +302,7 @@ CREATE POLICY "Therapists can delete assignments"
   TO authenticated
   USING (
     assigned_to = auth.uid()
-    AND EXISTS (
-      SELECT 1 FROM public.profiles
-      WHERE id = auth.uid() AND role = 'therapist'
-    )
+    AND public.current_user_role() = 'therapist'
   );
 
 
