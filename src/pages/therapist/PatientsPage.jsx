@@ -138,39 +138,38 @@ export default function PatientsPage() {
     const tasksWithProof = (tasksRes.data || []).filter((t) => t.proof_url)
     const urls = {}
     await Promise.all(
-    tasksWithProof.map(async (t) => {
-      try {
-        if (!t.proof_url) return
-        if (t.proof_url.startsWith('http')) {
-          urls[t.id] = t.proof_url
-          return
-        }
-
-        const { data, error } = await supabase.storage
-          .from('task-proofs')
-          .createSignedUrl(t.proof_url, 3600)
-
-        if (data?.signedUrl) {
-          urls[t.id] = data.signedUrl
-        } else {
-          console.error('Signed URL failed, trying public URL:', error)
-
-          const { data: pubData } = supabase.storage
-            .from('task-proofs')
-            .getPublicUrl(t.proof_url)
-
-          if (pubData?.publicUrl) {
-            urls[t.id] = pubData.publicUrl
+      tasksWithProof.map(async (t) => {
+        try {
+          if (!t.proof_url) return
+          if (t.proof_url.startsWith('http')) {
+            urls[t.id] = t.proof_url
+            return
           }
+
+          const { data, error } = await supabase.storage
+            .from('task-proofs')
+            .createSignedUrl(t.proof_url, 3600)
+
+          if (data?.signedUrl) {
+            urls[t.id] = data.signedUrl
+          } else {
+            console.error('Signed URL failed, trying public URL:', error)
+
+            const { data: pubData } = supabase.storage
+              .from('task-proofs')
+              .getPublicUrl(t.proof_url)
+
+            if (pubData?.publicUrl) {
+              urls[t.id] = pubData.publicUrl
+            }
+          }
+        } catch (err) {
+          console.error('Error generating signed URL:', err)
         }
-      } catch (err) {
-        console.error('Error generating signed URL:', err)
-      }
-    })
-  )
+      })
+    )
 
     setProofUrls(urls)
-    console.log('Proof URLs generated:', urls)
   }
 
   const filtered = patients.filter((p) =>

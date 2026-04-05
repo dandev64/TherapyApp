@@ -73,10 +73,6 @@ export default function ReadOnlyCalendar({ patientId, therapistId }) {
       })
       setFeedbackMap(fbMap)
       setLoading(false)
-      
-      
-
-
     }
     load()
     return () => { cancelled = true }
