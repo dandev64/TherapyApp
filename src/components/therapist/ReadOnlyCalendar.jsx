@@ -22,6 +22,7 @@ export default function ReadOnlyCalendar({ patientId, therapistId }) {
   const [selectedDate, setSelectedDate] = useState(toDateStr(new Date()))
   const [tasks, setTasks] = useState([])
   const [feedbackMap, setFeedbackMap] = useState({})
+  const [proofUrls, setProofUrls] = useState({})
   const [remarks, setRemarks] = useState({})
   const [loading, setLoading] = useState(true)
   const [selectedTask, setSelectedTask] = useState(null)
@@ -72,10 +73,54 @@ export default function ReadOnlyCalendar({ patientId, therapistId }) {
       })
       setFeedbackMap(fbMap)
       setLoading(false)
+      
+      
+
+
     }
     load()
     return () => { cancelled = true }
   }, [patientId, therapistId, year, month])
+
+  useEffect(() => {
+    if (!tasks.length) return
+
+    const urls = {}
+
+    Promise.all(
+      tasks
+        .filter(t => t.proof_url)
+        .map(async (t) => {
+          try {
+            if (t.proof_url.startsWith('http')) {
+              urls[t.id] = t.proof_url
+              return
+            }
+
+            const { data } = await supabase.storage
+              .from('task-proofs')
+              .createSignedUrl(t.proof_url, 3600)
+
+            if (data?.signedUrl) {
+              urls[t.id] = data.signedUrl
+            } else {
+              const { data: pubData } = supabase.storage
+                .from('task-proofs')
+                .getPublicUrl(t.proof_url)
+
+              if (pubData?.publicUrl) {
+                urls[t.id] = pubData.publicUrl
+              }
+            }
+          } catch (err) {
+            console.error('Error generating proof URL:', err)
+          }
+        })
+    ).then(() => {
+      setProofUrls(urls)
+    })
+  }, [tasks])
+
 
   const tasksByDate = useMemo(() => {
     const grouped = {}
@@ -335,10 +380,25 @@ export default function ReadOnlyCalendar({ patientId, therapistId }) {
 
                   {selectedTask.proof_url && (
                     <div>
-                      <p className="text-xs font-bold text-text-muted uppercase tracking-wider mb-2">Proof Photo</p>
-                      <a href={selectedTask.proof_url} target="_blank" rel="noopener noreferrer">
-                        <img src={selectedTask.proof_url} alt="Proof" className="w-full max-w-xs rounded-xl border border-border" />
-                      </a>
+                      <p className="text-xs font-bold text-text-muted uppercase tracking-wider mb-2">
+                        Proof Photo
+                      </p>
+
+                      {proofUrls[selectedTask.id] ? (
+                        <a
+                          href={proofUrls[selectedTask.id]}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <img
+                            src={proofUrls[selectedTask.id]}
+                            alt="Proof"
+                            className="w-full max-w-xs rounded-xl border border-border"
+                          />
+                        </a>
+                      ) : (
+                        <p className="text-sm text-text-muted">Loading proof image...</p>
+                      )}
                     </div>
                   )}
                 </div>
