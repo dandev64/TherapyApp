@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import Input from '../../components/ui/Input'
 import Button from '../../components/ui/Button'
@@ -12,14 +12,18 @@ const roleOptions = [
 ]
 
 export default function SignUpPage() {
-  const { signUp } = useAuth()
-  const navigate = useNavigate()
+  const { user, profile, profileError, signUp } = useAuth()
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [role, setRole] = useState('patient')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // Already logged in — redirect to dashboard
+  if (user && profile) {
+    return <Navigate to={`/${profile.role}`} replace />
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -38,8 +42,7 @@ export default function SignUpPage() {
       setError(err.message)
       return
     }
-
-    navigate(`/${role}`)
+    // AuthContext will pick up the new user and redirect via the check below
   }
 
   return (
@@ -55,9 +58,9 @@ export default function SignUpPage() {
 
         <div className="bg-surface-card rounded-3xl border border-border-light p-8 shadow-[0_20px_40px_rgba(44,52,54,0.06)]">
           <form onSubmit={handleSubmit} className="space-y-5">
-            {error && (
+            {(error || profileError) && (
               <div className="p-4 rounded-xl bg-danger-bg text-danger text-sm font-semibold">
-                {error}
+                {error || `Unable to load your profile: ${profileError}`}
               </div>
             )}
 

@@ -8,6 +8,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [profileError, setProfileError] = useState(null)
   const currentUserIdRef = useRef(null)
 
   // Listen to auth state changes (keep callback synchronous — no await)
@@ -45,6 +46,7 @@ export function AuthProvider({ children }) {
     if (!user) return
     let cancelled = false
 
+    setProfileError(null)
     supabase
       .from('profiles')
       .select('*')
@@ -54,11 +56,13 @@ export function AuthProvider({ children }) {
         if (cancelled) return
         if (error) {
           console.error('Profile fetch error:', error)
+          setProfileError(error.message)
           setProfile(null)
           setLoading(false)
           return
         }
         setProfile(data)
+        setProfileError(null)
         setLoading(false)
       })
 
@@ -108,7 +112,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, profile, loading, signUp, signIn, signOut, refreshProfile }}
+      value={{ user, profile, loading, profileError, signUp, signIn, signOut, refreshProfile }}
     >
       {children}
     </AuthContext.Provider>

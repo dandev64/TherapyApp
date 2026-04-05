@@ -6,7 +6,7 @@ import Input from '../../components/ui/Input'
 import Button from '../../components/ui/Button'
 
 export default function LoginPage() {
-  const { user, profile, signIn } = useAuth()
+  const { user, profile, profileError, signIn } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -62,9 +62,9 @@ export default function LoginPage() {
 
         <div className="bg-surface-card rounded-3xl border border-border-light p-8 shadow-[0_20px_40px_rgba(44,52,54,0.06)]">
           <form onSubmit={handleSubmit} className="space-y-5">
-            {error && (
+            {(error || profileError) && (
               <div className="p-4 rounded-xl bg-danger-bg text-danger text-sm font-semibold">
-                {error}
+                {error || `Unable to load your profile: ${profileError}`}
               </div>
             )}
             {resetSent && (
