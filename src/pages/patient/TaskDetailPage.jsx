@@ -56,10 +56,17 @@ export default function TaskDetailPage() {
 
     // Generate signed URL for existing proof photo
     if (data?.proof_url) {
-      const { data: signedData } = await supabase.storage
-        .from('task-proofs')
-        .createSignedUrl(data.proof_url, 3600)
-      if (!cancelled && signedData?.signedUrl) setProofSignedUrl(signedData.signedUrl)
+      // Old records store full public URLs; new records store just the file path
+      const isFullUrl = data.proof_url.startsWith('http')
+      if (isFullUrl) {
+        // Legacy: use the URL directly
+        if (!cancelled) setProofSignedUrl(data.proof_url)
+      } else {
+        const { data: signedData } = await supabase.storage
+          .from('task-proofs')
+          .createSignedUrl(data.proof_url, 3600)
+        if (!cancelled && signedData?.signedUrl) setProofSignedUrl(signedData.signedUrl)
+      }
     }
 
     setLoading(false)
