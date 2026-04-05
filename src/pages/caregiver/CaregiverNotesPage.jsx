@@ -30,20 +30,22 @@ export default function CaregiverNotesPage() {
   const [error, setError] = useState(null)
 
   async function loadPatients() {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('patient_assignments')
       .select('patient_id, profiles!patient_assignments_patient_id_fkey(id, full_name)')
       .eq('assigned_to', profile.id)
       .eq('relationship', 'caregiver')
+    if (error) { console.error('Failed to load patients:', error.message); setError('Failed to load patients.'); return }
     setPatients(data?.map((a) => a.profiles) || [])
   }
 
   async function loadNotes() {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('caregiver_notes')
       .select('*, patient:profiles!caregiver_notes_patient_id_fkey(full_name)')
       .eq('caregiver_id', profile.id)
       .order('created_at', { ascending: false })
+    if (error) { console.error('Failed to load notes:', error.message); setError('Failed to load notes.'); return }
     setNotes(data || [])
   }
 
@@ -278,6 +280,7 @@ export default function CaregiverNotesPage() {
                   placeholder="Describe what you've observed — behavior, mood, appetite, sleep, progress with exercises..."
                   value={form.content}
                   onChange={(e) => setForm({ ...form, content: e.target.value })}
+                  maxLength={2000}
                   required
                 />
               </div>

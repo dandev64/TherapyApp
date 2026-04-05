@@ -318,6 +318,7 @@ export default function TaskDetailPage() {
               placeholder="Write anything you'd like to share..."
               value={feedbackNote}
               onChange={(e) => setFeedbackNote(e.target.value)}
+              maxLength={1000}
             />
           </Card>
         </>

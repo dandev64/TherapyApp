@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../lib/supabase'
 import Input from '../../components/ui/Input'
@@ -7,7 +7,6 @@ import Button from '../../components/ui/Button'
 
 export default function LoginPage() {
   const { user, profile, signIn } = useAuth()
-  const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -25,19 +24,13 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
 
-    const { data, error: err } = await signIn({ email, password })
+    const { error: err } = await signIn({ email, password })
     setLoading(false)
 
     if (err) {
       setError(err.message)
-      return
     }
-
-    const validRoles = ['patient', 'therapist', 'caregiver']
-    const role = validRoles.includes(data.user?.user_metadata?.role)
-      ? data.user.user_metadata.role
-      : 'patient'
-    navigate(`/${role}`)
+    // AuthContext will update user/profile, triggering the redirect at the top of this component
   }
 
   async function handleForgotPassword() {

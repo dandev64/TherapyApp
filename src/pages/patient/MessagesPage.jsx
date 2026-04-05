@@ -20,16 +20,17 @@ export default function MessagesPage() {
   const bottomRef = useRef(null)
 
   async function loadRecipient() {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('profiles')
       .select('id, full_name, role')
       .eq('id', recipientId)
       .single()
+    if (error) console.error('Failed to load recipient:', error.message)
     setRecipient(data)
   }
 
   async function loadMessages() {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('messages')
       .select('id, sender_id, recipient_id, content, created_at, read_at')
       .or(
@@ -37,6 +38,7 @@ export default function MessagesPage() {
       )
       .order('created_at', { ascending: true })
 
+    if (error) console.error('Failed to load messages:', error.message)
     setMessages(data || [])
     setLoading(false)
 
@@ -116,7 +118,7 @@ export default function MessagesPage() {
   async function handleSend() {
     if (!text.trim()) return
     setSending(true)
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('messages')
       .insert({
         sender_id: profile.id,
@@ -126,6 +128,12 @@ export default function MessagesPage() {
       .select()
       .single()
 
+    if (error) {
+      console.error('Failed to send message:', error.message)
+      alert('Failed to send message. Please try again.')
+      setSending(false)
+      return
+    }
     if (data) setMessages((prev) => [...prev, data])
     setText('')
     setSending(false)
@@ -215,6 +223,7 @@ export default function MessagesPage() {
           aria-label="Type a message"
           value={text}
           onChange={(e) => setText(e.target.value)}
+          maxLength={1000}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault()

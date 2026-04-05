@@ -219,6 +219,7 @@ export default function TaskAssignmentPage() {
                     placeholder="Describe the task..."
                     value={form.description}
                     onChange={(e) => setForm({ ...form, description: e.target.value })}
+                    maxLength={2000}
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -245,6 +246,7 @@ export default function TaskAssignmentPage() {
                     placeholder="e.g. https://youtube.com/watch?v=... or describe the resource"
                     value={form.resource_url}
                     onChange={(e) => setForm({ ...form, resource_url: e.target.value })}
+                    maxLength={2000}
                   />
                 </div>
                 <label className="flex items-center gap-3 cursor-pointer">

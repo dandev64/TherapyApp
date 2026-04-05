@@ -332,6 +332,7 @@ export default function SchedulePage() {
               placeholder="How was your day?..."
               value={remarkText}
               onChange={(e) => setRemarkText(e.target.value)}
+              maxLength={2000}
             />
             <button
               onClick={saveRemark}

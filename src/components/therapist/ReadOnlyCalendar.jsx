@@ -50,7 +50,6 @@ export default function ReadOnlyCalendar({ patientId, therapistId }) {
         .from('daily_remarks')
         .select('date, content')
         .eq('patient_id', patientId)
-        .eq('therapist_id', therapistId)
         .gte('date', startOfMonth)
         .lte('date', endOfMonth),
       supabase

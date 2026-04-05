@@ -361,6 +361,7 @@ export default function PatientDetailPage() {
               placeholder="Describe the task..."
               value={assignForm.description}
               onChange={(e) => setAssignForm({ ...assignForm, description: e.target.value })}
+              maxLength={2000}
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -387,6 +388,7 @@ export default function PatientDetailPage() {
               placeholder="e.g. https://youtube.com/watch?v=... or describe the resource"
               value={assignForm.resource_url}
               onChange={(e) => setAssignForm({ ...assignForm, resource_url: e.target.value })}
+              maxLength={2000}
             />
           </div>
           <label className="flex items-center gap-3 cursor-pointer">

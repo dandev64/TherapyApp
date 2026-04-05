@@ -20,16 +20,17 @@ export default function TherapistMessagesPage() {
   const bottomRef = useRef(null)
 
   async function loadPatient() {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('profiles')
       .select('id, full_name, role')
       .eq('id', patientId)
       .single()
+    if (error) console.error('Failed to load patient:', error.message)
     setPatient(data)
   }
 
   async function loadMessages() {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('messages')
       .select('id, sender_id, recipient_id, content, created_at, read_at')
       .or(
@@ -37,6 +38,7 @@ export default function TherapistMessagesPage() {
       )
       .order('created_at', { ascending: true })
 
+    if (error) console.error('Failed to load messages:', error.message)
     setMessages(data || [])
     setLoading(false)
 
@@ -113,7 +115,7 @@ export default function TherapistMessagesPage() {
   async function handleSend() {
     if (!text.trim()) return
     setSending(true)
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('messages')
       .insert({
         sender_id: profile.id,
@@ -123,6 +125,12 @@ export default function TherapistMessagesPage() {
       .select()
       .single()
 
+    if (error) {
+      console.error('Failed to send message:', error.message)
+      alert('Failed to send message. Please try again.')
+      setSending(false)
+      return
+    }
     if (data) setMessages((prev) => [...prev, data])
     setText('')
     setSending(false)
@@ -208,6 +216,7 @@ export default function TherapistMessagesPage() {
           aria-label="Type a message"
           value={text}
           onChange={(e) => setText(e.target.value)}
+          maxLength={1000}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault()
