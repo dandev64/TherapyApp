@@ -156,10 +156,20 @@ export default function TaskAssignmentPage() {
       if (isFullUrl) {
         setProofSignedUrl(task.proof_url)
       } else {
-        const { data } = await supabase.storage
+        // Try signed URL first (private bucket)
+        const { data, error } = await supabase.storage
           .from('task-proofs')
           .createSignedUrl(task.proof_url, 3600)
-        if (data?.signedUrl) setProofSignedUrl(data.signedUrl)
+        if (data?.signedUrl) {
+          setProofSignedUrl(data.signedUrl)
+        } else {
+          // Fallback: try public URL in case bucket is still public
+          console.error('Signed URL failed, trying public URL:', error?.message)
+          const { data: pubData } = supabase.storage
+            .from('task-proofs')
+            .getPublicUrl(task.proof_url)
+          if (pubData?.publicUrl) setProofSignedUrl(pubData.publicUrl)
+        }
       }
     }
   }, [])
