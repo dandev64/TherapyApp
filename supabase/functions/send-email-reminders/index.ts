@@ -2,11 +2,11 @@
 // HabitOT — Email Reminder Edge Function
 // =============================================================================
 //
-// This Supabase Edge Function sends two types of email reminders:
+// This Supabase Edge Function sends email reminders:
 //   1. THERAPIST REMINDER — sent each morning if a therapist has patients
 //      with no tasks assigned for today.
-//   2. PATIENT REMINDER — sent 1 hour before a task's assigned_time if the
-//      task has not yet been completed.
+//   2. PATIENT REMINDER (1hr before) — COMMENTED OUT for now.
+//   3. TASK CREATED — sends immediately when a new task is assigned.
 //
 // ── How to activate ──────────────────────────────────────────────────────
 //   1. Sign up at https://resend.com and get an API key
@@ -125,30 +125,27 @@ async function checkTherapistReminders() {
 }
 
 // ── 2. Patient reminder: 1 hour before task assigned_time ───────────────
+// COMMENTED OUT — keeping for future use
+/*
 async function checkPatientReminders() {
   const now = new Date();
   const today = now.toISOString().split("T")[0];
   const currentMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
 
-  // Look for tasks whose assigned_time is ~1 hour from now (45–75 min window
-  // to account for the 15-minute cron interval and slight drift)
   const windowStart = currentMinutes + 45;
   const windowEnd = currentMinutes + 75;
 
-  // Format window bounds as HH:MM strings for comparison
   const toHHMM = (totalMins: number) => {
     const h = Math.floor(totalMins / 60) % 24;
     const m = totalMins % 60;
     return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
   };
 
-  // If window crosses midnight (e.g. 23:30 + 75min), skip — edge case unlikely for therapy tasks
   if (windowEnd >= 24 * 60) return;
 
   const startTime = toHHMM(windowStart);
   const endTime = toHHMM(windowEnd);
 
-  // Get incomplete tasks for today that fall within the reminder window
   const { data: tasks } = await supabase
     .from("task_assignments")
     .select("id, title, assigned_time, patient_id")
@@ -159,14 +156,12 @@ async function checkPatientReminders() {
 
   if (!tasks || tasks.length === 0) return;
 
-  // Group tasks by patient
   const byPatient: Record<string, typeof tasks> = {};
   for (const task of tasks) {
     if (!byPatient[task.patient_id]) byPatient[task.patient_id] = [];
     byPatient[task.patient_id].push(task);
   }
 
-  // Get patients who opted in to email notifications
   const patientIds = Object.keys(byPatient);
   const { data: patients } = await supabase
     .from("profiles")
@@ -181,7 +176,6 @@ async function checkPatientReminders() {
     const patientTasks = byPatient[patient.id];
     if (!patientTasks || patientTasks.length === 0) continue;
 
-    // Use a dedup key per patient per task so each task only triggers one reminder
     for (const task of patientTasks) {
       const emailType = `patient_task_reminder_${task.id}`;
       if (await alreadySent(patient.id, emailType, today)) continue;
@@ -213,17 +207,66 @@ async function checkPatientReminders() {
     }
   }
 }
+*/
+
+// ── 3. Immediate notification: task just created ────────────────────────
+async function sendTaskCreatedEmail(patientId: string, taskTitle: string, assignedDate: string, assignedTime: string) {
+  // Get the patient's profile
+  const { data: patient } = await supabase
+    .from("profiles")
+    .select("id, email, full_name, email_notifications_enabled")
+    .eq("id", patientId)
+    .single();
+
+  if (!patient || !patient.email_notifications_enabled) return;
+
+  const formattedTime = new Date(`${assignedDate}T${assignedTime}:00`).toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  const formattedDate = new Date(assignedDate + "T00:00:00").toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+
+  const subject = `HabitOT — New task assigned: "${taskTitle}"`;
+  const html = `
+    <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+      <h2 style="color: #2c3436;">Hi ${patient.full_name?.split(" ")[0]}!</h2>
+      <p>Your therapist just assigned you a new task:</p>
+      <div style="background: #f8f9fa; border-left: 4px solid #863bff; padding: 12px 16px; margin: 16px 0; border-radius: 0 8px 8px 0;">
+        <p style="margin: 0; font-weight: bold; color: #2c3436;">${taskTitle}</p>
+        <p style="margin: 4px 0 0; font-size: 14px; color: #6b7280;">${formattedDate} at ${formattedTime}</p>
+      </div>
+      <p>Log in to <a href="https://habitot.app/patient" style="color: #863bff;">HabitOT</a> to view your tasks.</p>
+      <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+      <p style="font-size: 12px; color: #9ca3af;">
+        You received this because email reminders are enabled on your HabitOT account.
+      </p>
+    </div>
+  `;
+
+  await sendEmail(patient.email, subject, html);
+}
 
 // ── HTTP Handler ────────────────────────────────────────────────────────
 serve(async (req) => {
   try {
-    const { type } = await req.json().catch(() => ({ type: "all" }));
+    const body = await req.json().catch(() => ({ type: "all" }));
+    const { type } = body;
 
     if (type === "therapist" || type === "all") {
       await checkTherapistReminders();
     }
-    if (type === "patient" || type === "all") {
-      await checkPatientReminders();
+    // Patient 1-hour reminders commented out for now
+    // if (type === "patient" || type === "all") {
+    //   await checkPatientReminders();
+    // }
+    if (type === "task_created") {
+      const { patient_id, title, assigned_date, assigned_time } = body;
+      await sendTaskCreatedEmail(patient_id, title, assigned_date, assigned_time);
     }
 
     return new Response(JSON.stringify({ success: true }), {

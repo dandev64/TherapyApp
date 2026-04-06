@@ -127,6 +127,17 @@ export default function PatientDetailPage() {
     })
 
     if (err) { setAssigning(false); return }
+
+    // Send immediate email notification to the patient
+    supabase.functions.invoke('send-email-reminders', {
+      body: {
+        type: 'task_created',
+        patient_id: patientId,
+        title: assignForm.title,
+        assigned_date: assignForm.assigned_date,
+        assigned_time: assignForm.assigned_time,
+      },
+    }).catch(() => {}) // fire-and-forget, don't block UI
     setAssigning(false)
     setShowAssign(false)
     loadAll()

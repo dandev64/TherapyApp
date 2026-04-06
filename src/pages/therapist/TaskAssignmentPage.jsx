@@ -121,6 +121,17 @@ export default function TaskAssignmentPage() {
 
     setLoading(false)
     if (err) { setError('Failed to assign task.'); return }
+
+    // Send immediate email notification to the patient
+    supabase.functions.invoke('send-email-reminders', {
+      body: {
+        type: 'task_created',
+        patient_id: form.patient_id,
+        title: form.title,
+        assigned_date: form.assigned_date,
+        assigned_time: form.assigned_time,
+      },
+    }).catch(() => {}) // fire-and-forget, don't block UI
     setForm({
       patient_id: form.patient_id,
       title: '',
