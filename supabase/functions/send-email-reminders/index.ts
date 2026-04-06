@@ -8,17 +8,13 @@
 //   2. PATIENT REMINDER — sent 1 hour before a task's assigned_time if the
 //      task has not yet been completed.
 //
-// CURRENTLY COMMENTED OUT to avoid using Supabase free tier resources.
-//
 // ── How to activate ──────────────────────────────────────────────────────
 //   1. Sign up at https://resend.com and get an API key
 //   2. Set the secret:  supabase secrets set RESEND_API_KEY=re_xxxxx
-//   3. Uncomment ALL the code below
-//   4. Deploy:  supabase functions deploy send-email-reminders
-//   5. Run the SQL in  migration_email_notifications.sql  to set up pg_cron
+//   3. Deploy:  supabase functions deploy send-email-reminders
+//   4. Run the SQL in migration.sql (section 10) to set up pg_cron
 // ─────────────────────────────────────────────────────────────────────────
 
-/*
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -241,4 +237,3 @@ serve(async (req) => {
     });
   }
 });
-*/

@@ -478,8 +478,6 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 -- 2. Deploy the Edge Function
 -- 3. Uncomment below and update YOUR_PROJECT_REF / YOUR_ANON_KEY
 
-/*
-
 -- Email opt-in column
 ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS email_notifications_enabled boolean DEFAULT false;
@@ -508,10 +506,10 @@ SELECT cron.schedule(
   '0 8 * * *',
   $$
   SELECT net.http_post(
-    url := 'https://YOUR_PROJECT_REF.supabase.co/functions/v1/send-email-reminders',
+    url := 'https://afzprgdowymgvmxtrqzc.supabase.co/functions/v1/send-email-reminders',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
-      'Authorization', 'Bearer YOUR_ANON_KEY'
+      'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFmenByZ2Rvd3ltZ3ZteHRycXpjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzMTk4NDMsImV4cCI6MjA4OTg5NTg0M30.lpxLOf09xwrFGqsz5aB86CX78tFyVq2W3Y3nU-OvaFg'
     ),
     body := '{"type": "therapist"}'::jsonb
   );
@@ -524,10 +522,10 @@ SELECT cron.schedule(
   '*/15 * * * *',
   $$
   SELECT net.http_post(
-    url := 'https://YOUR_PROJECT_REF.supabase.co/functions/v1/send-email-reminders',
+    url := 'https://afzprgdowymgvmxtrqzc.supabase.co/functions/v1/send-email-reminders',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
-      'Authorization', 'Bearer YOUR_ANON_KEY'
+      'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFmenByZ2Rvd3ltZ3ZteHRycXpjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzMTk4NDMsImV4cCI6MjA4OTg5NTg0M30.lpxLOf09xwrFGqsz5aB86CX78tFyVq2W3Y3nU-OvaFg''
     ),
     body := '{"type": "patient"}'::jsonb
   );
@@ -542,5 +540,3 @@ SELECT cron.schedule(
   DELETE FROM public.email_log WHERE sent_at < now() - interval '30 days';
   $$
 );
-
-*/
