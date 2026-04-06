@@ -21,7 +21,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const FROM_EMAIL = "HabitOT <notifications@habitot.app>"; // Change to your verified domain
+const FROM_EMAIL = "HabitOT <onboarding@resend.dev>";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -62,6 +62,8 @@ async function logEmail(recipientId: string, type: string, refDate: string) {
 }
 
 // ── 1. Therapist reminder: patients with no tasks today ─────────────────
+// COMMENTED OUT — keeping for future use
+/*
 async function checkTherapistReminders() {
   const today = new Date().toISOString().split("T")[0];
 
@@ -123,6 +125,7 @@ async function checkTherapistReminders() {
     if (sent) await logEmail(therapist.id, "therapist_no_tasks", today);
   }
 }
+*/
 
 // ── 2. Patient reminder: 1 hour before task assigned_time ───────────────
 // COMMENTED OUT — keeping for future use
@@ -257,9 +260,10 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({ type: "all" }));
     const { type } = body;
 
-    if (type === "therapist" || type === "all") {
-      await checkTherapistReminders();
-    }
+    // Therapist morning reminders commented out for now
+    // if (type === "therapist" || type === "all") {
+    //   await checkTherapistReminders();
+    // }
     // Patient 1-hour reminders commented out for now
     // if (type === "patient" || type === "all") {
     //   await checkPatientReminders();
