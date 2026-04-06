@@ -131,7 +131,8 @@ export default function TaskAssignmentPage() {
         assigned_date: form.assigned_date,
         assigned_time: form.assigned_time,
       },
-    }).catch(() => {}) // fire-and-forget, don't block UI
+    }).then((res) => console.log('Email function response:', res))
+    .catch((err) => console.error('Email function error:', err))
     setForm({
       patient_id: form.patient_id,
       title: '',
