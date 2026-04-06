@@ -98,10 +98,12 @@ function formatDate(date: string) {
 // ── 1. Patient reminder: tasks due in next 60 minutes (called by pg_cron) ──
 async function checkPatientReminders() {
   const now = new Date();
-  const today = now.toISOString().split("T")[0];
-  const currentMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+  // Convert UTC to local time (UTC+8)
+  const localNow = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+  const today = localNow.toISOString().split("T")[0];
+  const currentMinutes = localNow.getUTCHours() * 60 + localNow.getUTCMinutes();
 
-  // Look for tasks due in the next 60 minutes
+  // Look for tasks due in the next 60 minutes (in local time)
   const windowStart = currentMinutes;
   const windowEnd = currentMinutes + 60;
 
