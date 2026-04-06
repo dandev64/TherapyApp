@@ -38,6 +38,7 @@ export default function PatientDetailPage() {
     requires_proof: false,
   })
   const [assigning, setAssigning] = useState(false)
+  const [calendarRefreshKey, setCalendarRefreshKey] = useState(0)
 
   async function loadAll(cancelled = false) {
     const thirtyDaysAgo = new Date()
@@ -146,6 +147,7 @@ export default function PatientDetailPage() {
     }
     setAssigning(false)
     setShowAssign(false)
+    setCalendarRefreshKey((k) => k + 1)
     loadAll()
   }
 
@@ -212,7 +214,7 @@ export default function PatientDetailPage() {
 
       {/* Section 1 — Calendar */}
       <Card>
-        <ReadOnlyCalendar patientId={patientId} therapistId={profile.id} />
+        <ReadOnlyCalendar patientId={patientId} therapistId={profile.id} refreshKey={calendarRefreshKey} />
       </Card>
 
       {/* Section 2 — Task Completion Stats */}

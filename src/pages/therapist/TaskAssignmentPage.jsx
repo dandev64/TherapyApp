@@ -150,6 +150,7 @@ export default function TaskAssignmentPage() {
     })
     setShowForm(false)
     showSuccess('Task assigned successfully.')
+    setFilterDate(form.assigned_date)
     loadRecentAssignments()
   }
 

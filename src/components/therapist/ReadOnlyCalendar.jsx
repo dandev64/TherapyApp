@@ -14,7 +14,7 @@ const DAY_HEADERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const FULL_DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
-export default function ReadOnlyCalendar({ patientId, therapistId }) {
+export default function ReadOnlyCalendar({ patientId, therapistId, refreshKey }) {
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date()
     return { year: now.getFullYear(), month: now.getMonth() }
@@ -76,7 +76,7 @@ export default function ReadOnlyCalendar({ patientId, therapistId }) {
     }
     load()
     return () => { cancelled = true }
-  }, [patientId, therapistId, year, month])
+  }, [patientId, therapistId, year, month, refreshKey])
 
   useEffect(() => {
     if (!tasks.length) return
