@@ -81,7 +81,9 @@ function buildReminderHtml(firstName: string, taskTitle: string, formattedDate: 
 }
 
 function formatTime(date: string, time: string) {
-  return new Date(`${date}T${time}:00`).toLocaleTimeString("en-US", {
+  // time from DB is "HH:MM:SS", from frontend is "HH:MM"
+  const t = time.length === 5 ? `${time}:00` : time;
+  return new Date(`${date}T${t}`).toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
   });
