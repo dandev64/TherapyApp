@@ -95,15 +95,15 @@ function formatDate(date: string) {
   });
 }
 
-// ── 1. Patient reminder: tasks due in next 15 minutes (called by pg_cron) ──
+// ── 1. Patient reminder: tasks due in next 60 minutes (called by pg_cron) ──
 async function checkPatientReminders() {
   const now = new Date();
   const today = now.toISOString().split("T")[0];
   const currentMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
 
-  // Look for tasks due in the next 15 minutes
+  // Look for tasks due in the next 60 minutes
   const windowStart = currentMinutes;
-  const windowEnd = currentMinutes + 15;
+  const windowEnd = currentMinutes + 60;
 
   const toHHMM = (totalMins: number) => {
     const h = Math.floor(totalMins / 60) % 24;
