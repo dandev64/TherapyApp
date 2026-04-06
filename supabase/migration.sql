@@ -500,23 +500,24 @@ CREATE POLICY "Users can view own email log"
   ON public.email_log FOR SELECT TO authenticated
   USING (recipient_id = auth.uid());
 
--- pg_cron: therapist reminder every day at 8:00 AM UTC
-SELECT cron.schedule(
-  'therapist-morning-reminder',
-  '0 8 * * *',
-  $$
-  SELECT net.http_post(
-    url := 'https://afzprgdowymgvmxtrqzc.supabase.co/functions/v1/send-email-reminders',
-    headers := jsonb_build_object(
-      'Content-Type', 'application/json',
-      'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFmenByZ2Rvd3ltZ3ZteHRycXpjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzMTk4NDMsImV4cCI6MjA4OTg5NTg0M30.lpxLOf09xwrFGqsz5aB86CX78tFyVq2W3Y3nU-OvaFg'
-    ),
-    body := '{"type": "therapist"}'::jsonb
-  );
-  $$
-);
+-- pg_cron: therapist reminder every day at 8:00 AM UTC (COMMENTED OUT)
+-- SELECT cron.schedule(
+--   'therapist-morning-reminder',
+--   '0 8 * * *',
+--   $$
+--   SELECT net.http_post(
+--     url := 'https://afzprgdowymgvmxtrqzc.supabase.co/functions/v1/send-email-reminders',
+--     headers := jsonb_build_object(
+--       'Content-Type', 'application/json',
+--       'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFmenByZ2Rvd3ltZ3ZteHRycXpjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzMTk4NDMsImV4cCI6MjA4OTg5NTg0M30.lpxLOf09xwrFGqsz5aB86CX78tFyVq2W3Y3nU-OvaFg'
+--     ),
+--     body := '{"type": "therapist"}'::jsonb
+--   );
+--   $$
+-- );
 
--- pg_cron: patient reminder every 15 minutes
+-- pg_cron: patient task reminder every 15 minutes
+-- Checks for tasks due in the next 15 min that are not completed, sends reminder if needed
 SELECT cron.schedule(
   'patient-task-reminder',
   '*/15 * * * *',
@@ -525,7 +526,7 @@ SELECT cron.schedule(
     url := 'https://afzprgdowymgvmxtrqzc.supabase.co/functions/v1/send-email-reminders',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
-      'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFmenByZ2Rvd3ltZ3ZteHRycXpjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzMTk4NDMsImV4cCI6MjA4OTg5NTg0M30.lpxLOf09xwrFGqsz5aB86CX78tFyVq2W3Y3nU-OvaFg''
+      'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFmenByZ2Rvd3ltZ3ZteHRycXpjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzMTk4NDMsImV4cCI6MjA4OTg5NTg0M30.lpxLOf09xwrFGqsz5aB86CX78tFyVq2W3Y3nU-OvaFg'
     ),
     body := '{"type": "patient"}'::jsonb
   );

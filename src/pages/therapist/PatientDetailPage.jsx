@@ -128,16 +128,21 @@ export default function PatientDetailPage() {
 
     if (err) { setAssigning(false); return }
 
-    // Send immediate email notification to the patient
-    supabase.functions.invoke('send-email-reminders', {
-      body: {
-        type: 'task_created',
-        patient_id: patientId,
-        title: assignForm.title,
-        assigned_date: assignForm.assigned_date,
-        assigned_time: assignForm.assigned_time,
-      },
-    }).catch(() => {}) // fire-and-forget, don't block UI
+    // Send reminder email only if task is due within 1 hour
+    // Otherwise, pg_cron (every 15 min) will check and send closer to due time
+    const taskDue = new Date(`${assignForm.assigned_date}T${assignForm.assigned_time}:00`)
+    const minutesUntilDue = (taskDue - new Date()) / 60000
+    if (minutesUntilDue < 60) {
+      supabase.functions.invoke('send-email-reminders', {
+        body: {
+          type: 'task_reminder_immediate',
+          patient_id: patientId,
+          title: assignForm.title,
+          assigned_date: assignForm.assigned_date,
+          assigned_time: assignForm.assigned_time,
+        },
+      }).catch(() => {}) // fire-and-forget, don't block UI
+    }
     setAssigning(false)
     setShowAssign(false)
     loadAll()
