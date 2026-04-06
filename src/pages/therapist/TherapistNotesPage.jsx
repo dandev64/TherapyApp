@@ -3,82 +3,86 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCachedState, hasCache } from '../../hooks/useCachedState'
 import Card from '../../components/ui/Card'
-import Button from '../../components/ui/Button'
 import Badge from '../../components/ui/Badge'
-import { MessageSquare, Send, ChevronDown, ChevronUp } from 'lucide-react'
+import { MessageSquare, ChevronDown, ChevronUp, User } from 'lucide-react'
+
+const moodEmojis = {
+  excited: '🤩',
+  happy: '😊',
+  calm: '😌',
+  scared: '😨',
+  anxious: '😰',
+  angry: '😠',
+  tired: '😴',
+  sad: '😢',
+}
 
 export default function TherapistNotesPage() {
   const { profile } = useAuth()
-  const [notes, setNotes] = useCachedState('therapist-notes', [])
-  const [loading, setLoading] = useState(() => !hasCache('therapist-notes'))
-  const [expandedNote, setExpandedNote] = useState(null)
-  const [replies, setReplies] = useState({})
-  const [replyText, setReplyText] = useState('')
-  const [replyLoading, setReplyLoading] = useState(false)
+  const [patients, setPatients] = useCachedState('client-notes-patients', [])
+  const [feedbackByPatient, setFeedbackByPatient] = useCachedState('client-notes-feedback', {})
+  const [loading, setLoading] = useState(() => !hasCache('client-notes-patients'))
+  const [expandedPatient, setExpandedPatient] = useState(null)
   const [error, setError] = useState(null)
 
-  async function loadNotes() {
-    // Get patient IDs assigned to this therapist
-    const { data: assignments } = await supabase
+  async function loadData() {
+    // Step 1: Get therapist's assigned patients
+    const { data: assignments, error: assignErr } = await supabase
       .from('patient_assignments')
-      .select('patient_id')
+      .select('patient_id, profiles!patient_assignments_patient_id_fkey(id, full_name)')
       .eq('assigned_to', profile.id)
       .eq('relationship', 'therapist')
 
-    const patientIds = assignments?.map((a) => a.patient_id) || []
-    if (patientIds.length === 0) {
-      setNotes([])
+    if (assignErr) {
+      console.error('Failed to load patients:', assignErr.message)
+      setError('Failed to load patients.')
+      setLoading(false)
       return
     }
 
-    const { data, error: err } = await supabase
-      .from('caregiver_notes')
-      .select('*, profiles!caregiver_notes_caregiver_id_fkey(full_name), patient:profiles!caregiver_notes_patient_id_fkey(full_name)')
-      .in('patient_id', patientIds)
-      .order('created_at', { ascending: false })
-      .limit(100)
+    const patientList = (assignments || []).map((a) => a.profiles).filter(Boolean)
+    const patientIds = patientList.map((p) => p.id)
+    setPatients(patientList)
 
-    if (err) { setError('Failed to load notes.'); setLoading(false); return }
+    if (patientIds.length === 0) {
+      setFeedbackByPatient({})
+      setLoading(false)
+      return
+    }
+
+    // Step 2: Get task feedback with task details for all patients
+    const { data: feedback, error: fbErr } = await supabase
+      .from('task_feedback')
+      .select('*, task:task_assignments!task_feedback_task_assignment_id_fkey(title, therapy_type, assigned_date)')
+      .in('patient_id', patientIds)
+      .not('note', 'is', null)
+      .order('created_at', { ascending: false })
+
+    if (fbErr) {
+      console.error('Failed to load feedback:', fbErr.message)
+      setError('Failed to load client notes.')
+      setLoading(false)
+      return
+    }
+
+    // Filter out feedback with empty notes and group by patient_id
+    const grouped = {}
+    ;(feedback || []).forEach((fb) => {
+      if (!fb.note || !fb.note.trim()) return
+      if (!grouped[fb.patient_id]) grouped[fb.patient_id] = []
+      grouped[fb.patient_id].push(fb)
+    })
+
+    setFeedbackByPatient(grouped)
     setError(null)
-    setNotes(data || [])
     setLoading(false)
   }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (profile) loadNotes() }, [profile])
+  useEffect(() => { if (profile) loadData() }, [profile])
 
-  async function loadReplies(noteId) {
-    const { data } = await supabase
-      .from('note_replies')
-      .select('*, profiles!note_replies_author_id_fkey(full_name, role)')
-      .eq('note_id', noteId)
-      .order('created_at', { ascending: true })
-    setReplies((prev) => ({ ...prev, [noteId]: data || [] }))
-  }
-
-  async function toggleExpand(noteId) {
-    if (expandedNote === noteId) {
-      setExpandedNote(null)
-    } else {
-      setExpandedNote(noteId)
-      if (!replies[noteId]) {
-        await loadReplies(noteId)
-      }
-    }
-  }
-
-  async function handleReply(noteId) {
-    if (!replyText.trim()) return
-    setReplyLoading(true)
-    const { error: err } = await supabase.from('note_replies').insert({
-      note_id: noteId,
-      author_id: profile.id,
-      content: replyText.trim(),
-    })
-    setReplyLoading(false)
-    if (err) { setError('Failed to send reply.'); return }
-    setReplyText('')
-    await loadReplies(noteId)
+  function togglePatient(patientId) {
+    setExpandedPatient(expandedPatient === patientId ? null : patientId)
   }
 
   function formatDate(dateStr) {
@@ -91,6 +95,15 @@ export default function TherapistNotesPage() {
     })
   }
 
+  function formatAssignedDate(dateStr) {
+    if (!dateStr) return ''
+    return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    })
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -99,127 +112,121 @@ export default function TherapistNotesPage() {
     )
   }
 
+  const totalNotes = Object.values(feedbackByPatient).reduce((sum, arr) => sum + arr.length, 0)
+
   return (
     <div className="space-y-8">
       {error && (
         <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 font-medium flex items-center justify-between">
           {error}
-          <button onClick={() => { setError(null); loadNotes() }} className="text-red-500 hover:text-red-700 font-bold text-xs cursor-pointer">Retry</button>
+          <button onClick={() => { setError(null); loadData() }} className="text-red-500 hover:text-red-700 font-bold text-xs cursor-pointer">Retry</button>
         </div>
       )}
+
       <div>
-        <h2 className="text-3xl font-extrabold text-text-primary tracking-tight">Caregiver Notes</h2>
+        <h2 className="text-3xl font-extrabold text-text-primary tracking-tight">Client Notes</h2>
         <p className="text-text-secondary mt-2">
-          Review and respond to notes from caregivers
+          Review feedback from your patients&apos; completed tasks
         </p>
       </div>
 
-      <div className="space-y-4">
-        {notes.length === 0 ? (
-          <Card>
-            <div className="text-center py-8">
-              <MessageSquare size={32} className="text-text-muted mx-auto mb-3" />
-              <p className="text-sm text-text-muted">
-                No caregiver notes yet.
-              </p>
-            </div>
-          </Card>
-        ) : (
-          notes.map((note) => (
-            <Card key={note.id}>
-              <div
-                className="cursor-pointer"
-                onClick={() => toggleExpand(note.id)}
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm font-semibold text-text-primary">
-                        {note.profiles?.full_name}
-                      </span>
-                      <Badge color="caregiver">caregiver</Badge>
-                      <span className="text-xs text-text-muted">
-                        about {note.patient?.full_name}
-                      </span>
-                    </div>
-                    <p className="text-sm text-text-secondary line-clamp-2">
-                      {note.content}
-                    </p>
-                    <p className="text-xs text-text-muted mt-2">
-                      {formatDate(note.created_at)}
-                    </p>
-                  </div>
-                  <div className="ml-3 mt-1 text-text-muted">
-                    {expandedNote === note.id ? (
-                      <ChevronUp size={16} />
-                    ) : (
-                      <ChevronDown size={16} />
-                    )}
-                  </div>
-                </div>
-              </div>
+      {patients.length === 0 ? (
+        <Card>
+          <div className="text-center py-8">
+            <MessageSquare size={32} className="text-text-muted mx-auto mb-3" />
+            <p className="text-sm text-text-muted">
+              No patients assigned to you yet.
+            </p>
+          </div>
+        </Card>
+      ) : totalNotes === 0 ? (
+        <Card>
+          <div className="text-center py-8">
+            <MessageSquare size={32} className="text-text-muted mx-auto mb-3" />
+            <p className="text-sm text-text-muted">
+              No task feedback notes from your patients yet.
+            </p>
+          </div>
+        </Card>
+      ) : (
+        <div className="space-y-4">
+          {patients.map((patient) => {
+            const notes = feedbackByPatient[patient.id] || []
+            if (notes.length === 0) return null
+            const isExpanded = expandedPatient === patient.id
 
-              {expandedNote === note.id && (
-                <div className="mt-4 pt-4 border-t border-border-light">
-                  <div className="space-y-3 mb-4">
-                    {(replies[note.id] || []).map((reply) => (
-                      <div
-                        key={reply.id}
-                        className={`p-3 rounded-xl text-sm ${
-                          reply.profiles?.role === 'therapist'
-                            ? 'bg-primary/5 ml-6'
-                            : 'bg-surface mr-6'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-semibold text-text-primary text-xs">
-                            {reply.profiles?.full_name}
-                          </span>
-                          <Badge color={reply.profiles?.role}>
-                            {reply.profiles?.role}
-                          </Badge>
-                        </div>
-                        <p className="text-text-secondary">{reply.content}</p>
-                        <p className="text-xs text-text-muted mt-1">
-                          {formatDate(reply.created_at)}
+            return (
+              <Card key={patient.id}>
+                <div
+                  className="cursor-pointer"
+                  onClick={() => togglePatient(patient.id)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-primary-container flex items-center justify-center text-primary font-bold text-sm">
+                        {patient.full_name?.charAt(0)?.toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-text-primary">
+                          {patient.full_name}
+                        </p>
+                        <p className="text-xs text-text-muted">
+                          {notes.length} {notes.length === 1 ? 'note' : 'notes'}
                         </p>
                       </div>
-                    ))}
-                    {(replies[note.id] || []).length === 0 && (
-                      <p className="text-xs text-text-muted text-center py-2">
-                        No replies yet.
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="Write a reply..."
-                      value={replyText}
-                      onChange={(e) => setReplyText(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault()
-                          handleReply(note.id)
-                        }
-                      }}
-                      className="flex-1 px-4 py-3 rounded-xl border border-border text-sm bg-surface-alt focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-surface-card"
-                    />
-                    <Button
-                      size="sm"
-                      onClick={() => handleReply(note.id)}
-                      disabled={replyLoading || !replyText.trim()}
-                    >
-                      <Send size={14} />
-                    </Button>
+                    </div>
+                    <div className="text-text-muted">
+                      {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                    </div>
                   </div>
                 </div>
-              )}
-            </Card>
-          ))
-        )}
-      </div>
+
+                {isExpanded && (
+                  <div className="mt-4 pt-4 border-t border-border-light space-y-3">
+                    {notes.map((fb) => (
+                      <div
+                        key={fb.id}
+                        className="p-4 rounded-xl bg-surface-alt"
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          {fb.task?.title && (
+                            <span className="text-xs font-semibold text-text-primary">
+                              {fb.task.title}
+                            </span>
+                          )}
+                          {fb.task?.therapy_type && (
+                            <Badge color={fb.task.therapy_type}>
+                              {fb.task.therapy_type}
+                            </Badge>
+                          )}
+                          {fb.mood && (
+                            <span className="text-sm" title={fb.mood}>
+                              {moodEmojis[fb.mood] || fb.mood}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-text-secondary">
+                          {fb.note}
+                        </p>
+                        <div className="flex items-center gap-3 mt-2">
+                          <p className="text-xs text-text-muted">
+                            {formatDate(fb.created_at)}
+                          </p>
+                          {fb.task?.assigned_date && (
+                            <p className="text-xs text-text-muted">
+                              Task date: {formatAssignedDate(fb.task.assigned_date)}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
