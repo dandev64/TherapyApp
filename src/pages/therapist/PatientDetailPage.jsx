@@ -115,7 +115,7 @@ export default function PatientDetailPage() {
     if (!assignForm.title || !assignForm.assigned_date || !assignForm.assigned_time) return
     setAssigning(true)
 
-    const { error: err } = await supabase.from('task_assignments').insert({
+    const { data: taskData, error: err } = await supabase.from('task_assignments').insert({
       patient_id: patientId,
       therapist_id: profile.id,
       title: assignForm.title,
@@ -124,19 +124,20 @@ export default function PatientDetailPage() {
       assigned_time: assignForm.assigned_time,
       resource_url: assignForm.resource_url || null,
       requires_proof: assignForm.requires_proof,
-    })
+    }).select('id').single()
 
     if (err) { setAssigning(false); return }
 
-    // Send reminder email only if task is due within 1 hour
+    // Send reminder email only if task is due within 1 hour (and not already past due)
     // Otherwise, pg_cron (every 15 min) will check and send closer to due time
     const taskDue = new Date(`${assignForm.assigned_date}T${assignForm.assigned_time}:00`)
     const minutesUntilDue = (taskDue - new Date()) / 60000
-    if (minutesUntilDue < 60) {
+    if (minutesUntilDue > 0 && minutesUntilDue < 60) {
       supabase.functions.invoke('send-email-reminders', {
         body: {
           type: 'task_reminder_immediate',
           patient_id: patientId,
+          task_id: taskData.id,
           title: assignForm.title,
           assigned_date: assignForm.assigned_date,
           assigned_time: assignForm.assigned_time,

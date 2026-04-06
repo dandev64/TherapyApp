@@ -169,7 +169,10 @@ async function checkPatientReminders() {
 }
 
 // ── 2. Immediate reminder: task created < 1 hour before due time ───────
-async function sendTaskReminderImmediate(patientId: string, taskTitle: string, assignedDate: string, assignedTime: string) {
+async function sendTaskReminderImmediate(patientId: string, taskId: string, taskTitle: string, assignedDate: string, assignedTime: string) {
+  const emailType = `patient_task_reminder_${taskId}`;
+  if (await alreadySent(patientId, emailType, assignedDate)) return;
+
   const { data: patient } = await supabase
     .from("profiles")
     .select("id, email, full_name, email_notifications_enabled")
@@ -185,7 +188,8 @@ async function sendTaskReminderImmediate(patientId: string, taskTitle: string, a
   const subject = `HabitOT — Reminder: "${taskTitle}" is due at ${fTime}`;
   const html = buildReminderHtml(firstName, taskTitle, fDate, fTime);
 
-  await sendEmail(patient.email, subject, html);
+  const sent = await sendEmail(patient.email, subject, html);
+  if (sent) await logEmail(patientId, emailType, assignedDate);
 }
 
 // ── COMMENTED OUT — previous immediate "task created" email ─────────────
@@ -215,8 +219,8 @@ serve(async (req) => {
 
     // Frontend calls this when task is created < 1 hour before due time
     if (type === "task_reminder_immediate") {
-      const { patient_id, title, assigned_date, assigned_time } = body;
-      await sendTaskReminderImmediate(patient_id, title, assigned_date, assigned_time);
+      const { patient_id, task_id, title, assigned_date, assigned_time } = body;
+      await sendTaskReminderImmediate(patient_id, task_id, title, assigned_date, assigned_time);
     }
 
     return new Response(JSON.stringify({ success: true }), {
