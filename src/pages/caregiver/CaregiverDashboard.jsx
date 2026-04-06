@@ -6,6 +6,7 @@ import { useCachedState, hasCache } from '../../hooks/useCachedState'
 import Card from '../../components/ui/Card'
 import Badge from '../../components/ui/Badge'
 import { Users, FileText, CheckCircle, Clock } from 'lucide-react'
+import { toDateStr } from '../../utils/streak'
 
 export default function CaregiverDashboard() {
   const { profile } = useAuth()
@@ -18,7 +19,7 @@ export default function CaregiverDashboard() {
   useEffect(() => { if (profile) loadData() }, [profile])
 
   async function loadData() {
-    const today = new Date().toISOString().split('T')[0]
+    const today = toDateStr(new Date())
 
     const { data: assignments, error: err } = await supabase
       .from('patient_assignments')

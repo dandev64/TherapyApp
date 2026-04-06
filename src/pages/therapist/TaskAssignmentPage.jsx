@@ -9,6 +9,7 @@ import Select from '../../components/ui/Select'
 import Badge from '../../components/ui/Badge'
 import Modal from '../../components/ui/Modal'
 import { Plus, CheckSquare, Trash2, MessageSquare, Clock, Camera } from 'lucide-react'
+import { toDateStr } from '../../utils/streak'
 
 const MOOD_EMOJI = {
   excited: '🤩', happy: '😊', calm: '😌', scared: '😨',
@@ -25,7 +26,7 @@ export default function TaskAssignmentPage() {
     patient_id: '',
     title: '',
     description: '',
-    assigned_date: new Date().toISOString().split('T')[0],
+    assigned_date: toDateStr(new Date()),
     assigned_time: '09:00',
     resource_url: '',
     requires_proof: false,
@@ -37,7 +38,7 @@ export default function TaskAssignmentPage() {
   const [proofSignedUrl, setProofSignedUrl] = useState(null)
   const PAGE_SIZE = 50
   const [hasMoreAssignments, setHasMoreAssignments] = useState(true)
-  const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0])
+  const [filterDate, setFilterDate] = useState(toDateStr(new Date()))
   const [filterStatus, setFilterStatus] = useState('')
   const [filterPatient, setFilterPatient] = useState('')
 
@@ -143,7 +144,7 @@ export default function TaskAssignmentPage() {
       patient_id: form.patient_id,
       title: '',
       description: '',
-      assigned_date: new Date().toISOString().split('T')[0],
+      assigned_date: toDateStr(new Date()),
       assigned_time: '09:00',
       resource_url: '',
       requires_proof: false,

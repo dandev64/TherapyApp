@@ -8,6 +8,7 @@ import Input from '../../components/ui/Input'
 import Modal from '../../components/ui/Modal'
 import Badge from '../../components/ui/Badge'
 import { UserPlus, Search, Calendar, ChevronRight, Camera, MessageSquare } from 'lucide-react'
+import { toDateStr } from '../../utils/streak'
 
 const MOOD_EMOJI = {
   excited: '🤩', happy: '😊', calm: '😌', scared: '😨',
@@ -35,7 +36,7 @@ export default function PatientsPage() {
   }
 
   async function loadPatients() {
-    const today = new Date().toISOString().split('T')[0]
+    const today = toDateStr(new Date())
     const { data: assignments, error: err } = await supabase
       .from('patient_assignments')
       .select('patient_id, profiles!patient_assignments_patient_id_fkey(id, full_name, email)')

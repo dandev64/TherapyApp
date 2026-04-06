@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCachedState, hasCache } from '../../hooks/useCachedState'
 import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus'
-import { calculateStreak } from '../../utils/streak'
+import { calculateStreak, toDateStr } from '../../utils/streak'
 import { getTimeOfDay } from '../../utils/time'
 import Card from '../../components/ui/Card'
 import Badge from '../../components/ui/Badge'
@@ -46,7 +46,7 @@ export default function PatientDashboard() {
   const refreshKey = useRefreshOnFocus()
 
   async function loadTasks(cancelled = false) {
-    const today = new Date().toISOString().split('T')[0]
+    const today = toDateStr(new Date())
     const { data, error: err } = await supabase
       .from('task_assignments')
       .select('*')
@@ -67,7 +67,7 @@ export default function PatientDashboard() {
       .from('task_assignments')
       .select('assigned_date, status')
       .eq('patient_id', profile.id)
-      .gte('assigned_date', ninetyDaysAgo.toISOString().split('T')[0])
+      .gte('assigned_date', toDateStr(ninetyDaysAgo))
       .order('assigned_date', { ascending: false })
     if (cancelled) return
     if (!err) setAllTasks(data || [])

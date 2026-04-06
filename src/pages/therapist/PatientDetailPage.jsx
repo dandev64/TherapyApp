@@ -32,7 +32,7 @@ export default function PatientDetailPage() {
   const [assignForm, setAssignForm] = useState({
     title: '',
     description: '',
-    assigned_date: new Date().toISOString().split('T')[0],
+    assigned_date: toDateStr(new Date()),
     assigned_time: '09:00',
     resource_url: '',
     requires_proof: false,
@@ -46,7 +46,7 @@ export default function PatientDetailPage() {
     const thirtyDaysAgoStr = thirtyDaysAgo.toISOString()
     const ninetyDaysAgo = new Date()
     ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
-    const ninetyDaysAgoStr = ninetyDaysAgo.toISOString().split('T')[0]
+    const ninetyDaysAgoStr = toDateStr(ninetyDaysAgo)
 
     const [patientRes, tasksRes, feedbackRes, notesRes, remarksRes] = await Promise.all([
       supabase
@@ -103,7 +103,7 @@ export default function PatientDetailPage() {
     setAssignForm({
       title: '',
       description: '',
-      assigned_date: new Date().toISOString().split('T')[0],
+      assigned_date: toDateStr(new Date()),
       assigned_time: '09:00',
       resource_url: '',
       requires_proof: false,

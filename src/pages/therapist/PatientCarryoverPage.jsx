@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCachedState, hasCache } from '../../hooks/useCachedState'
-import { calculateStreak } from '../../utils/streak'
+import { calculateStreak, toDateStr } from '../../utils/streak'
 import PatientCard from '../../components/therapist/PatientCard'
 import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
@@ -32,10 +32,10 @@ export default function PatientCarryoverPage() {
   }
 
   async function loadPatients() {
-    const today = new Date().toISOString().split('T')[0]
+    const today = toDateStr(new Date())
     const ninetyDaysAgo = new Date()
     ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
-    const ninetyDaysAgoStr = ninetyDaysAgo.toISOString().split('T')[0]
+    const ninetyDaysAgoStr = toDateStr(ninetyDaysAgo)
 
     const { data: assignments, error: err } = await supabase
       .from('patient_assignments')

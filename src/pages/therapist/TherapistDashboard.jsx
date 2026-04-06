@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCachedState, hasCache } from '../../hooks/useCachedState'
-import { calculateStreak } from '../../utils/streak'
+import { calculateStreak, toDateStr } from '../../utils/streak'
 import PatientMoodChart, { MOOD_CONFIG } from '../../components/therapist/PatientMoodChart'
 import Card from '../../components/ui/Card'
 import { BarChart, Bar, XAxis, YAxis, Cell, ResponsiveContainer, Tooltip } from 'recharts'
@@ -23,15 +23,15 @@ export default function TherapistDashboard() {
   const [error, setError] = useState(null)
 
   async function loadDashboard(cancelled = false) {
-    const today = new Date().toISOString().split('T')[0]
+    const today = toDateStr(new Date())
     const weekAgo = new Date()
     weekAgo.setDate(weekAgo.getDate() - 7)
     const fourteenDaysAgo = new Date()
     fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 13)
-    const fourteenDaysAgoStr = fourteenDaysAgo.toISOString().split('T')[0]
+    const fourteenDaysAgoStr = toDateStr(fourteenDaysAgo)
     const ninetyDaysAgo = new Date()
     ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
-    const ninetyDaysAgoStr = ninetyDaysAgo.toISOString().split('T')[0]
+    const ninetyDaysAgoStr = toDateStr(ninetyDaysAgo)
 
     const results = await Promise.all([
       supabase
@@ -143,7 +143,7 @@ export default function TherapistDashboard() {
       for (let i = 13; i >= 0; i--) {
         const d = new Date()
         d.setDate(d.getDate() - i)
-        const dateStr = d.toISOString().split('T')[0]
+        const dateStr = toDateStr(d)
         const entry = byDate[dateStr]
         chartData.push({
           date: dateStr,
