@@ -10,10 +10,12 @@ Source: `c:\Users\danme\Downloads\HabitOT-website-development-edits.pdf` (12 pag
 Stack: Vite + React 19 + Tailwind 4 + Supabase (`src/lib/supabase.js`). Base schema `supabase/schema.sql` + `supabase/migration.sql`; this round's DB changes are in `supabase/migration-2026-10-client-edits.sql` (already run on the live DB, 2026-10-04). Times are local UTC+8 (Asia/Manila).
 
 ## Status (as of 2026-10-04)
-39 of 43 items done, verified end-to-end in headless Edge against the live DB (44/44 checks passed). Committed as `cc64153` on `master`. **Push failed**: the Windows credential manager has GitHub account `danmedado04-git`, which lacks access to `dandev64/TherapyApp` (403). The user must push from VS Code or as `dandev64`. Check `git status` / `git log origin/master..` before assuming it's pushed.
+40 of 43 items done, verified end-to-end in headless Edge against the live DB (44/44 checks passed). Pushed to `origin/master` (the only branch; there is no `main`).
+
+To push from here: the default saved credential is a different account (`danmedado04-git`, 403). In PowerShell set `$env:GIT_TERMINAL_PROMPT='1'; $env:GCM_INTERACTIVE='always'`, remove `GIT_ASKPASS` and `VSCODE_GIT_ASKPASS_MAIN`, then run `git -c credential.helper= -c credential.helper=manager push https://dandev64@github.com/dandev64/TherapyApp.git master` followed by `git fetch origin`.
 
 ## Open items
-- [ ] **Q15 Logo** — WAITING on the logo file from the user. Replace `public/habitot-icon.png` + `public/favicon.svg`; used in `src/components/layout/Sidebar.jsx`, `src/pages/auth/LoginPage.jsx`, `src/pages/auth/SignUpPage.jsx` (two places: form + check-email screen), `index.html`.
+- [x] **Q15 Logo** — done 2026-10-04. Full logo `public/habitot-logo.png` (login/signup); house-only mark `public/habitot-icon.png` (sidebar); `public/favicon.png` + `public/apple-touch-icon.png` (index.html). Source: `c:/Users/danme/Downloads/HabitOT logo.png` (1500px, white background).
 - [ ] **Q16 Confirmation email says "HabitOT"** — not code. The user pastes into Supabase → Authentication → Email Templates → Confirm signup. Subject `Confirm your HabitOT account`; body `<h2>Welcome to HabitOT!</h2><p>Thanks for signing up. Confirm your email to start using HabitOT:</p><p><a href="{{ .ConfirmationURL }}">Confirm my HabitOT account</a></p>`. Ask if done.
 - [ ] **F2 Schedule a task** — SKIPPED until the client clarifies. Tasks already have a date and time; possible meaning is "hidden from the patient until a publish time". Would need a `publish_at` column, a filter in the patient queries, and a field in `TaskAssignmentPage.jsx` and the assign modal in `PatientDetailPage.jsx`.
 - [ ] **B9 Mobile consistency % display error** — SKIPPED pending a screenshot. The Progress page now fits 375px with no overflow; it may already be fixed. Other places showing consistency: `TherapistDashboard.jsx` stat cards and table, `PatientCard.jsx`, `PatientDetailPage.jsx`.
