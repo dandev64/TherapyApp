@@ -71,7 +71,7 @@ export default function Sidebar() {
     <>
       <div className="px-6 py-6 border-b border-border-light">
         <div className="flex items-center gap-3">
-          <img src="/habitot-icon.png" alt="HabitOT" className="w-10 h-10 rounded-xl object-contain" />
+          <img src="/habitot-icon.png" alt="HabitOT" className="w-10 h-10 rounded-xl object-contain bg-white" />
           <div>
             <h1 className="text-base font-extrabold text-text-primary leading-tight tracking-tight">
               HabitOT
