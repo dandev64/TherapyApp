@@ -58,7 +58,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-surface p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-10">
-          <img src="/habitot-logo.png" alt="HabitOT" className="w-36 h-36 object-contain mx-auto mb-4 rounded-3xl" />
+          <img src="/habitot-logo.png" alt="HabitOT" className="w-52 h-52 object-contain mx-auto mb-4 rounded-3xl" />
           <h1 className="text-3xl font-extrabold text-text-primary tracking-tight">Welcome back</h1>
           <p className="text-text-secondary mt-2">
             Sign in to HabitOT

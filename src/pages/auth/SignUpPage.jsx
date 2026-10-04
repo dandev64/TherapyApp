@@ -64,7 +64,7 @@ export default function SignUpPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-surface p-4">
         <div className="w-full max-w-md text-center">
-          <img src="/habitot-logo.png" alt="HabitOT" className="w-36 h-36 object-contain mx-auto mb-4 rounded-3xl" />
+          <img src="/habitot-logo.png" alt="HabitOT" className="w-52 h-52 object-contain mx-auto mb-4 rounded-3xl" />
           <div className="bg-surface-card rounded-3xl border border-border-light p-8 shadow-[0_20px_40px_rgba(44,52,54,0.06)]">
             <h1 className="text-2xl font-extrabold text-text-primary tracking-tight">Check your email</h1>
             <p className="text-text-secondary mt-3 text-sm leading-relaxed">
@@ -87,7 +87,7 @@ export default function SignUpPage() {
     <div className="min-h-screen flex items-center justify-center bg-surface p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-10">
-          <img src="/habitot-logo.png" alt="HabitOT" className="w-36 h-36 object-contain mx-auto mb-4 rounded-3xl" />
+          <img src="/habitot-logo.png" alt="HabitOT" className="w-52 h-52 object-contain mx-auto mb-4 rounded-3xl" />
           <h1 className="text-3xl font-extrabold text-text-primary tracking-tight">Create your account</h1>
           <p className="text-text-secondary mt-2">
             Join HabitOT
