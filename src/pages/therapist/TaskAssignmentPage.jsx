@@ -10,6 +10,8 @@ import Badge from '../../components/ui/Badge'
 import Modal from '../../components/ui/Modal'
 import { Plus, CheckSquare, Trash2, MessageSquare, Clock, Camera, Pencil } from 'lucide-react'
 import ProofPhotos from '../../components/ProofPhotos'
+import PublishTimeField from '../../components/therapist/PublishTimeField'
+import { isScheduled, formatPublishAt, toLocalInputValue } from '../../utils/tasks'
 import { toDateStr } from '../../utils/streak'
 
 const MOOD_EMOJI = {
@@ -31,6 +33,7 @@ export default function TaskAssignmentPage() {
     assigned_time: '09:00',
     resource_url: '',
     requires_proof: false,
+    publish_at: '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -68,7 +71,7 @@ export default function TaskAssignmentPage() {
     const offset = append ? recentAssignments.length : 0
     const { data, error: err } = await supabase
       .from('task_assignments')
-      .select('id, title, description, assigned_date, assigned_time, status, requires_proof, proof_url, proof_urls, resource_url, patient_id, profiles!task_assignments_patient_id_fkey(full_name)')
+      .select('*, profiles!task_assignments_patient_id_fkey(full_name)')
       .eq('therapist_id', profile.id)
       .order('assigned_date', { ascending: false })
       .order('created_at', { ascending: false })
@@ -117,7 +120,20 @@ export default function TaskAssignmentPage() {
       assigned_time: '09:00',
       resource_url: '',
       requires_proof: false,
+      publish_at: '',
     }
+  }
+
+  // Validates the schedule; returns the ISO post time, null for "now", or false if invalid
+  function resolvePublishAt() {
+    if (!form.publish_at) return null
+    const at = new Date(form.publish_at)
+    if (at <= new Date()) { setError('The post time must be in the future.'); return false }
+    if (at > new Date(`${form.assigned_date}T${form.assigned_time}:00`)) {
+      setError("The post time must be before the task's scheduled date and time.")
+      return false
+    }
+    return at.toISOString()
   }
 
   function startEdit(task) {
@@ -131,6 +147,7 @@ export default function TaskAssignmentPage() {
       assigned_time: task.assigned_time ? task.assigned_time.slice(0, 5) : '09:00',
       resource_url: task.resource_url || '',
       requires_proof: !!task.requires_proof,
+      publish_at: isScheduled(task) ? toLocalInputValue(new Date(task.publish_at)) : '',
     })
     setShowForm(true)
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -143,17 +160,22 @@ export default function TaskAssignmentPage() {
   }
 
   async function handleUpdate() {
+    const publishAt = resolvePublishAt()
+    if (publishAt === false) return
+    const changes = {
+      title: form.title,
+      description: form.description || null,
+      assigned_date: form.assigned_date,
+      assigned_time: form.assigned_time,
+      resource_url: form.resource_url || null,
+      requires_proof: form.requires_proof,
+    }
+    // Only touch publish_at when scheduling, or when un-scheduling a pending task
+    if (publishAt || isScheduled(editingTask)) changes.publish_at = publishAt
     setLoading(true)
     const { error: err } = await supabase
       .from('task_assignments')
-      .update({
-        title: form.title,
-        description: form.description || null,
-        assigned_date: form.assigned_date,
-        assigned_time: form.assigned_time,
-        resource_url: form.resource_url || null,
-        requires_proof: form.requires_proof,
-      })
+      .update(changes)
       .eq('id', editingTask.id)
     setLoading(false)
     if (err) { setError('Failed to update task.'); return }
@@ -166,7 +188,10 @@ export default function TaskAssignmentPage() {
   async function handleAssign(e) {
     e.preventDefault()
     if (!form.patient_id || !form.title || !form.assigned_date || !form.assigned_time) return
+    setError(null)
     if (editingTask) { handleUpdate(); return }
+    const publishAt = resolvePublishAt()
+    if (publishAt === false) return
     setLoading(true)
 
     const { data: taskData, error: err } = await supabase.from('task_assignments').insert({
@@ -178,6 +203,7 @@ export default function TaskAssignmentPage() {
       assigned_time: form.assigned_time,
       resource_url: form.resource_url || null,
       requires_proof: form.requires_proof,
+      ...(publishAt ? { publish_at: publishAt } : {}),
     }).select('id').single()
 
     setLoading(false)
@@ -187,7 +213,7 @@ export default function TaskAssignmentPage() {
     // Otherwise, pg_cron (every 15 min) will check and send closer to due time
     const taskDue = new Date(`${form.assigned_date}T${form.assigned_time}:00`)
     const minutesUntilDue = (taskDue - new Date()) / 60000
-    if (minutesUntilDue > 0 && minutesUntilDue < 60) {
+    if (!publishAt && minutesUntilDue > 0 && minutesUntilDue < 60) {
       supabase.functions.invoke('send-email-reminders', {
         body: {
           type: 'task_reminder_immediate',
@@ -201,7 +227,7 @@ export default function TaskAssignmentPage() {
     }
     setForm(emptyForm(form.patient_id))
     setShowForm(false)
-    showSuccess('Task assigned successfully.')
+    showSuccess(publishAt ? `Task scheduled. It will be posted ${formatPublishAt(publishAt)}.` : 'Task assigned successfully.')
     setFilterDate(form.assigned_date)
     loadRecentAssignments()
   }
@@ -346,6 +372,10 @@ export default function TaskAssignmentPage() {
                     maxLength={2000}
                   />
                 </div>
+                <PublishTimeField
+                  value={form.publish_at}
+                  onChange={(v) => setForm({ ...form, publish_at: v })}
+                />
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input
                     type="checkbox"
@@ -435,6 +465,9 @@ export default function TaskAssignmentPage() {
                   >
                     <td className="px-4 py-3">
                       <p className="font-semibold text-text-primary">{a.title}</p>
+                      {isScheduled(a) && (
+                        <p className="text-xs font-semibold text-amber-600">Scheduled · posts {formatPublishAt(a.publish_at)}</p>
+                      )}
                       <p className="text-xs text-text-muted sm:hidden">{a.profiles?.full_name}</p>
                     </td>
                     <td className="px-4 py-3 text-text-secondary hidden sm:table-cell">{a.profiles?.full_name}</td>
@@ -506,6 +539,11 @@ export default function TaskAssignmentPage() {
               )}
             </div>
 
+            {isScheduled(selectedTask) && (
+              <p className="text-sm font-semibold text-amber-600">
+                Scheduled: the patient will see this on {formatPublishAt(selectedTask.publish_at)}
+              </p>
+            )}
             <div className="flex items-center gap-4 text-sm text-text-secondary">
               <span>{selectedTask.profiles?.full_name}</span>
               <span className="flex items-center gap-1">

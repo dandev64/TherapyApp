@@ -46,17 +46,18 @@ export default function Modal({ isOpen, onClose, title, children }) {
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4">
       <div
         className="absolute inset-0 bg-black/30 backdrop-blur-sm"
         onClick={onClose}
       />
-      <div ref={dialogRef} className="relative bg-surface-card rounded-3xl shadow-[0_20px_40px_rgba(44,52,54,0.12)] w-full max-w-lg max-h-[85vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b border-border-light">
+      <div ref={dialogRef} role="dialog" aria-modal="true" className="relative bg-surface-card rounded-t-3xl sm:rounded-3xl shadow-[0_20px_40px_rgba(44,52,54,0.12)] w-full max-w-lg max-h-[90dvh] sm:max-h-[85vh] overflow-y-auto pb-[env(safe-area-inset-bottom)]">
+        <div className="sticky top-0 z-10 bg-surface-card flex items-center justify-between px-6 py-4 sm:p-6 border-b border-border-light">
           <h3 className="text-lg font-bold text-text-primary">{title}</h3>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-text-muted hover:bg-surface-alt transition-colors cursor-pointer"
+            aria-label="Close"
+            className="p-3 -mr-2 rounded-xl text-text-muted hover:bg-surface-alt transition-colors cursor-pointer"
           >
             <X size={18} />
           </button>

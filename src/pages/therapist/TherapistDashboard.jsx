@@ -256,8 +256,8 @@ export default function TherapistDashboard() {
 
       {patientsWithoutTasks.length > 0 && (
         <Card className="!p-5 !border-2 !border-red-200 !bg-red-50">
-          <div className="flex items-center gap-4">
-            <div className="p-2.5 rounded-xl bg-red-100 shrink-0">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="hidden sm:block p-2.5 rounded-xl bg-red-100 shrink-0">
               <AlertTriangle size={22} className="text-red-500" />
             </div>
             <div className="flex-1">
@@ -272,7 +272,7 @@ export default function TherapistDashboard() {
             </div>
             <Link
               to="/therapist/patients"
-              className="shrink-0 px-4 py-2 rounded-xl bg-red-500 text-white text-sm font-bold hover:bg-red-600 transition-colors"
+              className="shrink-0 text-center px-4 py-2.5 rounded-xl bg-red-500 text-white text-sm font-bold hover:bg-red-600 transition-colors"
             >
               View Patients
             </Link>
@@ -355,7 +355,7 @@ export default function TherapistDashboard() {
             <h3 className="text-xl font-bold text-text-primary">Patient Overview</h3>
             <Link
               to="/therapist/patients"
-              className="text-sm text-primary font-bold hover:underline"
+              className="py-2 text-sm text-primary font-bold hover:underline"
             >
               View all
             </Link>
@@ -364,10 +364,10 @@ export default function TherapistDashboard() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="text-left text-xs font-bold text-text-muted uppercase tracking-wider px-5 py-3">Patient</th>
+                  <th className="text-left text-xs font-bold text-text-muted uppercase tracking-wider px-4 sm:px-5 py-3">Patient</th>
                   <th className="text-center text-xs font-bold text-text-muted uppercase tracking-wider px-3 py-3">Today</th>
-                  <th className="text-center text-xs font-bold text-text-muted uppercase tracking-wider px-3 py-3">Streak</th>
-                  <th className="text-center text-xs font-bold text-text-muted uppercase tracking-wider px-3 py-3">Missed</th>
+                  <th className="hidden sm:table-cell text-center text-xs font-bold text-text-muted uppercase tracking-wider px-3 py-3">Streak</th>
+                  <th className="hidden sm:table-cell text-center text-xs font-bold text-text-muted uppercase tracking-wider px-3 py-3">Missed</th>
                   <th className="text-center text-xs font-bold text-text-muted uppercase tracking-wider px-3 py-3" title="Last 30 days">Consistency</th>
                 </tr>
               </thead>
@@ -380,7 +380,7 @@ export default function TherapistDashboard() {
                       onClick={() => navigate(`/therapist/patients/${patient.id}`)}
                       className="border-b border-border/50 last:border-0 hover:bg-primary-container/10 transition-colors cursor-pointer"
                     >
-                      <td className="px-5 py-3.5">
+                      <td className="px-4 sm:px-5 py-3.5">
                         <p className="text-sm font-semibold text-text-primary">{patient.full_name}</p>
                         {patient.condition && (
                           <p className="text-xs text-text-muted mt-0.5">{patient.condition}</p>
@@ -395,7 +395,7 @@ export default function TherapistDashboard() {
                           <span className="text-xs text-text-muted">—</span>
                         )}
                       </td>
-                      <td className="text-center px-3 py-3.5">
+                      <td className="hidden sm:table-cell text-center px-3 py-3.5">
                         {patient.streak > 0 ? (
                           <span className="inline-flex items-center gap-1 text-sm font-bold text-amber-500">
                             <Flame size={14} />
@@ -405,7 +405,7 @@ export default function TherapistDashboard() {
                           <span className="text-xs text-text-muted">0</span>
                         )}
                       </td>
-                      <td className="text-center px-3 py-3.5">
+                      <td className="hidden sm:table-cell text-center px-3 py-3.5">
                         <span className={`text-sm font-bold ${patient.missed > 0 ? 'text-red-500' : 'text-text-muted'}`}>
                           {patient.missed || 0}
                         </span>

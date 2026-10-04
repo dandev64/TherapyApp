@@ -6,6 +6,7 @@ import { useCachedState, hasCache } from '../../hooks/useCachedState'
 import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus'
 import { toDateStr } from '../../utils/streak'
 import { formatClock } from '../../utils/time'
+import { postedOnly } from '../../utils/tasks'
 import { ChevronLeft, ChevronRight, CheckCircle, Lock } from 'lucide-react'
 
 const DAY_HEADERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -60,7 +61,7 @@ export default function SchedulePage() {
           return
         }
         setError(null)
-        setTasks(data || [])
+        setTasks(postedOnly(data))
         setLoading(false)
       })
   }, [profile, currentMonth, refreshKey])
@@ -133,21 +134,21 @@ export default function SchedulePage() {
           <button
             onClick={prevMonth}
             aria-label="Previous month"
-            className="p-2 rounded-full hover:bg-surface-alt transition-colors cursor-pointer"
+            className="p-2.5 rounded-full hover:bg-surface-alt transition-colors cursor-pointer"
           >
             <ChevronLeft size={18} />
           </button>
           <button
             onClick={goToday}
             title="Go to today"
-            className="px-4 py-1.5 min-w-[4.5rem] text-sm font-semibold text-text-primary hover:bg-surface-alt rounded-full transition-colors cursor-pointer"
+            className="px-4 py-2.5 min-w-[4.5rem] text-sm font-semibold text-text-primary hover:bg-surface-alt rounded-full transition-colors cursor-pointer"
           >
             {isCurrentMonth ? 'Today' : MONTHS[month].slice(0, 3)}
           </button>
           <button
             onClick={nextMonth}
             aria-label="Next month"
-            className="p-2 rounded-full hover:bg-surface-alt transition-colors cursor-pointer"
+            className="p-2.5 rounded-full hover:bg-surface-alt transition-colors cursor-pointer"
           >
             <ChevronRight size={18} />
           </button>

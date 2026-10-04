@@ -6,6 +6,7 @@ import { useCachedState, hasCache } from '../../hooks/useCachedState'
 import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus'
 import { calculateStreak, toDateStr } from '../../utils/streak'
 import { getTimeOfDay, formatLongDate } from '../../utils/time'
+import { postedOnly } from '../../utils/tasks'
 import Card from '../../components/ui/Card'
 import Badge from '../../components/ui/Badge'
 import Button from '../../components/ui/Button'
@@ -58,7 +59,7 @@ export default function PatientDashboard() {
     if (cancelled) return
     if (err) { setError('Failed to load tasks. Please try again.'); setLoading(false); return }
     setError(null)
-    setTasks(data || [])
+    setTasks(postedOnly(data))
     setLoading(false)
   }
 

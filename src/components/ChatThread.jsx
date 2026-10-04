@@ -195,10 +195,10 @@ export default function ChatThread({ otherId }) {
   })
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-8rem)]">
+    <div className="flex flex-col h-[calc(100dvh-6rem)] lg:h-[calc(100dvh-4rem)]">
       {/* Header */}
       <div className="flex items-center gap-3 pb-4 border-b border-border-light mb-4">
-        <button onClick={() => navigate(-1)} aria-label="Go back" className="text-text-secondary hover:text-primary cursor-pointer">
+        <button onClick={() => navigate(-1)} aria-label="Go back" className="p-2 -ml-2 text-text-secondary hover:text-primary cursor-pointer">
           <ArrowLeft size={20} />
         </button>
         <div className="w-10 h-10 rounded-xl bg-primary-container flex items-center justify-center text-primary font-bold text-sm">
@@ -261,7 +261,7 @@ export default function ChatThread({ otherId }) {
       </div>
 
       {/* Input */}
-      <div className="flex gap-2 pt-4 border-t border-border-light">
+      <div className="flex gap-2 pt-3 pb-[env(safe-area-inset-bottom)] border-t border-border-light">
         <input
           ref={inputRef}
           type="text"

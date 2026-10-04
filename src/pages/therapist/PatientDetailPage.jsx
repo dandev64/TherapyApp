@@ -11,6 +11,8 @@ import Modal from '../../components/ui/Modal'
 import ReadOnlyCalendar from '../../components/therapist/ReadOnlyCalendar'
 import PatientMoodChart from '../../components/therapist/PatientMoodChart'
 import PatientFeedbackList from '../../components/therapist/PatientFeedbackList'
+import PublishTimeField from '../../components/therapist/PublishTimeField'
+import { formatPublishAt } from '../../utils/tasks'
 import {
   ArrowLeft, Flame, Target, CheckCircle, Calendar, ClipboardList, MessageSquare, Send,
 } from 'lucide-react'
@@ -36,8 +38,10 @@ export default function PatientDetailPage() {
     assigned_time: '09:00',
     resource_url: '',
     requires_proof: false,
+    publish_at: '',
   })
   const [assigning, setAssigning] = useState(false)
+  const [assignError, setAssignError] = useState('')
   const [calendarRefreshKey, setCalendarRefreshKey] = useState(0)
 
   async function loadAll(cancelled = false) {
@@ -107,13 +111,26 @@ export default function PatientDetailPage() {
       assigned_time: '09:00',
       resource_url: '',
       requires_proof: false,
+      publish_at: '',
     })
+    setAssignError('')
     setShowAssign(true)
   }
 
   async function handleAssign(e) {
     e.preventDefault()
     if (!assignForm.title || !assignForm.assigned_date || !assignForm.assigned_time) return
+    let publishAt = null
+    if (assignForm.publish_at) {
+      const at = new Date(assignForm.publish_at)
+      if (at <= new Date()) { setAssignError('The post time must be in the future.'); return }
+      if (at > new Date(`${assignForm.assigned_date}T${assignForm.assigned_time}:00`)) {
+        setAssignError("The post time must be before the task's scheduled date and time.")
+        return
+      }
+      publishAt = at.toISOString()
+    }
+    setAssignError('')
     setAssigning(true)
 
     const { data: taskData, error: err } = await supabase.from('task_assignments').insert({
@@ -125,15 +142,16 @@ export default function PatientDetailPage() {
       assigned_time: assignForm.assigned_time,
       resource_url: assignForm.resource_url || null,
       requires_proof: assignForm.requires_proof,
+      ...(publishAt ? { publish_at: publishAt } : {}),
     }).select('id').single()
 
-    if (err) { setAssigning(false); return }
+    if (err) { setAssigning(false); setAssignError('Failed to assign task.'); return }
 
     // Send reminder email only if task is due within 1 hour (and not already past due)
     // Otherwise, pg_cron (every 15 min) will check and send closer to due time
     const taskDue = new Date(`${assignForm.assigned_date}T${assignForm.assigned_time}:00`)
     const minutesUntilDue = (taskDue - new Date()) / 60000
-    if (minutesUntilDue > 0 && minutesUntilDue < 60) {
+    if (!publishAt && minutesUntilDue > 0 && minutesUntilDue < 60) {
       supabase.functions.invoke('send-email-reminders', {
         body: {
           type: 'task_reminder_immediate',
@@ -183,7 +201,7 @@ export default function PatientDetailPage() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
         <button
           onClick={() => navigate('/therapist/patients')}
           aria-label="Back to patients"
@@ -191,8 +209,8 @@ export default function PatientDetailPage() {
         >
           <ArrowLeft size={20} />
         </button>
-        <div className="flex-1">
-          <h2 className="text-3xl font-extrabold text-text-primary tracking-tight">
+        <div className="flex-1 min-w-0">
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-text-primary tracking-tight truncate">
             {patient?.full_name}
           </h2>
           {patient?.condition && (
@@ -369,6 +387,9 @@ export default function PatientDetailPage() {
         title={`New Task for ${patient?.full_name}`}
       >
         <form onSubmit={handleAssign} className="space-y-4">
+          {assignError && (
+            <div className="p-3 rounded-xl bg-danger-bg text-danger text-sm font-medium">{assignError}</div>
+          )}
           <Input
             label="Title"
             placeholder="e.g. Practice vowel sounds for 10 minutes"
@@ -414,6 +435,10 @@ export default function PatientDetailPage() {
               maxLength={2000}
             />
           </div>
+          <PublishTimeField
+            value={assignForm.publish_at}
+            onChange={(v) => setAssignForm({ ...assignForm, publish_at: v })}
+          />
           <label className="flex items-center gap-3 cursor-pointer">
             <input
               type="checkbox"
@@ -426,7 +451,7 @@ export default function PatientDetailPage() {
             </span>
           </label>
           <Button type="submit" disabled={assigning || !assignForm.title} className="w-full">
-            {assigning ? 'Assigning...' : 'Assign Task'}
+            {assigning ? 'Saving...' : assignForm.publish_at ? `Schedule for ${formatPublishAt(new Date(assignForm.publish_at))}` : 'Assign Task'}
           </Button>
         </form>
       </Modal>

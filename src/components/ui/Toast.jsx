@@ -29,7 +29,7 @@ export default function ToastContainer() {
   }
 
   return (
-    <div className="fixed top-4 right-4 left-4 sm:left-auto z-50 space-y-2 sm:max-w-sm">
+    <div className="fixed top-[calc(env(safe-area-inset-top)+0.75rem)] right-4 left-4 sm:left-auto z-[60] space-y-2 sm:max-w-sm">
       {toasts.map((toast) => {
         const config = TYPE_ICONS[toast.type] || TYPE_ICONS.new_task
         const Icon = config.icon

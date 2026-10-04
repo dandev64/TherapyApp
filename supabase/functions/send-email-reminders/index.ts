@@ -126,6 +126,8 @@ async function checkPatientReminders() {
     .select("id, title, assigned_date, assigned_time, patient_id")
     .eq("assigned_date", today)
     .neq("status", "completed")
+    // Skip tasks scheduled to be posted later
+    .or(`publish_at.is.null,publish_at.lte.${now.toISOString()}`)
     .gte("assigned_time", startTime)
     .lte("assigned_time", endTime);
 

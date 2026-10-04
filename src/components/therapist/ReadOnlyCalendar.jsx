@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, CheckCircle, MessageSquare, Clock, CheckSqua
 import Modal from '../ui/Modal'
 import Badge from '../ui/Badge'
 import ProofPhotos from '../ProofPhotos'
+import { isScheduled, formatPublishAt } from '../../utils/tasks'
 
 const MOOD_EMOJI = {
   excited: '🤩', happy: '😊', calm: '😌', scared: '😨',
@@ -180,10 +181,10 @@ export default function ReadOnlyCalendar({ patientId, therapistId, refreshKey, o
           {MONTHS[month]} {year}
         </h4>
         <div className="flex items-center gap-1 bg-surface-container rounded-full px-1.5 py-1">
-          <button onClick={prevMonth} aria-label="Previous month" className="p-1.5 rounded-full hover:bg-surface-alt transition-colors cursor-pointer">
+          <button onClick={prevMonth} aria-label="Previous month" className="p-2.5 rounded-full hover:bg-surface-alt transition-colors cursor-pointer">
             <ChevronLeft size={16} />
           </button>
-          <button onClick={nextMonth} aria-label="Next month" className="p-1.5 rounded-full hover:bg-surface-alt transition-colors cursor-pointer">
+          <button onClick={nextMonth} aria-label="Next month" className="p-2.5 rounded-full hover:bg-surface-alt transition-colors cursor-pointer">
             <ChevronRight size={16} />
           </button>
         </div>
@@ -311,6 +312,9 @@ export default function ReadOnlyCalendar({ patientId, therapistId, refreshKey, o
                           {!patientId && task.patient?.full_name && (
                             <p className="text-xs font-semibold text-primary">{task.patient.full_name}</p>
                           )}
+                          {isScheduled(task) && (
+                            <p className="text-[11px] font-semibold text-amber-600">Posts {formatPublishAt(task.publish_at)}</p>
+                          )}
                           <p className="text-sm text-on-surface-variant">
                             {task.assigned_time
                               ? new Date(`2000-01-01T${task.assigned_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
@@ -349,7 +353,7 @@ export default function ReadOnlyCalendar({ patientId, therapistId, refreshKey, o
                   <button
                     onClick={saveRemark}
                     disabled={remarkSaving || !remarkText.trim() || remarkText.trim() === (selRemark?.content || '')}
-                    className="text-xs font-semibold text-primary hover:underline disabled:opacity-50 cursor-pointer"
+                    className="py-2 pr-3 text-xs font-semibold text-primary hover:underline disabled:opacity-50 cursor-pointer"
                   >
                     {remarkSaving ? 'Saving...' : selRemark ? 'Update' : 'Save'}
                   </button>

@@ -9,6 +9,7 @@ import { toDateStr } from '../../utils/streak'
 import { formatClock } from '../../utils/time'
 import ProofPhotos from '../../components/ProofPhotos'
 import { getProofPaths } from '../../utils/proofs'
+import { isScheduled } from '../../utils/tasks'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import { ArrowLeft, ArrowRight, Camera, Upload, X, CheckSquare, Clock, Lock, Pencil, ImagePlus } from 'lucide-react'
@@ -61,8 +62,8 @@ export default function TaskDetailPage() {
       .eq('id', id)
       .single()
     if (cancelled) return
-    if (error) {
-      console.error('Failed to load task:', error.message)
+    if (error || isScheduled(data)) {
+      if (error) console.error('Failed to load task:', error.message)
       setLoading(false)
       return
     }

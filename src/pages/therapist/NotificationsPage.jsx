@@ -264,19 +264,19 @@ export default function NotificationsPage() {
                             </Button>
                           </div>
                         ) : (
-                          <div className="flex gap-2">
+                          <div className="flex gap-4">
                             <button
                               onClick={() => {
                                 setReplyingTo(n.id)
                                 setReplyText('')
                               }}
-                              className="text-xs font-semibold text-primary hover:underline cursor-pointer"
+                              className="py-2 text-xs font-semibold text-primary hover:underline cursor-pointer"
                             >
                               Reply
                             </button>
                             <button
                               onClick={() => openNotification(n)}
-                              className="text-xs font-semibold text-text-muted hover:text-primary cursor-pointer"
+                              className="py-2 text-xs font-semibold text-text-muted hover:text-primary cursor-pointer"
                             >
                               Open thread
                             </button>
@@ -287,8 +287,9 @@ export default function NotificationsPage() {
                   </div>
                   <button
                     onClick={() => dismissNotification(n.id)}
-                    className="text-text-muted hover:text-danger shrink-0 cursor-pointer"
+                    className="p-2.5 -m-2 text-text-muted hover:text-danger shrink-0 cursor-pointer"
                     title="Dismiss"
+                    aria-label="Dismiss notification"
                   >
                     <X size={16} />
                   </button>
