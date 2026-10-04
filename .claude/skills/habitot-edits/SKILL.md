@@ -1,81 +1,45 @@
 ---
 name: habitot-edits
-description: Prioritized checklist of client-requested HabitOT website edits (from HabitOT-website-development-edits.pdf), with item IDs and file pointers. Use when working on any of these edits, or when the user references an item ID like B3 or "next edit".
+description: Status and remaining work for the client-requested HabitOT website edits (from HabitOT-website-development-edits.pdf), with item IDs, file pointers, and how to test. Use when working on any of these edits, when the user references an item ID like Q15 or F2, asks "what's left", or wants the app tested.
 ---
 
 # HabitOT client edits
 
-Source: `c:\Users\danme\Downloads\HabitOT-website-development-edits.pdf` (12 pages). Do NOT re-read the PDF unless an item below is unclear; this file is the working copy.
+Source: `c:\Users\danme\Downloads\HabitOT-website-development-edits.pdf` (12 pages). Do NOT re-read the PDF; this file is the working copy.
 
-Stack: Vite + React 19 + Tailwind 4 + Supabase (`src/lib/supabase.js`, schema in `supabase/schema.sql`, migrations in `supabase/migration.sql`, edge fn `supabase/functions/send-email-reminders`). Timezone is UTC+8 (see `src/utils/time.js`).
+Stack: Vite + React 19 + Tailwind 4 + Supabase (`src/lib/supabase.js`). Base schema `supabase/schema.sql` + `supabase/migration.sql`; this round's DB changes are in `supabase/migration-2026-10-client-edits.sql` (already run on the live DB, 2026-10-04). Times are local UTC+8 (Asia/Manila).
 
-## How to work
-- Pick items by ID. Read only the files listed for that item, then grep outward if needed.
-- Batch small items that touch the same file into one change.
-- After finishing an item, change `[ ]` to `[x]` here. Note any DB migration needed in `supabase/migration.sql` and tell the user to run it.
-- Run `npm run build` after each batch to catch errors.
-- Items marked **ASK** need a decision from the user before starting.
+## Status (as of 2026-10-04)
+39 of 43 items done, verified end-to-end in headless Edge against the live DB (44/44 checks passed). Committed as `cc64153` on `master`. **Push failed**: the Windows credential manager has GitHub account `danmedado04-git`, which lacks access to `dandev64/TherapyApp` (403). The user must push from VS Code or as `dandev64`. Check `git status` / `git log origin/master..` before assuming it's pushed.
 
-## P1 — Bugs & stability (broken behavior)
-- [x] **B1** Notifications tab throws frequent errors — test and harden. `src/pages/therapist/NotificationsPage.jsx` (also used by patient?), `src/contexts/NotificationContext.jsx`, `src/components/ui/ErrorBoundary.jsx`
-- [x] **B2** Red notif badge only drops when items are dismissed — reset count when the Notifications tab is opened (both roles). `NotificationContext.jsx`, `NotificationsPage.jsx`, `src/components/layout/Sidebar.jsx`
-- [x] **B3** Chats don't update live — must update without refresh (both roles). `src/pages/patient/MessagesPage.jsx` (realtime channel ~L95), `src/pages/therapist/TherapistMessagesPage.jsx`, both inboxes. Check Supabase realtime publication for `messages`.
-- [x] **B4** Message pop-up toasts work for therapist but not patient. `NotificationContext.jsx` (toast + channel), patient pages
-- [x] **B5** No notification created when a therapist replies (and verify patient→therapist too, PDF p.9 #5). Find where message notifications are inserted (DB trigger in schema.sql or client code).
-- [x] **B6** Therapist message thread: text cursor appears inside message bubbles — bubbles shouldn't be editable/focusable; cursor only in input. `TherapistMessagesPage.jsx`, `MessagesPage.jsx`
-- [x] **B7** Clicking create account twice shows "email rate limit exceeded" / "only request after N seconds" — replace with friendly "Check your email to confirm your account". Also disable button while submitting. `src/pages/auth/SignUpPage.jsx`
-- [x] **B8** Sidebar scrolls with page — make it fixed/sticky to viewport. `Sidebar.jsx`, `src/components/layout/DashboardLayout.jsx`
-- [ ] **B9** (SKIPPED for now per user; Progress cards were made narrower-friendly) Mobile: consistency % display error (layout overflow on Progress / dashboard cards). **ASK** for screenshot if not obvious.
+## Open items
+- [ ] **Q15 Logo** — WAITING on the logo file from the user. Replace `public/habitot-icon.png` + `public/favicon.svg`; used in `src/components/layout/Sidebar.jsx`, `src/pages/auth/LoginPage.jsx`, `src/pages/auth/SignUpPage.jsx` (two places: form + check-email screen), `index.html`.
+- [ ] **Q16 Confirmation email says "HabitOT"** — not code. The user pastes into Supabase → Authentication → Email Templates → Confirm signup. Subject `Confirm your HabitOT account`; body `<h2>Welcome to HabitOT!</h2><p>Thanks for signing up. Confirm your email to start using HabitOT:</p><p><a href="{{ .ConfirmationURL }}">Confirm my HabitOT account</a></p>`. Ask if done.
+- [ ] **F2 Schedule a task** — SKIPPED until the client clarifies. Tasks already have a date and time; possible meaning is "hidden from the patient until a publish time". Would need a `publish_at` column, a filter in the patient queries, and a field in `TaskAssignmentPage.jsx` and the assign modal in `PatientDetailPage.jsx`.
+- [ ] **B9 Mobile consistency % display error** — SKIPPED pending a screenshot. The Progress page now fits 375px with no overflow; it may already be fixed. Other places showing consistency: `TherapistDashboard.jsx` stat cards and table, `PatientCard.jsx`, `PatientDetailPage.jsx`.
 
-## P2 — Quick wins (copy / small UI)
-- [x] **Q1** Patient sidebar "Home" → "Today". `Sidebar.jsx:34`
-- [x] **Q2** Patient sidebar "Progress" → "Weekly Progress". `Sidebar.jsx:36` (and page heading in `ProgressPage.jsx`)
-- [x] **Q3** Therapist dashboard "Patient Moods" → "All Patient Moods". `src/pages/therapist/TherapistDashboard.jsx`
-- [x] **Q4** Show today's date on both home dashboards. `src/pages/patient/PatientDashboard.jsx`, `TherapistDashboard.jsx`
-- [x] **Q5** Task button: started-but-unfinished state says "Complete" → rename to "Continue". `PatientDashboard.jsx` / `src/pages/patient/SchedulePage.jsx`
-- [x] **Q6** Schedule month nav: middle "Today" button should show month name (e.g. "Sep", "Oct") when viewing another month. `SchedulePage.jsx`
-- [x] **Q7** Task page feedback copy: mood → "After completing the task, how did the patient feel about the task?" (bold **patient**); comments → "Do you or the patient have any comments after the task?" `src/pages/patient/TaskDetailPage.jsx`
-- [x] **Q8** Task page "Home" button → label "Back" (goes to schedule). `TaskDetailPage.jsx`
-- [x] **Q9** Task page "Scheduled for 9:00 AM" → include date: "Scheduled for 9:00 AM September 29". `TaskDetailPage.jsx`
-- [x] **Q10** Patient profile: remove "Message your Therapist" card. `src/pages/patient/PatientProfilePage.jsx:~127`
-- [x] **Q11** Patient profile: keep name edit, remove "Condition / diagnosis" field + display. `PatientProfilePage.jsx`
-- [x] **Q12** Show/hide password toggle on login + signup. `src/pages/auth/LoginPage.jsx`, `SignUpPage.jsx`, maybe `src/components/ui/Input.jsx`
-- [x] **Q13** Signup: confirm-password field with mismatch validation. `SignUpPage.jsx`
-- [x] **Q14** Delete-task confirmation modal for therapists. `src/pages/therapist/TaskAssignmentPage.jsx`, `src/components/ui/Modal.jsx`
-- [ ] **Q15** (WAITING on logo file from user) Replace logo everywhere with new HabitOT logo (house + figure + clipboard). Current: `public/habitot-icon.png`, `public/favicon.svg`, used in `Sidebar.jsx:73`, `LoginPage.jsx:56`, `SignUpPage.jsx:52`, `index.html`. **ASK** user for the new logo file (it's only embedded in the PDF).
-- [ ] **Q16** (template text given to user; needs pasting in Supabase dashboard) Confirmation email must mention "HabitOT" — this is a Supabase Auth email template (dashboard → Auth → Email Templates), not repo code. Give user the template text to paste.
+### Decisions to raise (not in the PDF)
+- Old patient-written `daily_remarks` are hidden everywhere now. Show them to therapists read-only, or leave them?
+- Email reminders (`supabase/functions/send-email-reminders`) only send if Resend + cron are set up and the patient opted in. The new reminders are in-app only.
+- Test leftovers: `[test]`/`[ui-test]` messages in the therapist1 ↔ patient1 chat (messages can't be deleted via RLS).
+- `src/pages/therapist/PatientsPage.jsx` is dead code (not routed) and can be deleted.
+- PDF headings "Client Notes" and therapist "Profile" are empty, so no changes were made there.
 
-## P3 — Logic / behavior changes
-- [x] **L1** Therapist dashboard consistency: rolling last 30 days through today, and only tasks assigned by THIS therapist. `TherapistDashboard.jsx`, `src/components/therapist/AggregatedStatsCard.jsx`, `PatientCard.jsx`, `PatientsPage.jsx`
-- [x] **L2** Patient Progress consistency: rolling last 30 days through today. Streak logic unchanged. `ProgressPage.jsx:~79`, `src/utils/streak.js`
-- [x] **L3** Patient Progress: remove Mood Summary (patient view only); move "Therapy Session Remarks" section to the Today page. `ProgressPage.jsx`, `PatientDashboard.jsx`
-- [x] **L4** Remarks flip direction: remove remark input from patient schedule; add remark input for THERAPIST in patient calendar "Selected day" panel (therapist → patient feedback). Patient sees them on Today page (L3). `SchedulePage.jsx`, `src/components/therapist/ReadOnlyCalendar.jsx`, table `daily_remarks` (needs author/therapist_id + RLS change → migration).
-- [x] **L5** Therapist dashboard recent feedback: show entries even with mood only (no text), with date. `src/components/therapist/PatientFeedbackList.jsx`
-- [x] **L6** Patients can't start future-dated tasks — view-only until assigned day (today or past OK). `TaskDetailPage.jsx`, `SchedulePage.jsx`
-- [x] **L7** Task page split: step 1 = description + photo proof; after proof, "Next" enables → step 2 = mood + comments → Submit. (PDF offered "Next" step or pop-up; default to the Next-step flow.) `TaskDetailPage.jsx`
-- [x] **L8** Message unread badge on Messages tab; other notifications stay on Notifications tab (both roles). `Sidebar.jsx`, `NotificationContext.jsx`
-- [x] **L9** Notification click navigates to target (e.g. new task → that task; message → thread), also for toasts. `NotificationsPage.jsx`, `NotificationContext.jsx`, `src/components/ui/Toast.jsx`
-- [x] **L10** Therapist Patients list: show number of missed tasks per patient (PDF p.3, vague). `PatientCard.jsx`, `PatientsPage.jsx`
+## Done (for reference)
+B1–B8, Q1–Q14, L1–L10, F1, F3–F8. Key places:
+- Notifications: `src/contexts/NotificationContext.jsx` (two badges: Notifications = unseen non-message, Messages = unread messages; realtime + 15s poll fallback; `markAllSeen` sets `seen_at`), `src/pages/therapist/NotificationsPage.jsx` (shared by both roles), click routing in `src/utils/notificationNav.js`, pop-ups in `src/components/ui/Toast.jsx`.
+- Notifications-tab crash root cause: `src/hooks/useCachedState.js` cached functional updaters. Now resolved.
+- Chat: `src/components/ChatThread.jsx` used by both chat pages (realtime + 5s poll, caret hidden in bubbles).
+- Tasks: `src/pages/patient/TaskDetailPage.jsx` (two-step flow, up to 3 photos with no `capture` attr, edit submission, future tasks locked), photos via `src/components/ProofPhotos.jsx` + `src/utils/proofs.js` (`proof_urls[]`, `proof_url` = first).
+- Remarks: table `therapist_remarks`, written in `src/components/therapist/ReadOnlyCalendar.jsx`, shown on `src/pages/patient/PatientDashboard.jsx` (Today).
+- Calendar tab: `src/pages/therapist/TherapistCalendarPage.jsx` (ReadOnlyCalendar without patientId).
+- Consistency: `calculateConsistency` in `src/utils/streak.js` (last 30 days through today; therapist views filter by therapist_id; also returns `missed`).
+- DB triggers: message → notification for any sender; `notify_patient_new_task` sets `reference_id`; `notify_new_remark`; cron `patient-inapp-reminders` every 5 min runs `generate_patient_task_reminders()` (due-in-1h + overdue today).
 
-## P4 — Bigger features
-- [x] **F1** Therapist: edit a task after posting. `TaskAssignmentPage.jsx`
-- [ ] **F2** (SKIPPED for now per user) Therapist: schedule a task (create now, publish/visible at a future time?). **ASK** what "schedule" means vs. existing due date.
-- [x] **F3** Therapist: new "Calendar" sidebar tab showing tasks for all their patients. New page + route in `src/App.jsx`, reuse `ReadOnlyCalendar.jsx`.
-- [x] **F4** Patient: edit submission after completion (re-upload photo when therapist asks). `TaskDetailPage.jsx`, storage + task_assignments update/RLS.
-- [x] **F5** Patient: allow at least 2 proof photos. `TaskDetailPage.jsx`, `src/utils/imageCompress.js`, schema (photo_url → array or new table → migration).
-- [x] **F6** Mobile: allow choosing from photo library, not just camera (likely remove `capture` attr on file input). `TaskDetailPage.jsx`
-- [x] **F7** Reminder notification 1 hour before a task is due. `supabase/functions/send-email-reminders` + cron / pg_cron.
-- [x] **F8** Notification for overdue / uncompleted tasks same day. Same infra as F7.
-
-## Open questions for the user
-- New logo file (Q15).
-- Meaning of "schedule a task" (F2).
-- Mobile consistency display bug details (B9).
-- Therapist "Client Notes" and "Profile" sections in the PDF are empty headings — assume no changes.
-
-## Implementation notes (Oct 2026 pass)
-- DB changes: `supabase/migration-2026-10-client-edits.sql` (seen_at on notifications, therapist_remarks table, proof_urls[], message trigger for all senders, new-task trigger with reference_id, in-app reminder cron). Must be run before deploying the frontend.
-- Shared pieces: `src/components/ChatThread.jsx` (both chat pages), `src/components/ProofPhotos.jsx` + `src/utils/proofs.js`, `src/utils/notificationNav.js` (click-through routes), `calculateConsistency` in `src/utils/streak.js`.
-- Badges: Notifications = unseen non-message notifications; Messages = unread messages (both in NotificationContext, with 15s polling fallback).
-- Old patient `daily_remarks` are no longer shown anywhere; therapist remarks live in `therapist_remarks`.
-- `src/pages/therapist/PatientsPage.jsx` is dead code (not routed).
+## How to work / test
+- Read only the files listed for an item, then `npm run build` and `npx eslint src`.
+- New DB changes go in a new `supabase/migration-*.sql`; tell the user to run it (no CLI or service key here).
+- Local run: `.env.local` (gitignored) points at the live project `afzprgdowymgvmxtrqzc`. `npx vite --port 5199`.
+- Test accounts: `therapst1@gmail.com` (note the spelling) and `patient1@gmail.com`; ask the user for the password. They are linked (therapist ↔ patient).
+- No browser MCP tool in this setup. UI testing works with `playwright-core` installed in the session scratchpad (not the project), using `chromium.launch({ channel: 'msedge' })`. Edge is installed. Prefix test data with `[test]` and delete it afterwards. Client clock runs slightly ahead of the server, so don't filter by `created_at >= localNow`.
+- Commit message style: `<Month> <day> <summary>`.
