@@ -24,6 +24,7 @@ const navItems = {
   therapist: [
     { to: '/therapist', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/therapist/patients', icon: Users, label: 'Patients' },
+    { to: '/therapist/calendar', icon: CalendarDays, label: 'Calendar' },
     { to: '/therapist/assignments', icon: ClipboardList, label: 'Task Assignment' },
     { to: '/therapist/notes', icon: FileText, label: 'Client Notes' },
     { to: '/therapist/messages', icon: MessageSquare, label: 'Messages' },
@@ -31,9 +32,9 @@ const navItems = {
     { to: '/therapist/profile', icon: User, label: 'Profile' },
   ],
   patient: [
-    { to: '/patient', icon: LayoutDashboard, label: 'Home' },
+    { to: '/patient', icon: LayoutDashboard, label: 'Today' },
     { to: '/patient/schedule', icon: CalendarDays, label: 'Schedule' },
-    { to: '/patient/progress', icon: TrendingUp, label: 'Progress' },
+    { to: '/patient/progress', icon: TrendingUp, label: 'Weekly Progress' },
     { to: '/patient/messages', icon: MessageSquare, label: 'Messages' },
     { to: '/patient/notifications', icon: Bell, label: 'Notifications' },
     { to: '/patient/profile', icon: User, label: 'Profile' },
@@ -47,7 +48,7 @@ const navItems = {
 export default function Sidebar() {
   const { profile, signOut } = useAuth()
   const { dark, toggleDark } = useTheme()
-  const { unreadCount } = useNotifications()
+  const { unreadCount, unreadMessages } = useNotifications()
   const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
   const items = navItems[profile?.role] || []
@@ -80,7 +81,7 @@ export default function Sidebar() {
         </div>
       </div>
 
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
         {/* eslint-disable-next-line no-unused-vars */}
         {items.map(({ to, icon: Icon, label }) => (
           <NavLink
@@ -98,11 +99,15 @@ export default function Sidebar() {
           >
             <Icon size={18} />
             {label}
-            {label === 'Notifications' && unreadCount > 0 && (
-              <span className="ml-auto bg-danger text-white text-[10px] font-bold min-w-[18px] h-[18px] flex items-center justify-center rounded-full px-1">
-                {unreadCount > 99 ? '99+' : unreadCount}
-              </span>
-            )}
+            {(() => {
+              const badge = label === 'Notifications' ? unreadCount : label === 'Messages' ? unreadMessages : 0
+              if (badge <= 0) return null
+              return (
+                <span className="ml-auto bg-danger text-white text-[10px] font-bold min-w-[18px] h-[18px] flex items-center justify-center rounded-full px-1">
+                  {badge > 99 ? '99+' : badge}
+                </span>
+              )
+            })()}
           </NavLink>
         ))}
       </nav>
@@ -150,6 +155,9 @@ export default function Sidebar() {
         onClick={() => setMobileOpen(!mobileOpen)}
       >
         {mobileOpen ? <X size={20} /> : <Menu size={20} />}
+        {!mobileOpen && unreadCount + unreadMessages > 0 && (
+          <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-danger border-2 border-surface-card" />
+        )}
       </button>
 
       {/* Mobile overlay */}
@@ -163,7 +171,7 @@ export default function Sidebar() {
       {/* Sidebar */}
       <aside
         className={`
-          fixed lg:static inset-y-0 left-0 z-40
+          fixed lg:sticky lg:top-0 lg:self-start inset-y-0 left-0 z-40 shrink-0
           w-64 bg-surface-card border-r border-border-light
           shadow-[20px_0_40px_rgba(44,52,54,0.04)]
           flex flex-col h-screen

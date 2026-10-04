@@ -14,6 +14,7 @@ import TaskAssignmentPage from './pages/therapist/TaskAssignmentPage'
 import TherapistNotesPage from './pages/therapist/TherapistNotesPage'
 import NotificationsPage from './pages/therapist/NotificationsPage'
 import TherapistProfilePage from './pages/therapist/TherapistProfilePage'
+import TherapistCalendarPage from './pages/therapist/TherapistCalendarPage'
 import TherapistMessagesPage from './pages/therapist/TherapistMessagesPage'
 import TherapistMessagesInbox from './pages/therapist/TherapistMessagesInbox'
 import PatientDashboard from './pages/patient/PatientDashboard'
@@ -66,6 +67,7 @@ export default function App() {
             <Route index element={<TherapistDashboard />} />
             <Route path="patients" element={<PatientCarryoverPage />} />
             <Route path="patients/:patientId" element={<PatientDetailPage />} />
+            <Route path="calendar" element={<TherapistCalendarPage />} />
             <Route path="assignments" element={<TaskAssignmentPage />} />
             <Route path="notes" element={<TherapistNotesPage />} />
             <Route path="notifications" element={<NotificationsPage />} />

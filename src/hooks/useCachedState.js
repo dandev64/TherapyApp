@@ -17,13 +17,17 @@ export function useCachedState(key, defaultValue) {
   )
 
   const setValue = useCallback((v) => {
-    // Evict oldest entry if cache is full
-    if (!cache.has(key) && cache.size >= MAX_CACHE_SIZE) {
-      const oldest = cache.keys().next().value
-      cache.delete(oldest)
-    }
-    cache.set(key, v)
-    _setValue(v)
+    _setValue((prev) => {
+      // Resolve functional updates so the cache never stores a function
+      const next = typeof v === 'function' ? v(prev) : v
+      // Evict oldest entry if cache is full
+      if (!cache.has(key) && cache.size >= MAX_CACHE_SIZE) {
+        const oldest = cache.keys().next().value
+        cache.delete(oldest)
+      }
+      cache.set(key, next)
+      return next
+    })
   }, [key])
 
   return [value, setValue]

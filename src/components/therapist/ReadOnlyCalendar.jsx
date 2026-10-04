@@ -4,6 +4,7 @@ import { toDateStr } from '../../utils/streak'
 import { ChevronLeft, ChevronRight, CheckCircle, MessageSquare, Clock, CheckSquare } from 'lucide-react'
 import Modal from '../ui/Modal'
 import Badge from '../ui/Badge'
+import ProofPhotos from '../ProofPhotos'
 
 const MOOD_EMOJI = {
   excited: '🤩', happy: '😊', calm: '😌', scared: '😨',
@@ -14,7 +15,11 @@ const DAY_HEADERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const FULL_DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
-export default function ReadOnlyCalendar({ patientId, therapistId, refreshKey }) {
+/**
+ * Month calendar of a therapist's tasks. With `patientId` it shows one patient and lets the
+ * therapist write a remark per day; without it, it shows tasks for all of the therapist's patients.
+ */
+export default function ReadOnlyCalendar({ patientId, therapistId, refreshKey, onRemarkSaved }) {
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date()
     return { year: now.getFullYear(), month: now.getMonth() }
@@ -22,8 +27,12 @@ export default function ReadOnlyCalendar({ patientId, therapistId, refreshKey })
   const [selectedDate, setSelectedDate] = useState(toDateStr(new Date()))
   const [tasks, setTasks] = useState([])
   const [feedbackMap, setFeedbackMap] = useState({})
-  const [proofUrls, setProofUrls] = useState({})
   const [remarks, setRemarks] = useState({})
+  // Draft + status are tied to the date they were made on, so switching days resets them
+  const [remarkDraft, setRemarkDraft] = useState({ date: null, text: '' })
+  const [remarkSaving, setRemarkSaving] = useState(false)
+  const [remarkStatusState, setRemarkStatus] = useState({ date: null, text: '' })
+  const [photoRequest, setPhotoRequest] = useState('')
   const [loading, setLoading] = useState(true)
   const [selectedTask, setSelectedTask] = useState(null)
 
@@ -31,46 +40,55 @@ export default function ReadOnlyCalendar({ patientId, therapistId, refreshKey })
   const { year, month } = currentMonth
 
   useEffect(() => {
-    if (!patientId) return
+    if (!therapistId) return
     let cancelled = false
     async function load() {
       setLoading(true)
       const startOfMonth = toDateStr(new Date(year, month, 1))
       const endOfMonth = toDateStr(new Date(year, month + 1, 0))
 
-      const [tasksRes, remarksRes, feedbackRes] = await Promise.all([
-      supabase
+      let tasksQuery = supabase
         .from('task_assignments')
-        .select('*')
-        .eq('patient_id', patientId)
+        .select('*, patient:profiles!task_assignments_patient_id_fkey(full_name)')
         .eq('therapist_id', therapistId)
         .gte('assigned_date', startOfMonth)
         .lte('assigned_date', endOfMonth)
-        .order('created_at', { ascending: true }),
-      supabase
-        .from('daily_remarks')
-        .select('date, content')
-        .eq('patient_id', patientId)
-        .gte('date', startOfMonth)
-        .lte('date', endOfMonth),
-      supabase
-        .from('task_feedback')
-        .select('task_assignment_id, mood, note, created_at')
-        .eq('patient_id', patientId)
-        .gte('created_at', new Date(year, month, 1).toISOString())
-        .lte('created_at', new Date(year, month + 1, 0, 23, 59, 59).toISOString()),
-    ])
+        .order('assigned_time', { ascending: true })
+      if (patientId) tasksQuery = tasksQuery.eq('patient_id', patientId)
+
+      const [tasksRes, remarksRes] = await Promise.all([
+        tasksQuery,
+        patientId
+          ? supabase
+              .from('therapist_remarks')
+              .select('id, date, content')
+              .eq('patient_id', patientId)
+              .eq('therapist_id', therapistId)
+              .gte('date', startOfMonth)
+              .lte('date', endOfMonth)
+          : Promise.resolve({ data: [] }),
+      ])
       if (cancelled) return
-      setTasks(tasksRes.data || [])
+      if (tasksRes.error) console.error('Failed to load calendar tasks:', tasksRes.error.message)
+      const monthTasks = tasksRes.data || []
+
+      const completedIds = monthTasks.filter((t) => t.status === 'completed').map((t) => t.id)
+      const fbMap = {}
+      if (completedIds.length) {
+        const { data: fbData } = await supabase
+          .from('task_feedback')
+          .select('task_assignment_id, mood, note, created_at')
+          .in('task_assignment_id', completedIds)
+        ;(fbData || []).forEach((fb) => { fbMap[fb.task_assignment_id] = fb })
+      }
+      if (cancelled) return
+
+      setTasks(monthTasks)
       const remarksMap = {}
       ;(remarksRes.data || []).forEach((r) => {
         remarksMap[r.date] = r
       })
       setRemarks(remarksMap)
-      const fbMap = {}
-      ;(feedbackRes.data || []).forEach((fb) => {
-        fbMap[fb.task_assignment_id] = fb
-      })
       setFeedbackMap(fbMap)
       setLoading(false)
     }
@@ -78,45 +96,54 @@ export default function ReadOnlyCalendar({ patientId, therapistId, refreshKey })
     return () => { cancelled = true }
   }, [patientId, therapistId, year, month, refreshKey])
 
-  useEffect(() => {
-    if (!tasks.length) return
+  const remarkText = remarkDraft.date === selectedDate ? remarkDraft.text : remarks[selectedDate]?.content || ''
+  const remarkStatus = remarkStatusState.date === selectedDate ? remarkStatusState.text : ''
+  function setRemarkText(text) {
+    setRemarkDraft({ date: selectedDate, text })
+  }
 
-    const urls = {}
-
-    Promise.all(
-      tasks
-        .filter(t => t.proof_url)
-        .map(async (t) => {
-          try {
-            if (t.proof_url.startsWith('http')) {
-              urls[t.id] = t.proof_url
-              return
-            }
-
-            const { data } = await supabase.storage
-              .from('task-proofs')
-              .createSignedUrl(t.proof_url, 3600)
-
-            if (data?.signedUrl) {
-              urls[t.id] = data.signedUrl
-            } else {
-              const { data: pubData } = supabase.storage
-                .from('task-proofs')
-                .getPublicUrl(t.proof_url)
-
-              if (pubData?.publicUrl) {
-                urls[t.id] = pubData.publicUrl
-              }
-            }
-          } catch (err) {
-            console.error('Error generating proof URL:', err)
-          }
-        })
-    ).then(() => {
-      setProofUrls(urls)
+  // Sends the patient a message (which also notifies them) asking them to edit their submission
+  async function requestNewPhoto(task) {
+    setPhotoRequest('sending')
+    const date = new Date(task.assigned_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    const { error } = await supabase.from('messages').insert({
+      sender_id: therapistId,
+      recipient_id: task.patient_id,
+      content: `Please upload a new, clearer photo for "${task.title}" (${date}). Open the task and tap "Edit submission".`,
     })
-  }, [tasks])
+    setPhotoRequest(error ? '' : 'sent')
+    if (error) console.error('Failed to send photo request:', error.message)
+  }
 
+  async function saveRemark() {
+    const content = remarkText.trim()
+    if (!content || !patientId) return
+    setRemarkSaving(true)
+    const { data, error } = await supabase
+      .from('therapist_remarks')
+      .upsert(
+        {
+          therapist_id: therapistId,
+          patient_id: patientId,
+          date: selectedDate,
+          content,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'therapist_id,patient_id,date' }
+      )
+      .select('id, date, content')
+      .single()
+    setRemarkSaving(false)
+    if (error) {
+      console.error('Failed to save remark:', error.message)
+      setRemarkStatus({ date: selectedDate, text: 'Failed to save. Please try again.' })
+      return
+    }
+    setRemarks((prev) => ({ ...prev, [selectedDate]: data }))
+    setRemarkDraft({ date: null, text: '' })
+    setRemarkStatus({ date: selectedDate, text: 'Saved. The patient can see this on their Today page.' })
+    onRemarkSaved?.()
+  }
 
   const tasksByDate = useMemo(() => {
     const grouped = {}
@@ -281,6 +308,9 @@ export default function ReadOnlyCalendar({ patientId, therapistId, refreshKey })
                           <p className={`text-sm font-bold ${isDone ? 'text-text-muted line-through' : 'text-text-primary'}`}>
                             {task.title}
                           </p>
+                          {!patientId && task.patient?.full_name && (
+                            <p className="text-xs font-semibold text-primary">{task.patient.full_name}</p>
+                          )}
                           <p className="text-sm text-on-surface-variant">
                             {task.assigned_time
                               ? new Date(`2000-01-01T${task.assigned_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
@@ -302,10 +332,29 @@ export default function ReadOnlyCalendar({ patientId, therapistId, refreshKey })
               <p className="text-sm text-outline mt-5">No tasks assigned for this day.</p>
             )}
 
-            {selRemark?.content && (
+            {patientId && (
               <div className="mt-5 bg-surface-container-lowest rounded-xl p-3">
-                <p className="text-xs font-bold text-outline uppercase tracking-wider mb-1.5">Patient Remark</p>
-                <p className="text-sm text-text-primary">{selRemark.content}</p>
+                <p className="text-xs font-bold text-outline uppercase tracking-wider mb-1.5">
+                  Remarks for patient
+                </p>
+                <textarea
+                  className="w-full text-sm text-text-primary bg-transparent resize-none focus:outline-none placeholder:text-text-muted"
+                  rows={3}
+                  placeholder="Feedback on the patient's performance this day..."
+                  value={remarkText}
+                  onChange={(e) => setRemarkText(e.target.value)}
+                  maxLength={2000}
+                />
+                <div className="flex items-center justify-between gap-2 mt-1">
+                  <button
+                    onClick={saveRemark}
+                    disabled={remarkSaving || !remarkText.trim() || remarkText.trim() === (selRemark?.content || '')}
+                    className="text-xs font-semibold text-primary hover:underline disabled:opacity-50 cursor-pointer"
+                  >
+                    {remarkSaving ? 'Saving...' : selRemark ? 'Update' : 'Save'}
+                  </button>
+                  {remarkStatus && <span className="text-[11px] text-text-muted text-right">{remarkStatus}</span>}
+                </div>
               </div>
             )}
           </div>
@@ -315,13 +364,16 @@ export default function ReadOnlyCalendar({ patientId, therapistId, refreshKey })
       {/* Task Detail Modal */}
       <Modal
         isOpen={!!selectedTask}
-        onClose={() => setSelectedTask(null)}
+        onClose={() => { setSelectedTask(null); setPhotoRequest('') }}
         title={selectedTask?.title}
       >
         {selectedTask && (() => {
           const fb = feedbackMap[selectedTask.id]
           return (
             <div className="space-y-4">
+              {!patientId && selectedTask.patient?.full_name && (
+                <p className="text-sm font-semibold text-primary">{selectedTask.patient.full_name}</p>
+              )}
               <div className="flex items-center gap-2">
                 <Badge color={selectedTask.status}>{selectedTask.status.replace('_', ' ')}</Badge>
                 {selectedTask.requires_proof && (
@@ -374,28 +426,15 @@ export default function ReadOnlyCalendar({ patientId, therapistId, refreshKey })
                     <p className="text-sm text-text-muted italic">No feedback submitted</p>
                   )}
 
-                  {selectedTask.proof_url && (
-                    <div>
-                      <p className="text-xs font-bold text-text-muted uppercase tracking-wider mb-2">
-                        Proof Photo
-                      </p>
-
-                      {proofUrls[selectedTask.id] ? (
-                        <a
-                          href={proofUrls[selectedTask.id]}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          <img
-                            src={proofUrls[selectedTask.id]}
-                            alt="Proof"
-                            className="w-full max-w-xs rounded-xl border border-border"
-                          />
-                        </a>
-                      ) : (
-                        <p className="text-sm text-text-muted">Loading proof image...</p>
-                      )}
-                    </div>
+                  <ProofPhotos task={selectedTask} />
+                  {selectedTask.requires_proof && (
+                    <button
+                      onClick={() => requestNewPhoto(selectedTask)}
+                      disabled={photoRequest === 'sending'}
+                      className="text-xs font-semibold text-primary hover:underline cursor-pointer disabled:opacity-50"
+                    >
+                      {photoRequest === 'sent' ? 'Request sent ✓' : photoRequest === 'sending' ? 'Sending...' : 'Ask patient for a new photo'}
+                    </button>
                   )}
                 </div>
               )}

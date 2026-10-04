@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from 'recharts'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { calculateStreak, toDateStr } from '../../utils/streak'
+import { calculateStreak, calculateConsistency, toDateStr } from '../../utils/streak'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
@@ -70,13 +70,13 @@ export default function PatientDetailPage() {
         .from('task_feedback')
         .select('id, mood, note, created_at')
         .eq('patient_id', patientId)
-        .not('note', 'is', null)
         .order('created_at', { ascending: false })
         .limit(5),
       supabase
-        .from('daily_remarks')
+        .from('therapist_remarks')
         .select('date, content')
         .eq('patient_id', patientId)
+        .eq('therapist_id', profile.id)
         .order('date', { ascending: false })
         .limit(20),
     ])
@@ -160,9 +160,8 @@ export default function PatientDetailPage() {
   }
 
   // Stats
-  const totalCompleted = allTasks.filter((t) => t.status === 'completed').length
-  const totalAssigned = allTasks.length
-  const consistency = totalAssigned > 0 ? Math.round((totalCompleted / totalAssigned) * 100) : 0
+  // Last 30 days, this therapist's tasks only
+  const { percent: consistency, completed: totalCompleted, total: totalAssigned, missed } = calculateConsistency(allTasks)
   const streak = calculateStreak(allTasks)
 
   // Daily completion % for last 14 days
@@ -214,7 +213,12 @@ export default function PatientDetailPage() {
 
       {/* Section 1 — Calendar */}
       <Card>
-        <ReadOnlyCalendar patientId={patientId} therapistId={profile.id} refreshKey={calendarRefreshKey} />
+        <ReadOnlyCalendar
+          patientId={patientId}
+          therapistId={profile.id}
+          refreshKey={calendarRefreshKey}
+          onRemarkSaved={() => loadAll()}
+        />
       </Card>
 
       {/* Section 2 — Task Completion Stats */}
@@ -242,7 +246,7 @@ export default function PatientDetailPage() {
               </div>
               <div>
                 <p className="text-2xl font-extrabold text-text-primary font-heading">{consistency}%</p>
-                <p className="text-[10px] font-medium text-text-muted">Consistency</p>
+                <p className="text-[10px] font-medium text-text-muted">Consistency (30d)</p>
               </div>
             </div>
           </Card>
@@ -253,7 +257,7 @@ export default function PatientDetailPage() {
               </div>
               <div>
                 <p className="text-2xl font-extrabold text-text-primary font-heading">{totalAssigned}</p>
-                <p className="text-[10px] font-medium text-text-muted">Assigned</p>
+                <p className="text-[10px] font-medium text-text-muted">Assigned (30d)</p>
               </div>
             </div>
           </Card>
@@ -264,7 +268,7 @@ export default function PatientDetailPage() {
               </div>
               <div>
                 <p className="text-2xl font-extrabold text-text-primary font-heading">{totalCompleted}</p>
-                <p className="text-[10px] font-medium text-text-muted">Completed</p>
+                <p className="text-[10px] font-medium text-text-muted">Completed (30d){missed > 0 ? ` · ${missed} missed` : ''}</p>
               </div>
             </div>
           </Card>
@@ -318,7 +322,7 @@ export default function PatientDetailPage() {
         {feedbackNotes.length > 0 && (
           <div className="mt-4">
             <p className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-3">
-              Recent Feedback Notes
+              Recent Feedback
             </p>
             <PatientFeedbackList feedbackNotes={feedbackNotes} />
           </div>
@@ -337,7 +341,7 @@ export default function PatientDetailPage() {
           {remarks.length === 0 ? (
             <Card>
               <p className="text-sm text-text-muted text-center py-6">
-                No session remarks yet.
+                No remarks yet. Select a day on the calendar above to write one.
               </p>
             </Card>
           ) : (

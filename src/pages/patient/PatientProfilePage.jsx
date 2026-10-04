@@ -6,7 +6,7 @@ import { useNotifications } from '../../contexts/NotificationContext'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
-import { MessageSquare, LogOut, Edit3, Check } from 'lucide-react'
+import { LogOut, Edit3, Check } from 'lucide-react'
 
 export default function PatientProfilePage() {
   const { profile, signOut, refreshProfile } = useAuth()
@@ -14,7 +14,7 @@ export default function PatientProfilePage() {
   const navigate = useNavigate()
   const [therapist, setTherapist] = useState(null)
   const [editing, setEditing] = useState(false)
-  const [form, setForm] = useState({ full_name: '', condition: '' })
+  const [form, setForm] = useState({ full_name: '' })
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -22,7 +22,7 @@ export default function PatientProfilePage() {
     let cancelled = false
 
     async function init() {
-      setForm({ full_name: profile.full_name || '', condition: profile.condition || '' })
+      setForm({ full_name: profile.full_name || '' })
       const { data, error } = await supabase
         .from('patient_assignments')
         .select('assigned_to, profiles!patient_assignments_assigned_to_fkey(id, full_name, role)')
@@ -39,10 +39,11 @@ export default function PatientProfilePage() {
   }, [profile])
 
   async function handleSave() {
+    if (!form.full_name.trim()) return
     setSaving(true)
     const { error } = await supabase
       .from('profiles')
-      .update({ full_name: form.full_name, condition: form.condition || null })
+      .update({ full_name: form.full_name.trim() })
       .eq('id', profile.id)
     if (error) {
       showToast('Failed to save profile. Please try again.', 'task_overdue')
@@ -71,32 +72,21 @@ export default function PatientProfilePage() {
           </div>
           <div className="flex-1">
             {editing ? (
-              <div className="space-y-2">
-                <Input
-                  value={form.full_name}
-                  onChange={(e) => setForm({ ...form, full_name: e.target.value })}
-                  placeholder="Full name"
-                />
-                <Input
-                  value={form.condition}
-                  onChange={(e) => setForm({ ...form, condition: e.target.value })}
-                  placeholder="Condition / diagnosis"
-                />
-              </div>
+              <Input
+                value={form.full_name}
+                onChange={(e) => setForm({ ...form, full_name: e.target.value })}
+                placeholder="Full name"
+                aria-label="Full name"
+              />
             ) : (
               <>
                 <p className="text-lg font-bold text-text-primary">{profile?.full_name}</p>
-                {profile?.condition && (
-                  <p className="text-sm text-text-secondary">{profile.condition}</p>
-                )}
-                {!profile?.condition && (
-                  <p className="text-sm text-text-muted italic">No condition set</p>
-                )}
+                <p className="text-sm text-text-muted">{profile?.email}</p>
               </>
             )}
           </div>
           {editing ? (
-            <Button size="sm" onClick={handleSave} disabled={saving}>
+            <Button size="sm" onClick={handleSave} disabled={saving || !form.full_name.trim()}>
               <Check size={14} /> {saving ? 'Saving...' : 'Save'}
             </Button>
           ) : (
@@ -113,22 +103,6 @@ export default function PatientProfilePage() {
           </div>
         )}
       </Card>
-
-      {/* Message Therapist */}
-      {therapist && (
-        <button
-          onClick={() => navigate(`/patient/messages/${therapist.id}`)}
-          className="w-full flex items-center gap-3 p-4 bg-surface-card rounded-2xl border border-border-light hover:bg-surface-alt transition-colors cursor-pointer"
-        >
-          <div className="p-2.5 rounded-xl bg-primary-container text-primary">
-            <MessageSquare size={18} />
-          </div>
-          <div className="text-left">
-            <p className="text-sm font-semibold text-text-primary">Message your Therapist</p>
-            <p className="text-xs text-text-muted">Send a direct message</p>
-          </div>
-        </button>
-      )}
 
       {/* Sign Out */}
       <button

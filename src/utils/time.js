@@ -44,3 +44,18 @@ export function formatTime(dateStr) {
   }
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
+
+export function formatLongDate(date = new Date()) {
+  return date.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
+
+/** "9:00 AM" from a DB time string like "09:00:00" */
+export function formatClock(timeStr) {
+  if (!timeStr) return ''
+  return new Date(`2000-01-01T${timeStr}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+}

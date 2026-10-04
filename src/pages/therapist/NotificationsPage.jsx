@@ -5,9 +5,10 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useNotifications } from '../../contexts/NotificationContext'
 import { useCachedState, hasCache } from '../../hooks/useCachedState'
 import { formatRelativeTime } from '../../utils/time'
+import { getNotificationPath } from '../../utils/notificationNav'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
-import { Bell, CheckCircle, AlertTriangle, MessageSquare, Mail, X, Send } from 'lucide-react'
+import { Bell, CheckCircle, AlertTriangle, MessageSquare, Mail, X, Send, Clock, StickyNote } from 'lucide-react'
 
 const TYPE_CONFIG = {
   task_completed: { icon: CheckCircle, color: 'text-success', bg: 'bg-success-bg' },
@@ -15,14 +16,17 @@ const TYPE_CONFIG = {
   task_comment: { icon: MessageSquare, color: 'text-primary', bg: 'bg-primary-container' },
   new_message: { icon: Mail, color: 'text-tertiary', bg: 'bg-tertiary-container' },
   new_task: { icon: Bell, color: 'text-primary', bg: 'bg-primary-container' },
+  task_due_soon: { icon: Clock, color: 'text-warning', bg: 'bg-warning-bg' },
+  new_remark: { icon: StickyNote, color: 'text-primary', bg: 'bg-primary-container' },
 }
 
 export default function NotificationsPage() {
   const { profile } = useAuth()
-  const { decrementCount, showToast } = useNotifications()
+  const { decrementCount, showToast, markAllSeen } = useNotifications()
   const navigate = useNavigate()
   const cacheKey = `${profile?.role}-notifications`
-  const [notifications, setNotifications] = useCachedState(cacheKey, [])
+  const [cachedNotifications, setNotifications] = useCachedState(cacheKey, [])
+  const notifications = Array.isArray(cachedNotifications) ? cachedNotifications : []
   const [loading, setLoading] = useState(() => !hasCache(cacheKey))
   const [replyingTo, setReplyingTo] = useState(null)
   const [replyText, setReplyText] = useState('')
@@ -32,7 +36,7 @@ export default function NotificationsPage() {
   const NOTIF_PAGE_SIZE = 50
 
   async function loadNotifications(cancelled) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('notifications')
       .select('id, content, type, patient_id, reference_id, created_at')
       .eq('recipient_id', profile.id)
@@ -40,6 +44,7 @@ export default function NotificationsPage() {
       .order('created_at', { ascending: false })
       .limit(NOTIF_PAGE_SIZE)
     if (cancelled) return
+    if (error) console.error('Failed to load notifications:', error.message)
     setNotifications(data || [])
     setHasMore((data || []).length === NOTIF_PAGE_SIZE)
     setLoading(false)
@@ -68,10 +73,16 @@ export default function NotificationsPage() {
     let cancelled = false
 
     async function init() {
-      if (profile.role === 'therapist') {
-        await supabase.rpc('check_overdue_tasks', { p_therapist_id: profile.id })
+      try {
+        if (profile.role === 'therapist') {
+          await supabase.rpc('check_overdue_tasks', { p_therapist_id: profile.id })
+        }
+      } catch (err) {
+        console.error('Overdue check failed:', err)
       }
-      if (!cancelled) loadNotifications(cancelled)
+      if (!cancelled) await loadNotifications(cancelled)
+      // Opening this tab clears the red badge
+      if (!cancelled) markAllSeen()
     }
 
     init()
@@ -83,7 +94,8 @@ export default function NotificationsPage() {
     if (!profile) return
 
     const channel = supabase
-      .channel('page-notifications')
+      // Unique name: reusing a channel name before the old one is removed throws
+      .channel(`page-notifications-${Math.random().toString(36).slice(2)}`)
       .on(
         'postgres_changes',
         {
@@ -93,7 +105,9 @@ export default function NotificationsPage() {
           filter: `recipient_id=eq.${profile.id}`,
         },
         (payload) => {
-          setNotifications((prev) => [payload.new, ...prev])
+          setNotifications((prev) => [payload.new, ...(Array.isArray(prev) ? prev : []).filter((n) => n.id !== payload.new.id)])
+          // The user is looking at it, so it is already seen
+          markAllSeen()
         }
       )
       .subscribe()
@@ -121,6 +135,10 @@ export default function NotificationsPage() {
 
     setNotifications((prev) => prev.filter((n) => n.id !== id))
     decrementCount()
+  }
+
+  async function openNotification(n) {
+    navigate(await getNotificationPath(n, profile?.role))
   }
 
   async function handleReply(notification) {
@@ -209,7 +227,12 @@ export default function NotificationsPage() {
                     <Icon size={18} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-text-primary">{n.content}</p>
+                    <button
+                      onClick={() => openNotification(n)}
+                      className="text-sm text-text-primary text-left hover:text-primary cursor-pointer"
+                    >
+                      {n.content}
+                    </button>
                     <p className="text-xs text-text-muted mt-1">{formatRelativeTime(n.created_at)}</p>
 
                     {/* Reply section for task_comment and new_message */}
@@ -252,25 +275,7 @@ export default function NotificationsPage() {
                               Reply
                             </button>
                             <button
-                              onClick={async () => {
-                                if (profile?.role === 'therapist') {
-                                  navigate(`/therapist/messages/${n.patient_id}`)
-                                } else {
-                                  // For patients: look up who sent the message so we can open the right thread
-                                  if (n.type === 'new_message' && n.reference_id) {
-                                    const { data: msg } = await supabase
-                                      .from('messages')
-                                      .select('sender_id')
-                                      .eq('id', n.reference_id)
-                                      .single()
-                                    if (msg) {
-                                      navigate(`/patient/messages/${msg.sender_id}`)
-                                      return
-                                    }
-                                  }
-                                  navigate(`/patient/notifications`)
-                                }
-                              }}
+                              onClick={() => openNotification(n)}
                               className="text-xs font-semibold text-text-muted hover:text-primary cursor-pointer"
                             >
                               Open thread

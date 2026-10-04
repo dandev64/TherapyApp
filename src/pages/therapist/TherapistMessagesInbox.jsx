@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { useNotifications } from '../../contexts/NotificationContext'
 import { formatTime } from '../../utils/time'
 import Card from '../../components/ui/Card'
 import { Search } from 'lucide-react'
 
 export default function TherapistMessagesInbox() {
   const { profile } = useAuth()
+  const { messageTick } = useNotifications()
   const navigate = useNavigate()
   const [conversations, setConversations] = useState([])
   const [loading, setLoading] = useState(true)
@@ -71,7 +73,8 @@ export default function TherapistMessagesInbox() {
 
     loadConversations()
     return () => { cancelled = true }
-  }, [profile])
+    // Reload when a new message arrives (messageTick)
+  }, [profile, messageTick])
 
   const filtered = conversations.filter((c) =>
     c.patient?.full_name?.toLowerCase().includes(search.toLowerCase())

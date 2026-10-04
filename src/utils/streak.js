@@ -59,3 +59,33 @@ export function getTodayProgress(taskAssignments) {
   const completed = todayTasks.filter((t) => t.status === 'completed').length
   return { total, completed, percent: total > 0 ? Math.round((completed / total) * 100) : 0 }
 }
+
+export const CONSISTENCY_WINDOW_DAYS = 30
+
+/** First date (YYYY-MM-DD) of the rolling consistency window, e.g. Mar 18 when today is Apr 18. */
+export function consistencyWindowStart() {
+  const d = new Date()
+  d.setDate(d.getDate() - CONSISTENCY_WINDOW_DAYS)
+  return toDateStr(d)
+}
+
+/**
+ * Consistency over the last 30 days up to and including today.
+ * Future-dated tasks are ignored. `missed` = past days' tasks never completed.
+ */
+export function calculateConsistency(taskAssignments) {
+  const start = consistencyWindowStart()
+  const today = toDateStr(new Date())
+  const inWindow = taskAssignments.filter(
+    (t) => t.assigned_date >= start && t.assigned_date <= today && !t.is_rest_day
+  )
+  const completed = inWindow.filter((t) => t.status === 'completed').length
+  const missed = inWindow.filter((t) => t.assigned_date < today && t.status !== 'completed').length
+  const total = inWindow.length
+  return {
+    percent: total > 0 ? Math.round((completed / total) * 100) : 0,
+    completed,
+    missed,
+    total,
+  }
+}

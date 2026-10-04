@@ -36,7 +36,7 @@ export default function PatientCard({ patient, onClick }) {
             <p className="text-xs text-text-muted mt-0.5 truncate">{patient.condition}</p>
           )}
 
-          <div className="flex items-center gap-4 mt-2">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2">
             <span className="text-xs text-text-secondary">
               <span className="font-bold text-text-primary">{patient.completedToday}</span>
               /{patient.totalToday} today
@@ -47,9 +47,14 @@ export default function PatientCard({ patient, onClick }) {
                 <span className="font-bold text-text-primary">{patient.streak}</span>
               </span>
             )}
-            <span className="text-xs text-text-secondary">
+            <span className="text-xs text-text-secondary" title="Last 30 days">
               <span className="font-bold text-text-primary">{patient.consistency}%</span> consistency
             </span>
+            {patient.missed > 0 && (
+              <span className="text-xs text-red-600">
+                <span className="font-bold">{patient.missed}</span> missed
+              </span>
+            )}
           </div>
 
           {noTasks && (

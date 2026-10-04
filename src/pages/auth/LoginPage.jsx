@@ -3,6 +3,7 @@ import { Link, Navigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../lib/supabase'
 import Input from '../../components/ui/Input'
+import PasswordInput from '../../components/ui/PasswordInput'
 import Button from '../../components/ui/Button'
 
 export default function LoginPage() {
@@ -28,7 +29,11 @@ export default function LoginPage() {
     setLoading(false)
 
     if (err) {
-      setError(err.message)
+      setError(
+        /not confirmed/i.test(err.message)
+          ? 'Please confirm your email first. Check your inbox for the HabitOT confirmation link.'
+          : err.message
+      )
     }
     // AuthContext will update user/profile, triggering the redirect at the top of this component
   }
@@ -81,9 +86,8 @@ export default function LoginPage() {
               onChange={(e) => setEmail(e.target.value)}
               required
             />
-            <Input
+            <PasswordInput
               label="Password"
-              type="password"
               placeholder="Your password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}

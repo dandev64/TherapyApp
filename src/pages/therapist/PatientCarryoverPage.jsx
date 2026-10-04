@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCachedState, hasCache } from '../../hooks/useCachedState'
-import { calculateStreak, toDateStr } from '../../utils/streak'
+import { calculateStreak, calculateConsistency, toDateStr } from '../../utils/streak'
 import PatientCard from '../../components/therapist/PatientCard'
 import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
@@ -78,8 +78,8 @@ export default function PatientCarryoverPage() {
     const patientDetails = (assignments || []).map((a) => {
       const todayTasks = todayByPatient[a.patient_id] || []
       const allTasks = allByPatient[a.patient_id] || []
-      const totalCompleted = allTasks.filter((t) => t.status === 'completed').length
-      const consistency = allTasks.length > 0 ? Math.round((totalCompleted / allTasks.length) * 100) : 0
+      // Last 30 days, this therapist's tasks only (queries filter by therapist_id)
+      const { percent: consistency, missed } = calculateConsistency(allTasks)
 
       return {
         ...a.profiles,
@@ -87,6 +87,7 @@ export default function PatientCarryoverPage() {
         completedToday: todayTasks.filter((t) => t.status === 'completed').length,
         streak: calculateStreak(allTasks),
         consistency,
+        missed,
       }
     })
 

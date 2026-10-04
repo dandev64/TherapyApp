@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCachedState, hasCache } from '../../hooks/useCachedState'
 import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus'
 import { toDateStr } from '../../utils/streak'
-import { ChevronLeft, ChevronRight, CheckCircle, Circle, Clock } from 'lucide-react'
-import Badge from '../../components/ui/Badge'
+import { formatClock } from '../../utils/time'
+import { ChevronLeft, ChevronRight, CheckCircle, Lock } from 'lucide-react'
 
 const DAY_HEADERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const FULL_DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
@@ -15,15 +15,23 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 
 export default function SchedulePage() {
   const { profile } = useAuth()
   const navigate = useNavigate()
+  // ?date=YYYY-MM-DD opens the schedule on that day (used by notifications)
+  const [searchParams] = useSearchParams()
+  const dateParam = /^\d{4}-\d{2}-\d{2}$/.test(searchParams.get('date') || '') ? searchParams.get('date') : null
   const [currentMonth, setCurrentMonth] = useState(() => {
-    const now = new Date()
-    return { year: now.getFullYear(), month: now.getMonth() }
+    const d = dateParam ? new Date(dateParam + 'T00:00:00') : new Date()
+    return { year: d.getFullYear(), month: d.getMonth() }
   })
-  const [selectedDate, setSelectedDate] = useState(toDateStr(new Date()))
+  const [selectedDate, setSelectedDate] = useState(dateParam || toDateStr(new Date()))
   const [tasks, setTasks] = useCachedState('patient-schedule-tasks', [])
-  const [remarks, setRemarks] = useState({})
-  const [remarkText, setRemarkText] = useState('')
-  const [remarkSaving, setRemarkSaving] = useState(false)
+
+  // Follow ?date= changes while already on this page
+  useEffect(() => {
+    if (!dateParam) return
+    const d = new Date(dateParam + 'T00:00:00')
+    setCurrentMonth({ year: d.getFullYear(), month: d.getMonth() })
+    setSelectedDate(dateParam)
+  }, [dateParam])
   const [loading, setLoading] = useState(() => !hasCache('patient-schedule-tasks'))
   const [error, setError] = useState(null)
   const refreshKey = useRefreshOnFocus()
@@ -38,42 +46,25 @@ export default function SchedulePage() {
     const startOfMonth = toDateStr(new Date(year, month, 1))
     const endOfMonth = toDateStr(new Date(year, month + 1, 0))
 
-    Promise.all([
-      supabase
-        .from('task_assignments')
-        .select('*')
-        .eq('patient_id', profile.id)
-        .gte('assigned_date', startOfMonth)
-        .lte('assigned_date', endOfMonth)
-        .order('created_at', { ascending: true }),
-      supabase
-        .from('daily_remarks')
-        .select('id, date, content')
-        .eq('patient_id', profile.id)
-        .gte('date', startOfMonth)
-        .lte('date', endOfMonth),
-    ]).then(([tasksRes, remarksRes]) => {
-      if (tasksRes.error || remarksRes.error) {
-        setError('Failed to load schedule. Please try again.')
+    supabase
+      .from('task_assignments')
+      .select('*')
+      .eq('patient_id', profile.id)
+      .gte('assigned_date', startOfMonth)
+      .lte('assigned_date', endOfMonth)
+      .order('assigned_time', { ascending: true })
+      .then(({ data, error: err }) => {
+        if (err) {
+          setError('Failed to load schedule. Please try again.')
+          setLoading(false)
+          return
+        }
+        setError(null)
+        setTasks(data || [])
         setLoading(false)
-        return
-      }
-      setError(null)
-      setTasks(tasksRes.data || [])
-      const remarksMap = {}
-      ;(remarksRes.data || []).forEach((r) => {
-        remarksMap[r.date] = r
       })
-      setRemarks(remarksMap)
-      setLoading(false)
-    })
   }, [profile, currentMonth, refreshKey])
   /* eslint-enable react-hooks/exhaustive-deps */
-
-  // Update remark text when selected date changes
-  useEffect(() => {
-    setRemarkText(remarks[selectedDate]?.content || '')
-  }, [selectedDate, remarks])
 
   // Group tasks by date
   const tasksByDate = useMemo(() => {
@@ -93,6 +84,8 @@ export default function SchedulePage() {
   const firstDay = new Date(year, month, 1).getDay()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1)
+  const now = new Date()
+  const isCurrentMonth = year === now.getFullYear() && month === now.getMonth()
 
   function prevMonth() {
     setCurrentMonth((p) => (p.month === 0 ? { year: p.year - 1, month: 11 } : { year: p.year, month: p.month - 1 }))
@@ -106,32 +99,12 @@ export default function SchedulePage() {
     setSelectedDate(toDateStr(now))
   }
 
-  async function saveRemark() {
-    if (!remarkText.trim()) return
-    setRemarkSaving(true)
-    const existing = remarks[selectedDate]
-    let err
-    if (existing) {
-      ({ error: err } = await supabase.from('daily_remarks').update({ content: remarkText.trim() }).eq('id', existing.id))
-    } else {
-      ({ error: err } = await supabase.from('daily_remarks').insert({
-        patient_id: profile.id,
-        date: selectedDate,
-        content: remarkText.trim(),
-      }))
-    }
-    if (err) { setError('Failed to save remark.'); setRemarkSaving(false); return }
-    setRemarks((prev) => ({
-      ...prev,
-      [selectedDate]: { ...prev[selectedDate], content: remarkText.trim(), date: selectedDate },
-    }))
-    setRemarkSaving(false)
-  }
-
   // Parse selected date for display
   const selDateObj = new Date(selectedDate + 'T00:00:00')
   const selDayName = FULL_DAYS[selDateObj.getDay()]
   const selDayNum = selDateObj.getDate()
+  // Tasks on future days are view-only
+  const isFutureDay = selectedDate > todayStr
 
   if (loading) {
     return (
@@ -166,9 +139,10 @@ export default function SchedulePage() {
           </button>
           <button
             onClick={goToday}
-            className="px-4 py-1.5 text-sm font-semibold text-text-primary hover:bg-surface-alt rounded-full transition-colors cursor-pointer"
+            title="Go to today"
+            className="px-4 py-1.5 min-w-[4.5rem] text-sm font-semibold text-text-primary hover:bg-surface-alt rounded-full transition-colors cursor-pointer"
           >
-            Today
+            {isCurrentMonth ? 'Today' : MONTHS[month].slice(0, 3)}
           </button>
           <button
             onClick={nextMonth}
@@ -291,6 +265,8 @@ export default function SchedulePage() {
                     <div className="absolute left-3 top-4">
                       {isDone ? (
                         <CheckCircle size={16} className="text-secondary" style={{ fill: 'currentColor', stroke: 'var(--color-surface)' }} />
+                      ) : isFutureDay ? (
+                        <Lock size={14} className="text-text-muted" />
                       ) : (
                         <div className="w-4 h-4 rounded-full border-2 border-primary/20" />
                       )}
@@ -306,9 +282,7 @@ export default function SchedulePage() {
                           </p>
                         )}
                         <p className="text-sm text-on-surface-variant">
-                          {task.assigned_time
-                            ? new Date(`2000-01-01T${task.assigned_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-                            : '—'}
+                          {task.assigned_time ? formatClock(task.assigned_time) : '—'}
                         </p>
                       </div>
                       <ChevronRight size={14} className="text-text-muted shrink-0" />
@@ -323,28 +297,14 @@ export default function SchedulePage() {
             <p className="text-sm text-outline mt-6">No tasks assigned for this day.</p>
           )}
 
-          {/* Day's Remarks */}
-          <div className="mt-6 bg-surface-container-low rounded-2xl p-4">
-            <p className="text-xs font-bold text-outline uppercase tracking-wider mb-2">Remarks</p>
-            <textarea
-              className="w-full text-sm text-text-primary bg-transparent resize-none focus:outline-none placeholder:text-text-muted"
-              rows={3}
-              placeholder="How was your day?..."
-              value={remarkText}
-              onChange={(e) => setRemarkText(e.target.value)}
-              maxLength={2000}
-            />
-            <button
-              onClick={saveRemark}
-              disabled={remarkSaving || !remarkText.trim()}
-              className="mt-2 text-xs font-semibold text-primary hover:underline disabled:opacity-50 cursor-pointer"
-            >
-              {remarkSaving ? 'Saving...' : 'Save'}
-            </button>
-          </div>
+          {isFutureDay && selectedTasks.length > 0 && (
+            <p className="mt-6 text-xs text-text-muted flex items-center gap-1.5">
+              <Lock size={12} /> These tasks open on their scheduled day.
+            </p>
+          )}
 
           {/* Start Tasks Button */}
-          {selectedTasks.length > 0 && selectedTasks.some((t) => t.status !== 'completed') && (
+          {!isFutureDay && selectedTasks.length > 0 && selectedTasks.some((t) => t.status !== 'completed') && (
             <button
               onClick={() => {
                 const next = selectedTasks.find((t) => t.status !== 'completed')

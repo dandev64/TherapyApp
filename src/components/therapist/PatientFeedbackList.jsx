@@ -5,7 +5,7 @@ export default function PatientFeedbackList({ feedbackNotes }) {
   if (feedbackNotes.length === 0) {
     return (
       <p className="text-sm text-text-muted text-center py-6">
-        No feedback notes yet.
+        No feedback yet.
       </p>
     )
   }
@@ -29,7 +29,11 @@ export default function PatientFeedbackList({ feedbackNotes }) {
                     })}
                   </span>
                 </div>
-                <p className="text-sm text-text-primary mt-1">{f.note}</p>
+                {f.note ? (
+                  <p className="text-sm text-text-primary mt-1">{f.note}</p>
+                ) : (
+                  <p className="text-xs text-text-muted italic mt-1">Mood only, no comment</p>
+                )}
               </div>
             </div>
           </Card>

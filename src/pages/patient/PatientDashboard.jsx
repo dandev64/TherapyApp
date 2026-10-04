@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useCachedState, hasCache } from '../../hooks/useCachedState'
 import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus'
 import { calculateStreak, toDateStr } from '../../utils/streak'
-import { getTimeOfDay } from '../../utils/time'
+import { getTimeOfDay, formatLongDate } from '../../utils/time'
 import Card from '../../components/ui/Card'
 import Badge from '../../components/ui/Badge'
 import Button from '../../components/ui/Button'
@@ -22,6 +22,7 @@ import {
   AlertTriangle,
   CheckSquare,
   ChevronRight,
+  StickyNote,
 } from 'lucide-react'
 
 const timeIcons = {
@@ -32,7 +33,7 @@ const timeIcons = {
 
 const statusConfig = {
   pending: { icon: Circle, label: 'Start', next: 'in_progress' },
-  in_progress: { icon: PlayCircle, label: 'Complete', next: 'completed' },
+  in_progress: { icon: PlayCircle, label: 'Continue', next: 'completed' },
   completed: { icon: CheckCircle, label: 'Done', next: null },
 }
 
@@ -41,6 +42,7 @@ export default function PatientDashboard() {
   const navigate = useNavigate()
   const [tasks, setTasks] = useCachedState('patient-tasks', [])
   const [allTasks, setAllTasks] = useCachedState('patient-streak-tasks', [])
+  const [remarks, setRemarks] = useCachedState('patient-therapist-remarks', [])
   const [loading, setLoading] = useState(() => !hasCache('patient-tasks'))
   const [error, setError] = useState(null)
   const refreshKey = useRefreshOnFocus()
@@ -73,12 +75,25 @@ export default function PatientDashboard() {
     if (!err) setAllTasks(data || [])
   }
 
+  async function loadRemarks(cancelled = false) {
+    const { data, error: err } = await supabase
+      .from('therapist_remarks')
+      .select('id, date, content, therapist:profiles!therapist_remarks_therapist_id_fkey(full_name)')
+      .eq('patient_id', profile.id)
+      .order('date', { ascending: false })
+      .limit(10)
+    if (cancelled) return
+    if (err) console.error('Failed to load remarks:', err.message)
+    else setRemarks(data || [])
+  }
+
   /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (!profile) return
     let cancelled = false
     loadTasks(cancelled)
     loadStreakData(cancelled)
+    loadRemarks(cancelled)
     return () => { cancelled = true }
   }, [profile, refreshKey])
   /* eslint-enable react-hooks/exhaustive-deps */
@@ -128,6 +143,7 @@ export default function PatientDashboard() {
         </div>
       )}
       <div>
+        <p className="text-sm font-semibold text-primary">{formatLongDate()}</p>
         <div className="flex items-center gap-3">
           <h2 className="text-3xl font-extrabold text-text-primary tracking-tight">
             Good {getTimeOfDay()}, {profile?.full_name?.split(' ')[0]}
@@ -286,6 +302,39 @@ export default function PatientDashboard() {
           )
         })
       )}
+
+      {/* Therapy Session Remarks (written by the therapist) */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <StickyNote size={16} className="text-text-muted" />
+          <h3 className="text-sm font-bold text-text-secondary uppercase tracking-wider">
+            Therapy Session Remarks
+          </h3>
+        </div>
+        {remarks.length === 0 ? (
+          <Card>
+            <p className="text-sm text-text-muted text-center py-4">
+              No remarks from your therapist yet.
+            </p>
+          </Card>
+        ) : (
+          <div className="space-y-3">
+            {remarks.map((r) => (
+              <Card key={r.id} className="!p-4">
+                <p className="text-xs font-semibold text-text-muted mb-1">
+                  {new Date(r.date + 'T00:00:00').toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    month: 'short',
+                    day: 'numeric',
+                  })}
+                  {r.therapist?.full_name && ` · ${r.therapist.full_name}`}
+                </p>
+                <p className="text-sm text-text-primary whitespace-pre-wrap">{r.content}</p>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Activity Timeline */}
       {tasks.some((t) => t.status === 'completed') && (

@@ -3,12 +3,12 @@ import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCachedState, hasCache } from '../../hooks/useCachedState'
-import { calculateStreak, toDateStr } from '../../utils/streak'
+import { calculateStreak, calculateConsistency, toDateStr } from '../../utils/streak'
 import PatientMoodChart, { MOOD_CONFIG } from '../../components/therapist/PatientMoodChart'
 import Card from '../../components/ui/Card'
 import { BarChart, Bar, XAxis, YAxis, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import { Users, ClipboardCheck, Target, FileText, Heart, AlertTriangle, Flame, TrendingUp } from 'lucide-react'
-import { getTimeOfDay } from '../../utils/time'
+import { getTimeOfDay, formatLongDate } from '../../utils/time'
 
 export default function TherapistDashboard() {
   const { profile } = useAuth()
@@ -103,8 +103,8 @@ export default function TherapistDashboard() {
     const patientDetails = patients.map((p) => {
       const todayTasks = todayByPatient[p.patient_id] || []
       const allTasks = allByPatient[p.patient_id] || []
-      const totalCompleted = allTasks.filter((t) => t.status === 'completed').length
-      const consistency = allTasks.length > 0 ? Math.round((totalCompleted / allTasks.length) * 100) : 0
+      // Last 30 days, this therapist's tasks only (queries filter by therapist_id)
+      const { percent: consistency, missed } = calculateConsistency(allTasks)
 
       return {
         ...p.profiles,
@@ -112,6 +112,7 @@ export default function TherapistDashboard() {
         completedToday: todayTasks.filter((t) => t.status === 'completed').length,
         streak: calculateStreak(allTasks),
         consistency,
+        missed,
       }
     })
 
@@ -206,7 +207,7 @@ export default function TherapistDashboard() {
   const statCards = useMemo(() => [
     { label: 'Patients', value: stats.patients, icon: Users, bgColor: 'bg-primary-container', color: 'text-primary' },
     { label: "Today's Tasks", value: `${stats.completedToday}/${stats.todayTasks}`, icon: ClipboardCheck, bgColor: 'bg-secondary-container', color: 'text-secondary' },
-    { label: 'Avg Consistency', value: `${stats.avgConsistency}%`, icon: Target, bgColor: 'bg-success-bg', color: 'text-success' },
+    { label: 'Avg Consistency (30d)', value: `${stats.avgConsistency}%`, icon: Target, bgColor: 'bg-success-bg', color: 'text-success' },
     { label: 'Caregiver Notes', value: stats.notes, icon: FileText, bgColor: 'bg-tertiary-container', color: 'text-tertiary' },
   ], [stats])
 
@@ -236,6 +237,7 @@ export default function TherapistDashboard() {
         </div>
       )}
       <header>
+        <p className="text-sm font-semibold text-primary">{formatLongDate()}</p>
         <h2 className="text-3xl font-extrabold text-text-primary tracking-tight">
           Good {getTimeOfDay()}, {profile?.full_name?.split(' ')[0]}
         </h2>
@@ -342,7 +344,7 @@ export default function TherapistDashboard() {
 
         {/* Mood Overview */}
         <Card className="!p-6">
-          <PatientMoodChart feedback={moodFeedback} title="Patient Moods" subtitle="(last 7 days)" />
+          <PatientMoodChart feedback={moodFeedback} title="All Patient Moods" subtitle="(last 7 days)" />
         </Card>
       </div>
 
@@ -365,7 +367,8 @@ export default function TherapistDashboard() {
                   <th className="text-left text-xs font-bold text-text-muted uppercase tracking-wider px-5 py-3">Patient</th>
                   <th className="text-center text-xs font-bold text-text-muted uppercase tracking-wider px-3 py-3">Today</th>
                   <th className="text-center text-xs font-bold text-text-muted uppercase tracking-wider px-3 py-3">Streak</th>
-                  <th className="text-center text-xs font-bold text-text-muted uppercase tracking-wider px-3 py-3">Consistency</th>
+                  <th className="text-center text-xs font-bold text-text-muted uppercase tracking-wider px-3 py-3">Missed</th>
+                  <th className="text-center text-xs font-bold text-text-muted uppercase tracking-wider px-3 py-3" title="Last 30 days">Consistency</th>
                 </tr>
               </thead>
               <tbody>
@@ -401,6 +404,11 @@ export default function TherapistDashboard() {
                         ) : (
                           <span className="text-xs text-text-muted">0</span>
                         )}
+                      </td>
+                      <td className="text-center px-3 py-3.5">
+                        <span className={`text-sm font-bold ${patient.missed > 0 ? 'text-red-500' : 'text-text-muted'}`}>
+                          {patient.missed || 0}
+                        </span>
                       </td>
                       <td className="text-center px-3 py-3.5">
                         <span className={`text-sm font-bold ${

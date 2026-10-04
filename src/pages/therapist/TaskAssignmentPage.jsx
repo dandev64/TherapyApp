@@ -8,7 +8,8 @@ import Input from '../../components/ui/Input'
 import Select from '../../components/ui/Select'
 import Badge from '../../components/ui/Badge'
 import Modal from '../../components/ui/Modal'
-import { Plus, CheckSquare, Trash2, MessageSquare, Clock, Camera } from 'lucide-react'
+import { Plus, CheckSquare, Trash2, MessageSquare, Clock, Camera, Pencil } from 'lucide-react'
+import ProofPhotos from '../../components/ProofPhotos'
 import { toDateStr } from '../../utils/streak'
 
 const MOOD_EMOJI = {
@@ -35,7 +36,10 @@ export default function TaskAssignmentPage() {
   const [error, setError] = useState(null)
   const [successMsg, setSuccessMsg] = useState('')
   const [selectedTask, setSelectedTask] = useState(null)
-  const [proofSignedUrl, setProofSignedUrl] = useState(null)
+  // Task being edited (null = creating a new one)
+  const [editingTask, setEditingTask] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleting, setDeleting] = useState(false)
   const PAGE_SIZE = 50
   const [hasMoreAssignments, setHasMoreAssignments] = useState(true)
   const [filterDate, setFilterDate] = useState(toDateStr(new Date()))
@@ -64,7 +68,7 @@ export default function TaskAssignmentPage() {
     const offset = append ? recentAssignments.length : 0
     const { data, error: err } = await supabase
       .from('task_assignments')
-      .select('id, title, description, assigned_date, assigned_time, status, requires_proof, proof_url, resource_url, patient_id, profiles!task_assignments_patient_id_fkey(full_name)')
+      .select('id, title, description, assigned_date, assigned_time, status, requires_proof, proof_url, proof_urls, resource_url, patient_id, profiles!task_assignments_patient_id_fkey(full_name)')
       .eq('therapist_id', profile.id)
       .order('assigned_date', { ascending: false })
       .order('created_at', { ascending: false })
@@ -104,9 +108,65 @@ export default function TaskAssignmentPage() {
   }, [profile])
   /* eslint-enable react-hooks/exhaustive-deps */
 
+  function emptyForm(patientId) {
+    return {
+      patient_id: patientId,
+      title: '',
+      description: '',
+      assigned_date: toDateStr(new Date()),
+      assigned_time: '09:00',
+      resource_url: '',
+      requires_proof: false,
+    }
+  }
+
+  function startEdit(task) {
+    setSelectedTask(null)
+    setEditingTask(task)
+    setForm({
+      patient_id: task.patient_id,
+      title: task.title || '',
+      description: task.description || '',
+      assigned_date: task.assigned_date,
+      assigned_time: task.assigned_time ? task.assigned_time.slice(0, 5) : '09:00',
+      resource_url: task.resource_url || '',
+      requires_proof: !!task.requires_proof,
+    })
+    setShowForm(true)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function closeForm() {
+    setShowForm(false)
+    setEditingTask(null)
+    setForm(emptyForm(form.patient_id))
+  }
+
+  async function handleUpdate() {
+    setLoading(true)
+    const { error: err } = await supabase
+      .from('task_assignments')
+      .update({
+        title: form.title,
+        description: form.description || null,
+        assigned_date: form.assigned_date,
+        assigned_time: form.assigned_time,
+        resource_url: form.resource_url || null,
+        requires_proof: form.requires_proof,
+      })
+      .eq('id', editingTask.id)
+    setLoading(false)
+    if (err) { setError('Failed to update task.'); return }
+    closeForm()
+    showSuccess('Task updated.')
+    setFilterDate(form.assigned_date)
+    loadRecentAssignments()
+  }
+
   async function handleAssign(e) {
     e.preventDefault()
     if (!form.patient_id || !form.title || !form.assigned_date || !form.assigned_time) return
+    if (editingTask) { handleUpdate(); return }
     setLoading(true)
 
     const { data: taskData, error: err } = await supabase.from('task_assignments').insert({
@@ -137,27 +197,23 @@ export default function TaskAssignmentPage() {
           assigned_date: form.assigned_date,
           assigned_time: form.assigned_time,
         },
-      }).then((res) => console.log('Email function response:', res))
-      .catch((err) => console.error('Email function error:', err))
+      }).catch((err) => console.error('Email function error:', err))
     }
-    setForm({
-      patient_id: form.patient_id,
-      title: '',
-      description: '',
-      assigned_date: toDateStr(new Date()),
-      assigned_time: '09:00',
-      resource_url: '',
-      requires_proof: false,
-    })
+    setForm(emptyForm(form.patient_id))
     setShowForm(false)
     showSuccess('Task assigned successfully.')
     setFilterDate(form.assigned_date)
     loadRecentAssignments()
   }
 
-  async function handleDelete(id) {
-    const { error: err } = await supabase.from('task_assignments').delete().eq('id', id)
+  async function confirmDelete() {
+    if (!deleteTarget) return
+    setDeleting(true)
+    const { error: err } = await supabase.from('task_assignments').delete().eq('id', deleteTarget.id)
+    setDeleting(false)
+    setDeleteTarget(null)
     if (err) { setError('Failed to delete assignment.'); return }
+    showSuccess('Task deleted.')
     loadRecentAssignments()
   }
 
@@ -168,30 +224,8 @@ export default function TaskAssignmentPage() {
     return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
   }
 
-  const openTaskDetail = useCallback(async (task) => {
+  const openTaskDetail = useCallback((task) => {
     setSelectedTask(task)
-    setProofSignedUrl(null)
-    if (task.proof_url) {
-      const isFullUrl = task.proof_url.startsWith('http')
-      if (isFullUrl) {
-        setProofSignedUrl(task.proof_url)
-      } else {
-        // Try signed URL first (private bucket)
-        const { data, error } = await supabase.storage
-          .from('task-proofs')
-          .createSignedUrl(task.proof_url, 3600)
-        if (data?.signedUrl) {
-          setProofSignedUrl(data.signedUrl)
-        } else {
-          // Fallback: try public URL in case bucket is still public
-          console.error('Signed URL failed, trying public URL:', error?.message)
-          const { data: pubData } = supabase.storage
-            .from('task-proofs')
-            .getPublicUrl(task.proof_url)
-          if (pubData?.publicUrl) setProofSignedUrl(pubData.publicUrl)
-        }
-      }
-    }
   }, [])
 
   const filteredAssignments = useMemo(() => {
@@ -241,7 +275,7 @@ export default function TaskAssignmentPage() {
             Create and assign tasks directly to patients
           </p>
         </div>
-        <Button onClick={() => setShowForm(!showForm)}>
+        <Button onClick={() => (showForm ? closeForm() : setShowForm(true))}>
           <Plus size={16} /> New Task
         </Button>
       </div>
@@ -249,6 +283,11 @@ export default function TaskAssignmentPage() {
       {showForm && (
         <Card>
           <form onSubmit={handleAssign} className="space-y-4">
+            {editingTask && (
+              <p className="text-sm font-bold text-text-primary">
+                Editing task for {editingTask.profiles?.full_name}
+              </p>
+            )}
             {patients.length === 0 ? (
               <p className="text-sm text-text-muted text-center py-4">
                 You have no patients assigned. Add a patient first.
@@ -257,6 +296,7 @@ export default function TaskAssignmentPage() {
               <>
                 <Select
                   label="Patient"
+                  disabled={!!editingTask}
                   value={form.patient_id}
                   onChange={(e) => setForm({ ...form, patient_id: e.target.value })}
                   options={patients.map((p) => ({ value: p.id, label: p.full_name }))}
@@ -317,9 +357,18 @@ export default function TaskAssignmentPage() {
                     Require proof of completion
                   </span>
                 </label>
-                <Button type="submit" disabled={loading} className="w-full">
-                  {loading ? 'Assigning...' : 'Assign Task'}
-                </Button>
+                <div className="flex gap-3">
+                  {editingTask && (
+                    <Button type="button" variant="secondary" className="flex-1" onClick={closeForm}>
+                      Cancel
+                    </Button>
+                  )}
+                  <Button type="submit" disabled={loading} className="flex-1">
+                    {editingTask
+                      ? (loading ? 'Saving...' : 'Save Changes')
+                      : (loading ? 'Assigning...' : 'Assign Task')}
+                  </Button>
+                </div>
               </>
             )}
           </form>
@@ -366,7 +415,7 @@ export default function TaskAssignmentPage() {
               <th className="text-left px-4 py-2.5 text-xs font-bold text-text-muted uppercase tracking-wider hidden md:table-cell">Time</th>
               <th className="text-left px-4 py-2.5 text-xs font-bold text-text-muted uppercase tracking-wider hidden md:table-cell">Proof</th>
               <th className="text-left px-4 py-2.5 text-xs font-bold text-text-muted uppercase tracking-wider">Status</th>
-              <th className="px-4 py-2.5 w-10"></th>
+              <th className="px-4 py-2.5 w-20"></th>
             </tr>
           </thead>
           <tbody>
@@ -399,16 +448,28 @@ export default function TaskAssignmentPage() {
                       <Badge color={a.status}>{a.status.replace('_', ' ')}</Badge>
                     </td>
                     <td className="px-4 py-3">
-                      {a.status !== 'completed' && (
+                      <div className="flex items-center justify-end gap-1">
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={(e) => { e.stopPropagation(); handleDelete(a.id) }}
-                          title="Delete assignment"
+                          onClick={(e) => { e.stopPropagation(); startEdit(a) }}
+                          title="Edit task"
+                          aria-label="Edit task"
                         >
-                          <Trash2 size={14} className="text-danger" />
+                          <Pencil size={14} />
                         </Button>
-                      )}
+                        {a.status !== 'completed' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => { e.stopPropagation(); setDeleteTarget(a) }}
+                            title="Delete task"
+                            aria-label="Delete task"
+                          >
+                            <Trash2 size={14} className="text-danger" />
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -468,6 +529,10 @@ export default function TaskAssignmentPage() {
               </div>
             )}
 
+            <Button variant="secondary" size="sm" onClick={() => startEdit(selectedTask)}>
+              <Pencil size={14} /> Edit task
+            </Button>
+
             {/* Patient completion data */}
             {selectedTask.status === 'completed' && (
               <div className="border-t border-border pt-4 space-y-3">
@@ -490,18 +555,34 @@ export default function TaskAssignmentPage() {
                   <p className="text-sm text-text-muted italic">No feedback submitted</p>
                 )}
 
-                {selectedTask.proof_url && proofSignedUrl && (
-                  <div>
-                    <p className="text-xs font-bold text-text-muted uppercase tracking-wider mb-2">Proof Photo</p>
-                    <a href={proofSignedUrl} target="_blank" rel="noopener noreferrer">
-                      <img src={proofSignedUrl} alt="Proof" className="w-full max-w-xs rounded-xl border border-border" loading="lazy" />
-                    </a>
-                  </div>
-                )}
+                <ProofPhotos task={selectedTask} />
               </div>
             )}
           </div>
         )}
+      </Modal>
+
+      {/* Delete confirmation */}
+      <Modal
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        title="Delete Task"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-text-primary">
+            Are you sure you want to delete <span className="font-bold">{deleteTarget?.title}</span>
+            {deleteTarget?.profiles?.full_name ? ` for ${deleteTarget.profiles.full_name}` : ''}?
+          </p>
+          <p className="text-xs text-text-muted">This cannot be undone.</p>
+          <div className="flex gap-3">
+            <Button variant="secondary" className="flex-1" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button variant="danger" className="flex-1" onClick={confirmDelete} disabled={deleting}>
+              {deleting ? 'Deleting...' : 'Delete Task'}
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   )
