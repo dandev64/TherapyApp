@@ -3,16 +3,22 @@
 // =============================================================================
 //
 // This Supabase Edge Function sends email reminders:
-//   1. PATIENT REMINDER (pg_cron) — runs every 15 min, checks for tasks due
-//      in the next 15 min that are not completed, and sends a reminder.
+//   1. DAILY DIGEST (pg_cron) — runs once at 7 AM Manila, finds every task due
+//      today and hands Resend one scheduled send per task, timed for an hour
+//      before that task is due. Resend holds the queue and delivers on time.
 //   2. TASK REMINDER IMMEDIATE — called by the frontend when a task is created
-//      less than 1 hour before its due time; sends a reminder right away.
+//      after the digest has already run; schedules (or sends) that one task.
+//
+// It used to poll every 15 minutes. That cost ~96 pg_net round trips a day and
+// was responsible for ~70% of all database execution time and 99.8% of write
+// IO, which exhausted the project's disk IO budget. One run a day does the
+// same job because Resend handles the waiting.
 //
 // ── How to activate ──────────────────────────────────────────────────────
 //   1. Sign up at https://resend.com and get an API key
 //   2. Set the secret:  supabase secrets set RESEND_API_KEY=re_xxxxx
 //   3. Deploy:  supabase functions deploy send-email-reminders
-//   4. Run the SQL in migration.sql (section 10) to set up pg_cron
+//   4. Run supabase/migration-2026-10-disk-io.sql to set up pg_cron
 // ─────────────────────────────────────────────────────────────────────────
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
@@ -25,21 +31,40 @@ const FROM_EMAIL = "HabitOT <notifications@itsbydan.com>";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+// Tasks store assigned_date/assigned_time as Manila wall-clock (UTC+8)
+const MANILA_OFFSET_MS = 8 * 60 * 60 * 1000;
+// How far ahead of a task its reminder goes out
+const LEAD_MS = 60 * 60 * 1000;
+
 // ── Email sender via Resend ─────────────────────────────────────────────
-async function sendEmail(to: string, subject: string, html: string) {
+// `sendAt` (ISO 8601) asks Resend to hold the email until then. Resend accepts
+// a schedule up to 30 days out; omitting it sends immediately.
+async function sendEmail(to: string, subject: string, html: string, sendAt?: string) {
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${RESEND_API_KEY}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ from: FROM_EMAIL, to, subject, html }),
+    body: JSON.stringify({
+      from: FROM_EMAIL,
+      to,
+      subject,
+      html,
+      ...(sendAt ? { scheduled_at: sendAt } : {}),
+    }),
   });
 
   if (!res.ok) {
     console.error("Resend error:", await res.text());
   }
   return res.ok;
+}
+
+// The UTC instant a task is due, from its Manila-local date and time
+function taskInstantUtc(date: string, time: string) {
+  const t = time.length === 5 ? `${time}:00` : time;
+  return new Date(new Date(`${date}T${t}Z`).getTime() - MANILA_OFFSET_MS);
 }
 
 // ── Prevent duplicate emails ────────────────────────────────────────────
@@ -97,39 +122,19 @@ function formatDate(date: string) {
   });
 }
 
-// ── 1. Patient reminder: tasks due in next 60 minutes (called by pg_cron) ──
-async function checkPatientReminders() {
+// ── 1. Daily digest: queue every reminder for today (called by pg_cron) ──
+async function scheduleTodaysReminders() {
   const now = new Date();
-  // Convert UTC to local time (UTC+8)
-  const localNow = new Date(now.getTime() + 8 * 60 * 60 * 1000);
-  const today = localNow.toISOString().split("T")[0];
-  const currentMinutes = localNow.getUTCHours() * 60 + localNow.getUTCMinutes();
+  const today = new Date(now.getTime() + MANILA_OFFSET_MS)
+    .toISOString()
+    .split("T")[0];
 
-  // Look for tasks due in the next 60 minutes (in local time)
-  const windowStart = currentMinutes;
-  const windowEnd = currentMinutes + 60;
-
-  const toHHMM = (totalMins: number) => {
-    const h = Math.floor(totalMins / 60) % 24;
-    const m = totalMins % 60;
-    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-  };
-
-  if (windowEnd >= 24 * 60) return;
-
-  const startTime = toHHMM(windowStart);
-  const endTime = toHHMM(windowEnd);
-
-  // Find tasks due in this window that are NOT completed
   const { data: tasks } = await supabase
     .from("task_assignments")
-    .select("id, title, assigned_date, assigned_time, patient_id")
+    .select("id, title, assigned_date, assigned_time, patient_id, publish_at")
     .eq("assigned_date", today)
     .neq("status", "completed")
-    // Skip tasks scheduled to be posted later
-    .or(`publish_at.is.null,publish_at.lte.${now.toISOString()}`)
-    .gte("assigned_time", startTime)
-    .lte("assigned_time", endTime);
+    .not("assigned_time", "is", null);
 
   if (!tasks || tasks.length === 0) return;
 
@@ -150,10 +155,16 @@ async function checkPatientReminders() {
   if (!patients || patients.length === 0) return;
 
   for (const patient of patients) {
-    const patientTasks = byPatient[patient.id];
-    if (!patientTasks || patientTasks.length === 0) continue;
+    for (const task of byPatient[patient.id] || []) {
+      const dueAt = taskInstantUtc(task.assigned_date, task.assigned_time);
+      // Already overdue by the time the digest runs — the in-app overdue
+      // notification covers this, so an email would only arrive late.
+      if (dueAt <= now) continue;
 
-    for (const task of patientTasks) {
+      // Don't email about a task the patient still can't see at send time
+      const sendAt = new Date(Math.max(dueAt.getTime() - LEAD_MS, now.getTime()));
+      if (task.publish_at && new Date(task.publish_at) > sendAt) continue;
+
       const emailType = `patient_task_reminder_${task.id}`;
       if (await alreadySent(patient.id, emailType, today)) continue;
 
@@ -164,16 +175,23 @@ async function checkPatientReminders() {
       const subject = `HabitOT — Reminder: "${task.title}" is due at ${fTime}`;
       const html = buildReminderHtml(firstName, task.title, fDate, fTime);
 
-      const sent = await sendEmail(patient.email, subject, html);
+      // Logged at schedule time, so a re-run today won't double-queue it
+      const sent = await sendEmail(patient.email, subject, html, sendAt.toISOString());
       if (sent) await logEmail(patient.id, emailType, today);
     }
   }
 }
 
-// ── 2. Immediate reminder: task created < 1 hour before due time ───────
+// ── 2. One-off reminder: task created after today's digest already ran ──
+// Schedules for an hour before the task, or sends now if that moment passed.
 async function sendTaskReminderImmediate(patientId: string, taskId: string, taskTitle: string, assignedDate: string, assignedTime: string) {
   const emailType = `patient_task_reminder_${taskId}`;
   if (await alreadySent(patientId, emailType, assignedDate)) return;
+
+  const now = new Date();
+  const dueAt = taskInstantUtc(assignedDate, assignedTime);
+  if (dueAt <= now) return;
+  const sendAt = new Date(Math.max(dueAt.getTime() - LEAD_MS, now.getTime()));
 
   const { data: patient } = await supabase
     .from("profiles")
@@ -190,7 +208,7 @@ async function sendTaskReminderImmediate(patientId: string, taskId: string, task
   const subject = `HabitOT — Reminder: "${taskTitle}" is due at ${fTime}`;
   const html = buildReminderHtml(firstName, taskTitle, fDate, fTime);
 
-  const sent = await sendEmail(patient.email, subject, html);
+  const sent = await sendEmail(patient.email, subject, html, sendAt.toISOString());
   if (sent) await logEmail(patientId, emailType, assignedDate);
 }
 
@@ -214,12 +232,12 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({ type: "all" }));
     const { type } = body;
 
-    // pg_cron calls this every 15 minutes
+    // pg_cron calls this once a day at 7 AM Manila
     if (type === "patient" || type === "all") {
-      await checkPatientReminders();
+      await scheduleTodaysReminders();
     }
 
-    // Frontend calls this when task is created < 1 hour before due time
+    // Frontend calls this when a task is created after the digest has run
     if (type === "task_reminder_immediate") {
       const { patient_id, task_id, title, assigned_date, assigned_time } = body;
       await sendTaskReminderImmediate(patient_id, task_id, title, assigned_date, assigned_time);

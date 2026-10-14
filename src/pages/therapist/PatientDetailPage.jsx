@@ -147,11 +147,12 @@ export default function PatientDetailPage() {
 
     if (err) { setAssigning(false); setAssignError('Failed to assign task.'); return }
 
-    // Send reminder email only if task is due within 1 hour (and not already past due)
-    // Otherwise, pg_cron (every 15 min) will check and send closer to due time
+    // The 7 AM digest queues every reminder for the day, so a task created for
+    // today after it ran has to be scheduled here. Later dates are picked up by
+    // that day's digest.
     const taskDue = new Date(`${assignForm.assigned_date}T${assignForm.assigned_time}:00`)
-    const minutesUntilDue = (taskDue - new Date()) / 60000
-    if (!publishAt && minutesUntilDue > 0 && minutesUntilDue < 60) {
+    const isToday = assignForm.assigned_date === toDateStr(new Date())
+    if (!publishAt && isToday && taskDue > new Date()) {
       supabase.functions.invoke('send-email-reminders', {
         body: {
           type: 'task_reminder_immediate',
