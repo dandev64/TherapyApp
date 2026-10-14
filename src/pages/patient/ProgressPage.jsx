@@ -44,13 +44,16 @@ export default function ProgressPage() {
   /* eslint-enable react-hooks/exhaustive-deps */
 
   const streak = calculateStreak(allTasks)
-  const { percent: consistency, completed, total } = calculateConsistency(allTasks)
+  const { percent: consistency } = calculateConsistency(allTasks)
 
-  // This week (last 7 days including today)
+  // This week (Sunday through Saturday of the current week)
+  const todayStr = toDateStr(new Date())
+  const weekStart = new Date()
+  weekStart.setDate(weekStart.getDate() - weekStart.getDay())
   const week = []
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date()
-    d.setDate(d.getDate() - i)
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weekStart)
+    d.setDate(weekStart.getDate() + i)
     const dateStr = toDateStr(d)
     const dayTasks = allTasks.filter((t) => t.assigned_date === dateStr)
     week.push({
@@ -59,7 +62,7 @@ export default function ProgressPage() {
       day: d.getDate(),
       total: dayTasks.length,
       done: dayTasks.filter((t) => t.status === 'completed').length,
-      isToday: i === 0,
+      isToday: dateStr === todayStr,
     })
   }
 
@@ -140,9 +143,6 @@ export default function ProgressPage() {
             )
           })}
         </div>
-        <p className="text-xs text-text-muted mt-4">
-          {completed} of {total} task{total !== 1 ? 's' : ''} completed in the last 30 days
-        </p>
       </Card>
     </div>
   )

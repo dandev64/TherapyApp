@@ -306,10 +306,6 @@ export default function TaskDetailPage() {
 
   return (
     <div className="space-y-6 max-w-lg mx-auto">
-      <button onClick={goBack} className="flex items-center gap-2 text-sm text-text-secondary hover:text-primary cursor-pointer">
-        <ArrowLeft size={16} /> Back
-      </button>
-
       <h2 className="text-2xl font-extrabold text-text-primary">{task.title}</h2>
 
       {/* Scheduled date & time */}

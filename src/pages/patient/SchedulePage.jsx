@@ -86,7 +86,6 @@ export default function SchedulePage() {
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1)
   const now = new Date()
-  const isCurrentMonth = year === now.getFullYear() && month === now.getMonth()
 
   function prevMonth() {
     setCurrentMonth((p) => (p.month === 0 ? { year: p.year - 1, month: 11 } : { year: p.year, month: p.month - 1 }))
@@ -143,7 +142,7 @@ export default function SchedulePage() {
             title="Go to today"
             className="px-4 py-2.5 min-w-[4.5rem] text-sm font-semibold text-text-primary hover:bg-surface-alt rounded-full transition-colors cursor-pointer"
           >
-            {isCurrentMonth ? 'Today' : MONTHS[month].slice(0, 3)}
+            {MONTHS[now.getMonth()].slice(0, 3)}
           </button>
           <button
             onClick={nextMonth}
