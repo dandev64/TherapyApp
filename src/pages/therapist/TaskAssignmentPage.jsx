@@ -424,6 +424,7 @@ export default function TaskAssignmentPage() {
           <input
             type="date"
             value={filterDate}
+            aria-label="Filter by date"
             onChange={(e) => setFilterDate(e.target.value)}
             className="px-3 py-1.5 rounded-lg border border-border text-sm bg-surface-card text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
           />
