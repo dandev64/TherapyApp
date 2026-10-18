@@ -64,9 +64,22 @@ Item IDs: B = bugs, Q = quick wins, L = logic, F = features.
 - **Reminders (F7, F8)**: cron `patient-inapp-reminders` (every 5 min) runs `generate_patient_task_reminders()` (due within 1 hour, and overdue today; skips unposted tasks).
 - **DB triggers**: message → notification for any sender; `notify_patient_new_task` (sets `reference_id`, skips scheduled tasks); `notify_new_remark`.
 
+## Round 2 (`HabitOT-Product-Development-Revisions-2-2.pdf`, 2026-10-18, commit bd2d9e0)
+Plan: `~/.claude/plans/create-a-plan-for-melodic-crescent.md`. Migration `supabase/migration-2026-10-revisions-2.sql` (+ `-verify.sql`) must be pasted by the user.
+- Dashboard cards are links → `/therapist/patients`, `/therapist/today` (TodayTasksPage), `/therapist/consistency` (ConsistencyPage, no sidebar entry), `/therapist/client-notes/recent`. Task Completion + Mood charts removed from the dashboard; they live on PatientDetailPage with a Week/Month/Overall `PeriodToggle`.
+- Timeframes (`src/utils/streak.js`): `getRange(period, offset, firstDate)` (week = Sun–Sat), `calculateConsistency(tasks, range?)` (no range = overall), `dailyCompletion`. Consistency = whole history; assigned/completed/missed = this week. Shared chart `components/therapist/CompletionChart.jsx`.
+- Naming: old `/therapist/notes` (task feedback) is now **Patient Feedback**; **Client Notes** = `caregiver_notes` at `/therapist/client-notes`, read via `therapist_read_at` + RPC `mark_client_note_read`. Dashboard card counts unread.
+- "No tasks for today" = `task_assignments` row with `is_rest_day = true`, no time (`utils/restDay.js`); excluded from counts everywhere; trigger skips its notification.
+- Multiple links stored newline-separated in `resource_url` (`getResourceLinks`, `joinLinks`); multiple dates insert one row per date (`utils/assignTask.js`, `components/therapist/TaskFields.jsx`).
+- Calendar colours: `dayStatus` / `DAY_STATUS_CLASS` in `utils/tasks.js` (green done, red incomplete for today/past only). "Incomplete" filter is derived (past + not completed).
+- Archive patients: `patient_assignments.archived_at` via RPC `set_patient_archived`; `utils/patients.js#fetchTherapistPatients` hides archived.
+- Notifications: X removed; Archive sets `read_at`, Inbox/Archived tabs; DELETE policy dropped.
+- Message search in `ChatThread.jsx` (ilike over the conversation, jump to result).
+- **Deferred:** video proof (client to confirm feasibility; photos ~110 KB each vs 20–60 MB per video).
+
 ## How to work / test
 - Read only the files relevant to the change, then run `npm run build` and `npx eslint src`.
-- New DB changes go in a new `supabase/migration-*.sql`; tell the user to run it (there's no CLI or service key here). Afterwards, check it was applied by selecting a new column via supabase-js.
+- New DB changes go in a new `supabase/migration-*.sql` plus a `-verify.sql`; the user pastes them into the SQL Editor after pushing. The Supabase CLI *is* authenticated and linked here (`supabase db query --linked -o table "..."`, `supabase inspect db ...`, `supabase functions deploy`), so use it for read-only checks; don't run destructive SQL against production without asking.
 - Keep frontend changes working before a migration runs, e.g. `select('*')` and only send new columns when they're used.
 - Local run: `.env.local` (gitignored) points at the live project `afzprgdowymgvmxtrqzc`. Start with `npx vite --port 5199`.
 - Test accounts: `therapst1@gmail.com` (note the spelling) and `patient1@gmail.com`; ask the user for the password. They are linked (therapist ↔ patient).
