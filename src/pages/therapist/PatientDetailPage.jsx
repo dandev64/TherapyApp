@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from 'recharts'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { calculateStreak, calculateConsistency, toDateStr } from '../../utils/streak'
+import { calculateStreak, calculateConsistency, toDateStr, getRange, firstTaskDate, dailyCompletion } from '../../utils/streak'
+import { createTasksForDates, joinLinks } from '../../utils/assignTask'
+import PeriodToggle from '../../components/PeriodToggle'
+import CompletionChart from '../../components/therapist/CompletionChart'
+import { LinkListField, DateListField } from '../../components/therapist/TaskFields'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
@@ -16,6 +19,18 @@ import { formatPublishAt } from '../../utils/tasks'
 import {
   ArrowLeft, Flame, Target, CheckCircle, Calendar, ClipboardList, MessageSquare, Send,
 } from 'lucide-react'
+
+function emptyAssignForm() {
+  return {
+    title: '',
+    description: '',
+    dates: [toDateStr(new Date())],
+    assigned_time: '09:00',
+    links: [''],
+    requires_proof: false,
+    publish_at: '',
+  }
+}
 
 export default function PatientDetailPage() {
   const { patientId } = useParams()
@@ -31,27 +46,14 @@ export default function PatientDetailPage() {
 
   // Assign task state
   const [showAssign, setShowAssign] = useState(false)
-  const [assignForm, setAssignForm] = useState({
-    title: '',
-    description: '',
-    assigned_date: toDateStr(new Date()),
-    assigned_time: '09:00',
-    resource_url: '',
-    requires_proof: false,
-    publish_at: '',
-  })
+  const [assignForm, setAssignForm] = useState(emptyAssignForm)
+  const [period, setPeriod] = useState('week')
+  const [periodOffset, setPeriodOffset] = useState(0)
   const [assigning, setAssigning] = useState(false)
   const [assignError, setAssignError] = useState('')
   const [calendarRefreshKey, setCalendarRefreshKey] = useState(0)
 
   async function loadAll(cancelled = false) {
-    const thirtyDaysAgo = new Date()
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-    const thirtyDaysAgoStr = thirtyDaysAgo.toISOString()
-    const ninetyDaysAgo = new Date()
-    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
-    const ninetyDaysAgoStr = toDateStr(ninetyDaysAgo)
-
     const [patientRes, tasksRes, feedbackRes, notesRes, remarksRes] = await Promise.all([
       supabase
         .from('profiles')
@@ -60,16 +62,14 @@ export default function PatientDetailPage() {
         .single(),
       supabase
         .from('task_assignments')
-        .select('assigned_date, status')
+        .select('assigned_date, status, is_rest_day')
         .eq('patient_id', patientId)
         .eq('therapist_id', profile.id)
-        .gte('assigned_date', ninetyDaysAgoStr)
         .order('assigned_date', { ascending: false }),
       supabase
         .from('task_feedback')
         .select('mood, created_at')
-        .eq('patient_id', patientId)
-        .gte('created_at', thirtyDaysAgoStr),
+        .eq('patient_id', patientId),
       supabase
         .from('task_feedback')
         .select('id, mood, note, created_at')
@@ -104,27 +104,19 @@ export default function PatientDetailPage() {
   /* eslint-enable react-hooks/exhaustive-deps */
 
   function openAssignModal() {
-    setAssignForm({
-      title: '',
-      description: '',
-      assigned_date: toDateStr(new Date()),
-      assigned_time: '09:00',
-      resource_url: '',
-      requires_proof: false,
-      publish_at: '',
-    })
+    setAssignForm(emptyAssignForm())
     setAssignError('')
     setShowAssign(true)
   }
 
   async function handleAssign(e) {
     e.preventDefault()
-    if (!assignForm.title || !assignForm.assigned_date || !assignForm.assigned_time) return
+    if (!assignForm.title || !assignForm.dates.length || !assignForm.assigned_time) return
     let publishAt = null
     if (assignForm.publish_at) {
       const at = new Date(assignForm.publish_at)
       if (at <= new Date()) { setAssignError('The post time must be in the future.'); return }
-      if (at > new Date(`${assignForm.assigned_date}T${assignForm.assigned_time}:00`)) {
+      if (at > new Date(`${assignForm.dates[0]}T${assignForm.assigned_time}:00`)) {
         setAssignError("The post time must be before the task's scheduled date and time.")
         return
       }
@@ -133,38 +125,22 @@ export default function PatientDetailPage() {
     setAssignError('')
     setAssigning(true)
 
-    const { data: taskData, error: err } = await supabase.from('task_assignments').insert({
-      patient_id: patientId,
-      therapist_id: profile.id,
-      title: assignForm.title,
-      description: assignForm.description || null,
-      assigned_date: assignForm.assigned_date,
-      assigned_time: assignForm.assigned_time,
-      resource_url: assignForm.resource_url || null,
-      requires_proof: assignForm.requires_proof,
-      ...(publishAt ? { publish_at: publishAt } : {}),
-    }).select('id').single()
+    const { error: err } = await createTasksForDates({
+      dates: assignForm.dates,
+      publishAt,
+      fields: {
+        patient_id: patientId,
+        therapist_id: profile.id,
+        title: assignForm.title,
+        description: assignForm.description || null,
+        assigned_time: assignForm.assigned_time,
+        resource_url: joinLinks(assignForm.links),
+        requires_proof: assignForm.requires_proof,
+      },
+    })
 
-    if (err) { setAssigning(false); setAssignError('Failed to assign task.'); return }
-
-    // The 7 AM digest queues every reminder for the day, so a task created for
-    // today after it ran has to be scheduled here. Later dates are picked up by
-    // that day's digest.
-    const taskDue = new Date(`${assignForm.assigned_date}T${assignForm.assigned_time}:00`)
-    const isToday = assignForm.assigned_date === toDateStr(new Date())
-    if (!publishAt && isToday && taskDue > new Date()) {
-      supabase.functions.invoke('send-email-reminders', {
-        body: {
-          type: 'task_reminder_immediate',
-          patient_id: patientId,
-          task_id: taskData.id,
-          title: assignForm.title,
-          assigned_date: assignForm.assigned_date,
-          assigned_time: assignForm.assigned_time,
-        },
-      }).catch(() => {}) // fire-and-forget, don't block UI
-    }
     setAssigning(false)
+    if (err) { setAssignError('Failed to assign task.'); return }
     setShowAssign(false)
     setCalendarRefreshKey((k) => k + 1)
     loadAll()
@@ -178,26 +154,18 @@ export default function PatientDetailPage() {
     )
   }
 
-  // Stats
-  // Last 30 days, this therapist's tasks only
-  const { percent: consistency, completed: totalCompleted, total: totalAssigned, missed } = calculateConsistency(allTasks)
+  // Consistency covers the whole course of therapy; counts cover this week
+  const consistency = calculateConsistency(allTasks).percent
+  const week = calculateConsistency(allTasks, getRange('week'))
   const streak = calculateStreak(allTasks)
 
-  // Daily completion % for last 14 days
-  const dailyData = []
-  for (let i = 13; i >= 0; i--) {
-    const d = new Date()
-    d.setDate(d.getDate() - i)
-    const dateStr = toDateStr(d)
-    const dayTasks = allTasks.filter((t) => t.assigned_date === dateStr)
-    const dayCompleted = dayTasks.filter((t) => t.status === 'completed').length
-    const pct = dayTasks.length > 0 ? Math.round((dayCompleted / dayTasks.length) * 100) : null
-    dailyData.push({
-      label: `${d.getMonth() + 1}/${d.getDate()}`,
-      pct: pct ?? 0,
-      hasTasks: dayTasks.length > 0,
-    })
-  }
+  // Chart period (Week / Month / Overall, with ‹ › for earlier periods)
+  const range = getRange(period, periodOffset, firstTaskDate(allTasks))
+  const completionDays = dailyCompletion(allTasks, range)
+  const feedbackInRange = feedback.filter((f) => {
+    const d = toDateStr(new Date(f.created_at))
+    return d >= range.from && d <= range.to
+  })
 
   return (
     <div className="space-y-8">
@@ -265,7 +233,7 @@ export default function PatientDetailPage() {
               </div>
               <div>
                 <p className="text-2xl font-extrabold text-text-primary font-heading">{consistency}%</p>
-                <p className="text-[10px] font-medium text-text-muted">Consistency (30d)</p>
+                <p className="text-[10px] font-medium text-text-muted">Consistency (overall)</p>
               </div>
             </div>
           </Card>
@@ -275,8 +243,8 @@ export default function PatientDetailPage() {
                 <ClipboardList size={18} className="text-primary" />
               </div>
               <div>
-                <p className="text-2xl font-extrabold text-text-primary font-heading">{totalAssigned}</p>
-                <p className="text-[10px] font-medium text-text-muted">Assigned (30d)</p>
+                <p className="text-2xl font-extrabold text-text-primary font-heading">{week.total}</p>
+                <p className="text-[10px] font-medium text-text-muted">Assigned (this week)</p>
               </div>
             </div>
           </Card>
@@ -286,47 +254,27 @@ export default function PatientDetailPage() {
                 <CheckCircle size={18} className="text-secondary" />
               </div>
               <div>
-                <p className="text-2xl font-extrabold text-text-primary font-heading">{totalCompleted}</p>
-                <p className="text-[10px] font-medium text-text-muted">Completed (30d){missed > 0 ? ` · ${missed} missed` : ''}</p>
+                <p className="text-2xl font-extrabold text-text-primary font-heading">{week.completed}</p>
+                <p className="text-[10px] font-medium text-text-muted">Completed (this week){week.missed > 0 ? ` · ${week.missed} missed` : ''}</p>
               </div>
             </div>
           </Card>
         </div>
 
+        <div className="mb-4 overflow-x-auto">
+          <PeriodToggle
+            period={period}
+            onPeriodChange={setPeriod}
+            offset={periodOffset}
+            onOffsetChange={setPeriodOffset}
+            label={range.label}
+          />
+        </div>
         <Card>
           <p className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-4">
-            Daily Completion % (Last 14 Days)
+            Daily Completion % · {range.label}
           </p>
-          <ResponsiveContainer width="100%" height={180}>
-            <BarChart data={dailyData} barCategoryGap="15%">
-              <XAxis
-                dataKey="label"
-                tick={{ fontSize: 10, fill: '#757c7e' }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis
-                domain={[0, 100]}
-                tick={{ fontSize: 10, fill: '#757c7e' }}
-                axisLine={false}
-                tickLine={false}
-                width={30}
-                tickFormatter={(v) => `${v}%`}
-              />
-              <Tooltip
-                formatter={(value) => [`${value}%`, 'Completion']}
-                contentStyle={{ borderRadius: 12, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: 12 }}
-              />
-              <Bar dataKey="pct" radius={[4, 4, 0, 0]}>
-                {dailyData.map((entry, i) => (
-                  <Cell
-                    key={i}
-                    fill={!entry.hasTasks ? '#eaeff0' : entry.pct >= 80 ? '#22c55e' : entry.pct >= 50 ? '#f59e0b' : '#ef4444'}
-                  />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <CompletionChart days={completionDays} period={period} height={200} />
         </Card>
       </div>
 
@@ -336,7 +284,7 @@ export default function PatientDetailPage() {
           Mood Summary
         </h3>
         <Card>
-          <PatientMoodChart feedback={feedback} />
+          <PatientMoodChart feedback={feedbackInRange} subtitle={`· ${range.label}`} />
         </Card>
         {feedbackNotes.length > 0 && (
           <div className="mt-4">
@@ -409,33 +357,15 @@ export default function PatientDetailPage() {
               maxLength={2000}
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Date"
-              type="date"
-              value={assignForm.assigned_date}
-              onChange={(e) => setAssignForm({ ...assignForm, assigned_date: e.target.value })}
-              required
-            />
-            <Input
-              label="Time"
-              type="time"
-              value={assignForm.assigned_time}
-              onChange={(e) => setAssignForm({ ...assignForm, assigned_time: e.target.value })}
-              required
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-semibold text-text-secondary">Resources (guides, video links, or instructions)</label>
-            <textarea
-              className="w-full px-4 py-3 rounded-xl border border-border text-sm bg-surface-alt text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-surface-card resize-none"
-              rows={2}
-              placeholder="e.g. https://youtube.com/watch?v=... or describe the resource"
-              value={assignForm.resource_url}
-              onChange={(e) => setAssignForm({ ...assignForm, resource_url: e.target.value })}
-              maxLength={2000}
-            />
-          </div>
+          <DateListField dates={assignForm.dates} onChange={(dates) => setAssignForm({ ...assignForm, dates })} />
+          <Input
+            label="Expected completion time"
+            type="time"
+            value={assignForm.assigned_time}
+            onChange={(e) => setAssignForm({ ...assignForm, assigned_time: e.target.value })}
+            required
+          />
+          <LinkListField links={assignForm.links} onChange={(links) => setAssignForm({ ...assignForm, links })} />
           <PublishTimeField
             value={assignForm.publish_at}
             onChange={(v) => setAssignForm({ ...assignForm, publish_at: v })}
@@ -451,8 +381,12 @@ export default function PatientDetailPage() {
               Require proof of completion
             </span>
           </label>
-          <Button type="submit" disabled={assigning || !assignForm.title} className="w-full">
-            {assigning ? 'Saving...' : assignForm.publish_at ? `Schedule for ${formatPublishAt(new Date(assignForm.publish_at))}` : 'Assign Task'}
+          <Button type="submit" disabled={assigning || !assignForm.title || !assignForm.dates.length} className="w-full">
+            {assigning
+              ? 'Saving...'
+              : assignForm.publish_at
+                ? `Schedule for ${formatPublishAt(new Date(assignForm.publish_at))}`
+                : assignForm.dates.length > 1 ? `Assign ${assignForm.dates.length} Tasks` : 'Assign Task'}
           </Button>
         </form>
       </Modal>

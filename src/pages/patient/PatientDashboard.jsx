@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useCachedState, hasCache } from '../../hooks/useCachedState'
 import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus'
 import { calculateStreak, toDateStr } from '../../utils/streak'
-import { getTimeOfDay, formatLongDate } from '../../utils/time'
+import { getTimeOfDay, formatLongDate, formatExpected } from '../../utils/time'
 import { postedOnly } from '../../utils/tasks'
 import Card from '../../components/ui/Card'
 import Badge from '../../components/ui/Badge'
@@ -42,6 +42,7 @@ export default function PatientDashboard() {
   const { profile } = useAuth()
   const navigate = useNavigate()
   const [tasks, setTasks] = useCachedState('patient-tasks', [])
+  const [restDay, setRestDay] = useCachedState('patient-rest-day', false)
   const [allTasks, setAllTasks] = useCachedState('patient-streak-tasks', [])
   const [remarks, setRemarks] = useCachedState('patient-therapist-remarks', [])
   const [loading, setLoading] = useState(() => !hasCache('patient-tasks'))
@@ -59,18 +60,17 @@ export default function PatientDashboard() {
     if (cancelled) return
     if (err) { setError('Failed to load tasks. Please try again.'); setLoading(false); return }
     setError(null)
-    setTasks(postedOnly(data))
+    const rows = postedOnly(data)
+    setRestDay(rows.some((t) => t.is_rest_day))
+    setTasks(rows.filter((t) => !t.is_rest_day))
     setLoading(false)
   }
 
   async function loadStreakData(cancelled = false) {
-    const ninetyDaysAgo = new Date()
-    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
     const { data, error: err } = await supabase
       .from('task_assignments')
-      .select('assigned_date, status')
+      .select('assigned_date, status, is_rest_day')
       .eq('patient_id', profile.id)
-      .gte('assigned_date', toDateStr(ninetyDaysAgo))
       .order('assigned_date', { ascending: false })
     if (cancelled) return
     if (!err) setAllTasks(data || [])
@@ -197,7 +197,7 @@ export default function PatientDashboard() {
           : 'text-text-muted'
         }`}>
           {total === 0
-            ? 'No tasks today'
+            ? (restDay ? 'No tasks for today' : 'No tasks today')
             : progress === 100
             ? 'All done!'
             : `${remaining} task${remaining !== 1 ? 's' : ''} remaining`}
@@ -210,7 +210,9 @@ export default function PatientDashboard() {
           <div className="text-center py-8">
             <Clock size={32} className="text-text-muted mx-auto mb-3" />
             <p className="text-sm text-text-muted">
-              No tasks assigned for today. Check back later!
+              {restDay
+                ? 'No tasks for today. Your therapist has given you a rest day.'
+                : 'No tasks assigned for today. Check back later!'}
             </p>
           </div>
         </Card>
@@ -267,7 +269,7 @@ export default function PatientDashboard() {
                               {task.assigned_time && (
                                 <span className="text-xs text-text-muted flex items-center gap-1">
                                   <Clock size={11} />
-                                  {new Date(`2000-01-01T${task.assigned_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                                  {formatExpected(task.assigned_time)}
                                 </span>
                               )}
                               {task.requires_proof && (

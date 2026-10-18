@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { toDateStr } from '../../utils/streak'
-import { ChevronLeft, ChevronRight, CheckCircle, MessageSquare, Clock, CheckSquare } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CheckCircle, MessageSquare, Clock, CheckSquare, CalendarOff } from 'lucide-react'
 import Modal from '../ui/Modal'
 import Badge from '../ui/Badge'
 import ProofPhotos from '../ProofPhotos'
-import { isScheduled, formatPublishAt } from '../../utils/tasks'
+import { isScheduled, formatPublishAt, dayStatus, DAY_STATUS_CLASS, getResourceLinks } from '../../utils/tasks'
+import { formatExpected } from '../../utils/time'
+import { markRestDay, clearRestDay } from '../../utils/restDay'
+import { fetchTherapistPatients } from '../../utils/patients'
+import { Linkify } from '../../utils/linkify'
 
 const MOOD_EMOJI = {
   excited: '🤩', happy: '😊', calm: '😌', scared: '😨',
@@ -36,6 +40,8 @@ export default function ReadOnlyCalendar({ patientId, therapistId, refreshKey, o
   const [photoRequest, setPhotoRequest] = useState('')
   const [loading, setLoading] = useState(true)
   const [selectedTask, setSelectedTask] = useState(null)
+  const [restBusy, setRestBusy] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
 
   const todayStr = toDateStr(new Date())
   const { year, month } = currentMonth
@@ -55,7 +61,13 @@ export default function ReadOnlyCalendar({ patientId, therapistId, refreshKey, o
         .gte('assigned_date', startOfMonth)
         .lte('assigned_date', endOfMonth)
         .order('assigned_time', { ascending: true })
-      if (patientId) tasksQuery = tasksQuery.eq('patient_id', patientId)
+      if (patientId) {
+        tasksQuery = tasksQuery.eq('patient_id', patientId)
+      } else {
+        // All-patients view: leave archived patients out
+        const { data: links } = await fetchTherapistPatients(therapistId)
+        tasksQuery = tasksQuery.in('patient_id', links.map((l) => l.patient_id))
+      }
 
       const [tasksRes, remarksRes] = await Promise.all([
         tasksQuery,
@@ -95,7 +107,7 @@ export default function ReadOnlyCalendar({ patientId, therapistId, refreshKey, o
     }
     load()
     return () => { cancelled = true }
-  }, [patientId, therapistId, year, month, refreshKey])
+  }, [patientId, therapistId, year, month, refreshKey, reloadKey])
 
   const remarkText = remarkDraft.date === selectedDate ? remarkDraft.text : remarks[selectedDate]?.content || ''
   const remarkStatus = remarkStatusState.date === selectedDate ? remarkStatusState.text : ''
@@ -146,14 +158,27 @@ export default function ReadOnlyCalendar({ patientId, therapistId, refreshKey, o
     onRemarkSaved?.()
   }
 
-  const tasksByDate = useMemo(() => {
+  // Real tasks per day, and the "No tasks for today" markers kept separately
+  const { tasksByDate, restByDate } = useMemo(() => {
     const grouped = {}
+    const rest = {}
     tasks.forEach((t) => {
-      if (!grouped[t.assigned_date]) grouped[t.assigned_date] = []
-      grouped[t.assigned_date].push(t)
+      const bucket = t.is_rest_day ? rest : grouped
+      if (!bucket[t.assigned_date]) bucket[t.assigned_date] = []
+      bucket[t.assigned_date].push(t)
     })
-    return grouped
+    return { tasksByDate: grouped, restByDate: rest }
   }, [tasks])
+
+  async function toggleRestDay(on) {
+    if (!patientId) return
+    setRestBusy(true)
+    const args = { therapistId, patientId, date: selectedDate }
+    const { error } = on ? await markRestDay(args) : await clearRestDay(args)
+    setRestBusy(false)
+    if (error) { console.error('Failed to update rest day:', error.message); return }
+    setReloadKey((k) => k + 1)
+  }
 
   const firstDay = new Date(year, month, 1).getDay()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
@@ -173,6 +198,7 @@ export default function ReadOnlyCalendar({ patientId, therapistId, refreshKey, o
   const selDayName = FULL_DAYS[selDateObj.getDay()]
   const selDayNum = selDateObj.getDate()
   const selRemark = remarks[selectedDate]
+  const selRest = restByDate[selectedDate] || []
 
   return (
     <div>
@@ -212,7 +238,8 @@ export default function ReadOnlyCalendar({ patientId, therapistId, refreshKey, o
                 const dayTasks = tasksByDate[dateStr] || []
                 const dayCompleted = dayTasks.filter((t) => t.status === 'completed').length
                 const dayTotal = dayTasks.length
-                const allDone = dayTotal > 0 && dayCompleted === dayTotal
+                const status = dayStatus({ total: dayTotal, completed: dayCompleted, dateStr, todayStr })
+                const isRest = dayTotal === 0 && !!restByDate[dateStr]
                 const isToday = dateStr === todayStr
                 const isSelected = dateStr === selectedDate
                 const hasTherapy = dayTasks.some((t) => t.therapy_type)
@@ -221,13 +248,11 @@ export default function ReadOnlyCalendar({ patientId, therapistId, refreshKey, o
                   <button
                     key={day}
                     onClick={() => setSelectedDate(dateStr)}
-                    aria-label={`${MONTHS[month]} ${day}, ${dayTotal} task${dayTotal !== 1 ? 's' : ''}${isToday ? ', today' : ''}`}
+                    aria-label={`${MONTHS[month]} ${day}, ${isRest ? 'no tasks' : `${dayTotal} task${dayTotal !== 1 ? 's' : ''}`}${status === 'done' ? ', all completed' : status === 'incomplete' ? ', incomplete' : ''}${isToday ? ', today' : ''}`}
                     aria-pressed={isSelected}
-                    className={`rounded-2xl p-1.5 sm:p-3 aspect-square flex flex-col justify-between transition-all cursor-pointer group text-left
-                      ${isToday ? 'bg-primary-container ring-2 ring-primary ring-offset-2' : ''}
-                      ${isSelected && !isToday ? 'bg-primary/10 ring-2 ring-primary/40' : ''}
-                      ${!isToday && !isSelected && allDone ? 'bg-secondary-container/20' : ''}
-                      ${!isToday && !isSelected && !allDone ? 'bg-surface-container-lowest hover:bg-primary-container/20' : ''}
+                    className={`rounded-2xl p-1.5 sm:p-3 aspect-square flex flex-col justify-between transition-all cursor-pointer group text-left hover:brightness-95
+                      ${DAY_STATUS_CLASS[status]}
+                      ${isToday ? 'ring-2 ring-primary ring-offset-2' : isSelected ? 'ring-2 ring-primary/40' : ''}
                     `}
                   >
                     <div>
@@ -239,6 +264,9 @@ export default function ReadOnlyCalendar({ patientId, therapistId, refreshKey, o
                       )}
                     </div>
                     <div>
+                      {isRest && (
+                        <span className="block text-[8px] sm:text-[10px] font-semibold text-text-muted leading-tight">No tasks</span>
+                      )}
                       {hasTherapy && (
                         <span className="inline-block px-1 sm:px-1.5 py-0.5 bg-primary/10 text-primary text-[8px] sm:text-[10px] font-bold rounded-full">
                           therapy
@@ -315,10 +343,8 @@ export default function ReadOnlyCalendar({ patientId, therapistId, refreshKey, o
                           {isScheduled(task) && (
                             <p className="text-[11px] font-semibold text-amber-600">Posts {formatPublishAt(task.publish_at)}</p>
                           )}
-                          <p className="text-sm text-on-surface-variant">
-                            {task.assigned_time
-                              ? new Date(`2000-01-01T${task.assigned_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-                              : '—'}
+                          <p className="text-xs text-on-surface-variant">
+                            {task.assigned_time ? formatExpected(task.assigned_time) : '—'}
                           </p>
                           {isDone && fb && (
                             <span className="text-xs text-text-secondary">{MOOD_EMOJI[fb.mood] || ''} {fb.mood}</span>
@@ -332,19 +358,50 @@ export default function ReadOnlyCalendar({ patientId, therapistId, refreshKey, o
               </div>
             )}
 
-            {selectedTasks.length === 0 && (
-              <p className="text-sm text-outline mt-5">No tasks assigned for this day.</p>
+            {selectedTasks.length === 0 && selRest.length > 0 && (
+              <div className="mt-5 rounded-xl bg-surface-container-lowest p-4 text-center">
+                <CalendarOff size={18} className="text-primary mx-auto mb-1.5" />
+                <p className="text-sm font-bold text-text-primary">No tasks for today</p>
+                {!patientId && (
+                  <p className="text-xs text-text-muted mt-1">{selRest.map((r) => r.patient?.full_name).filter(Boolean).join(', ')}</p>
+                )}
+                {patientId && (
+                  <button
+                    onClick={() => toggleRestDay(false)}
+                    disabled={restBusy}
+                    className="mt-2 py-1 text-xs font-semibold text-text-muted underline hover:text-text-primary cursor-pointer disabled:opacity-50"
+                  >
+                    Undo
+                  </button>
+                )}
+              </div>
+            )}
+
+            {selectedTasks.length === 0 && selRest.length === 0 && (
+              <div className="mt-5">
+                <p className="text-sm text-outline">No tasks assigned for this day.</p>
+                {patientId && (
+                  <button
+                    onClick={() => toggleRestDay(true)}
+                    disabled={restBusy}
+                    className="mt-3 w-full px-4 py-2.5 rounded-xl bg-surface-container text-sm font-semibold text-text-primary hover:bg-primary-container hover:text-primary transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    Mark as &ldquo;No tasks for today&rdquo;
+                  </button>
+                )}
+              </div>
             )}
 
             {patientId && (
               <div className="mt-5 bg-surface-container-lowest rounded-xl p-3">
-                <p className="text-xs font-bold text-outline uppercase tracking-wider mb-1.5">
-                  Remarks for patient
-                </p>
+                <label htmlFor="day-remarks" className="block text-xs font-bold text-outline uppercase tracking-wider mb-1.5">
+                  Remarks for the Day
+                </label>
                 <textarea
+                  id="day-remarks"
                   className="w-full text-sm text-text-primary bg-transparent resize-none focus:outline-none placeholder:text-text-muted"
                   rows={3}
-                  placeholder="Feedback on the patient's performance this day..."
+                  placeholder="Write your remarks for this day..."
                   value={remarkText}
                   onChange={(e) => setRemarkText(e.target.value)}
                   maxLength={2000}
@@ -390,7 +447,7 @@ export default function ReadOnlyCalendar({ patientId, therapistId, refreshKey, o
               {selectedTask.assigned_time && (
                 <div className="flex items-center gap-2 text-sm text-text-secondary">
                   <Clock size={14} />
-                  {new Date(`2000-01-01T${selectedTask.assigned_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                  {formatExpected(selectedTask.assigned_time)}
                 </div>
               )}
 
@@ -401,10 +458,14 @@ export default function ReadOnlyCalendar({ patientId, therapistId, refreshKey, o
                 </div>
               )}
 
-              {selectedTask.resource_url && (
+              {getResourceLinks(selectedTask).length > 0 && (
                 <div>
                   <p className="text-xs font-bold text-text-muted uppercase tracking-wider mb-1">Resources</p>
-                  <p className="text-sm text-text-secondary break-all">{selectedTask.resource_url}</p>
+                  <ul className="space-y-1">
+                    {getResourceLinks(selectedTask).map((link, i) => (
+                      <li key={i} className="text-sm text-text-secondary break-all"><Linkify text={link} /></li>
+                    ))}
+                  </ul>
                 </div>
               )}
 

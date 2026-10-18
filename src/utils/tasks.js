@@ -32,3 +32,33 @@ export function defaultPublishValue() {
   d.setHours(7, 0, 0, 0)
   return toLocalInputValue(d)
 }
+
+/** Past-due task that was never completed (the "Incomplete" filter). */
+export function isIncomplete(task, todayStr) {
+  return !task.is_rest_day && task.status !== 'completed' && task.assigned_date < todayStr
+}
+
+/**
+ * Calendar day colour: 'done' when every task is completed, 'incomplete' when a
+ * task on today or a past day is still open, otherwise 'none'. Future days stay
+ * neutral because their tasks can't be late yet.
+ */
+export function dayStatus({ total, completed, dateStr, todayStr }) {
+  if (!total) return 'none'
+  if (completed === total) return 'done'
+  return dateStr <= todayStr ? 'incomplete' : 'none'
+}
+
+export const DAY_STATUS_CLASS = {
+  done: 'bg-success/20 border border-success/70',
+  incomplete: 'bg-danger/15 border border-danger/70',
+  none: 'bg-surface-container-lowest border border-transparent',
+}
+
+/** Resource links of a task, one per line of resource_url. */
+export function getResourceLinks(task) {
+  return (task?.resource_url || '').split('\n').map((l) => l.trim()).filter(Boolean)
+}
+
+/** The "No tasks for today" marker row for a patient/day. */
+export const REST_DAY_TITLE = 'No tasks for today'

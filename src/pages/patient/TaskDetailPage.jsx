@@ -6,10 +6,10 @@ import { useNotifications } from '../../contexts/NotificationContext'
 import { Linkify } from '../../utils/linkify'
 import { compressImage } from '../../utils/imageCompress'
 import { toDateStr } from '../../utils/streak'
-import { formatClock } from '../../utils/time'
+import { formatExpected } from '../../utils/time'
 import ProofPhotos from '../../components/ProofPhotos'
 import { getProofPaths } from '../../utils/proofs'
-import { isScheduled } from '../../utils/tasks'
+import { isScheduled, getResourceLinks } from '../../utils/tasks'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import { ArrowLeft, ArrowRight, Camera, Upload, X, CheckSquare, Clock, Lock, Pencil, ImagePlus } from 'lucide-react'
@@ -312,7 +312,7 @@ export default function TaskDetailPage() {
       <div className="flex items-center gap-2 text-sm text-text-secondary">
         <Clock size={16} className="text-primary" />
         <span>
-          Scheduled for {task.assigned_time ? `${formatClock(task.assigned_time)} ` : ''}{scheduledDate}
+          {scheduledDate}{task.assigned_time ? ` · ${formatExpected(task.assigned_time)}` : ''}
         </span>
       </div>
 
@@ -339,14 +339,16 @@ export default function TaskDetailPage() {
             </Card>
           )}
 
-          {task.resource_url && (
+          {getResourceLinks(task).length > 0 && (
             <Card>
               <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">
                 Resources
               </p>
-              <div className="text-sm text-text-secondary leading-relaxed">
-                <Linkify text={task.resource_url} />
-              </div>
+              <ul className="space-y-2 text-sm text-text-secondary leading-relaxed break-words">
+                {getResourceLinks(task).map((link, i) => (
+                  <li key={i}><Linkify text={link} /></li>
+                ))}
+              </ul>
             </Card>
           )}
         </>

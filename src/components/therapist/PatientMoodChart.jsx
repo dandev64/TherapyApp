@@ -14,7 +14,7 @@ const MOOD_CONFIG = {
 
 export { MOOD_CONFIG }
 
-export default function PatientMoodChart({ feedback, title = 'Mood Summary', subtitle = '(last 30 days)' }) {
+export default function PatientMoodChart({ feedback, title = 'Mood Summary', subtitle = null }) {
   const moodCounts = {}
   Object.keys(MOOD_CONFIG).forEach((m) => { moodCounts[m] = 0 })
   feedback.forEach((f) => {

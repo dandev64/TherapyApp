@@ -3,13 +3,15 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCachedState, hasCache } from '../../hooks/useCachedState'
-import { calculateStreak, calculateConsistency, toDateStr } from '../../utils/streak'
+import { calculateStreak, calculateConsistency, toDateStr, getRange } from '../../utils/streak'
+import { fetchTherapistPatients } from '../../utils/patients'
+import { markRestDay, clearRestDay } from '../../utils/restDay'
 import PatientCard from '../../components/therapist/PatientCard'
 import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
 import Modal from '../../components/ui/Modal'
 import Card from '../../components/ui/Card'
-import { UserPlus, Search, Trash2 } from 'lucide-react'
+import { UserPlus, Search, Trash2, Archive, ArchiveRestore } from 'lucide-react'
 
 export default function PatientCarryoverPage() {
   const { profile } = useAuth()
@@ -25,6 +27,8 @@ export default function PatientCarryoverPage() {
   const [removeLoading, setRemoveLoading] = useState(false)
   const [error, setError] = useState(null)
   const [successMsg, setSuccessMsg] = useState('')
+  const [view, setView] = useState('active')
+  const [busyId, setBusyId] = useState(null)
 
   function showSuccess(msg) {
     setSuccessMsg(msg)
@@ -33,66 +37,72 @@ export default function PatientCarryoverPage() {
 
   async function loadPatients() {
     const today = toDateStr(new Date())
-    const ninetyDaysAgo = new Date()
-    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
-    const ninetyDaysAgoStr = toDateStr(ninetyDaysAgo)
+    const week = getRange('week')
 
-    const { data: assignments, error: err } = await supabase
-      .from('patient_assignments')
-      .select('patient_id, profiles!patient_assignments_patient_id_fkey(id, full_name, email, condition)')
-      .eq('assigned_to', profile.id)
-      .eq('relationship', 'therapist')
+    const { data: assignments, error: err } = await fetchTherapistPatients(profile.id, { includeArchived: true })
     if (err) { setError('Failed to load patients.'); setLoading(false); return }
     setError(null)
 
-    const patientIds = (assignments || []).map((a) => a.patient_id)
+    const patientIds = assignments.map((a) => a.patient_id)
     if (patientIds.length === 0) { setPatients([]); setLoading(false); return }
 
-    const [todayBatchRes, allBatchRes] = await Promise.all([
-      supabase
-        .from('task_assignments')
-        .select('patient_id, status')
-        .eq('therapist_id', profile.id)
-        .in('patient_id', patientIds)
-        .eq('assigned_date', today),
-      supabase
-        .from('task_assignments')
-        .select('patient_id, assigned_date, status')
-        .eq('therapist_id', profile.id)
-        .in('patient_id', patientIds)
-        .gte('assigned_date', ninetyDaysAgoStr)
-        .order('assigned_date', { ascending: false }),
-    ])
+    const { data: tasks } = await supabase
+      .from('task_assignments')
+      .select('patient_id, assigned_date, status, is_rest_day')
+      .eq('therapist_id', profile.id)
+      .in('patient_id', patientIds)
 
-    const todayByPatient = {}
-    ;(todayBatchRes.data || []).forEach((t) => {
-      if (!todayByPatient[t.patient_id]) todayByPatient[t.patient_id] = []
-      todayByPatient[t.patient_id].push(t)
-    })
-    const allByPatient = {}
-    ;(allBatchRes.data || []).forEach((t) => {
-      if (!allByPatient[t.patient_id]) allByPatient[t.patient_id] = []
-      allByPatient[t.patient_id].push(t)
+    const byPatient = {}
+    ;(tasks || []).forEach((t) => {
+      if (!byPatient[t.patient_id]) byPatient[t.patient_id] = []
+      byPatient[t.patient_id].push(t)
     })
 
-    const patientDetails = (assignments || []).map((a) => {
-      const todayTasks = todayByPatient[a.patient_id] || []
-      const allTasks = allByPatient[a.patient_id] || []
-      // Last 30 days, this therapist's tasks only (queries filter by therapist_id)
-      const { percent: consistency, missed } = calculateConsistency(allTasks)
-
+    // Consistency over the whole course of therapy, missed tasks this week only
+    const patientDetails = assignments.map((a) => {
+      const all = byPatient[a.patient_id] || []
+      const todayRows = all.filter((t) => t.assigned_date === today)
+      const todayTasks = todayRows.filter((t) => !t.is_rest_day)
       return {
         ...a.profiles,
+        archived: !!a.archived_at,
         totalToday: todayTasks.length,
         completedToday: todayTasks.filter((t) => t.status === 'completed').length,
-        streak: calculateStreak(allTasks),
-        consistency,
-        missed,
+        restDayToday: todayRows.some((t) => t.is_rest_day),
+        streak: calculateStreak(all),
+        consistency: calculateConsistency(all).percent,
+        missed: calculateConsistency(all, week).missed,
       }
     })
 
     setPatients(patientDetails)
     setLoading(false)
+  }
+
+  async function handleRestDay(patient, on) {
+    setBusyId(patient.id)
+    const args = { therapistId: profile.id, patientId: patient.id, date: toDateStr(new Date()) }
+    const { error: err } = on ? await markRestDay(args) : await clearRestDay(args)
+    setBusyId(null)
+    if (err) { setError('Failed to update today for this patient.'); return }
+    showSuccess(on ? `Marked "No tasks for today" for ${patient.full_name}.` : 'Rest day removed.')
+    loadPatients()
+  }
+
+  async function handleArchive(patient, archive) {
+    setBusyId(patient.id)
+    const { error: err } = await supabase.rpc('set_patient_archived', {
+      p_patient_id: patient.id,
+      p_archived: archive,
+    })
+    setBusyId(null)
+    if (err) {
+      console.error('Archive failed:', err.message)
+      setError(archive ? 'Failed to archive patient.' : 'Failed to restore patient.')
+      return
+    }
+    showSuccess(archive ? `${patient.full_name} archived.` : `${patient.full_name} restored to active patients.`)
+    loadPatients()
   }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -153,8 +163,11 @@ export default function PatientCarryoverPage() {
     loadPatients()
   }
 
+  const activeCount = patients.filter((p) => !p.archived).length
+  const archivedCount = patients.length - activeCount
   const filtered = patients.filter((p) =>
-    p.full_name?.toLowerCase().includes(search.toLowerCase())
+    (view === 'archived' ? p.archived : !p.archived)
+    && p.full_name?.toLowerCase().includes(search.toLowerCase())
   )
 
   if (loading) {
@@ -182,12 +195,28 @@ export default function PatientCarryoverPage() {
         <div>
           <h2 className="text-3xl font-extrabold text-text-primary tracking-tight">Patients</h2>
           <p className="text-text-secondary mt-2">
-            {patients.length} patient{patients.length !== 1 ? 's' : ''} assigned
+            {activeCount} active patient{activeCount !== 1 ? 's' : ''}{archivedCount > 0 ? ` · ${archivedCount} archived` : ''}
           </p>
         </div>
         <Button onClick={() => setShowAddModal(true)}>
           <UserPlus size={16} /> Add Patient
         </Button>
+      </div>
+
+      <div className="inline-flex p-1 rounded-xl bg-surface-container" role="tablist">
+        {[['active', `Active (${activeCount})`], ['archived', `Archived (${archivedCount})`]].map(([key, text]) => (
+          <button
+            key={key}
+            role="tab"
+            aria-selected={view === key}
+            onClick={() => setView(key)}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors cursor-pointer ${
+              view === key ? 'bg-surface-card text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary'
+            }`}
+          >
+            {text}
+          </button>
+        ))}
       </div>
 
       <div className="relative">
@@ -205,27 +234,43 @@ export default function PatientCarryoverPage() {
         {filtered.length === 0 ? (
           <Card>
             <p className="text-sm text-text-muted text-center py-8">
-              {patients.length === 0
-                ? 'No patients yet. Add your first patient to get started.'
-                : 'No patients match your search.'}
+              {search
+                ? 'No patients match your search.'
+                : view === 'archived'
+                  ? 'No archived patients.'
+                  : 'No active patients. Add a patient to get started.'}
             </p>
           </Card>
         ) : (
           filtered.map((patient) => (
-            <div key={patient.id} className="flex items-center gap-2">
-              <div className="flex-1">
+            <div key={patient.id} className="flex items-center gap-1 sm:gap-2">
+              <div className="flex-1 min-w-0">
                 <PatientCard
                   patient={patient}
                   onClick={() => navigate(`/therapist/patients/${patient.id}`)}
+                  onRestDay={patient.archived ? null : (on) => handleRestDay(patient, on)}
+                  restDayBusy={busyId === patient.id}
                 />
               </div>
-              <button
-                onClick={() => setRemovePatient(patient)}
-                className="p-2.5 rounded-xl text-text-muted hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer shrink-0"
-                title="Remove patient"
-              >
-                <Trash2 size={16} />
-              </button>
+              <div className="flex flex-col sm:flex-row gap-1 shrink-0">
+                <button
+                  onClick={() => handleArchive(patient, !patient.archived)}
+                  disabled={busyId === patient.id}
+                  className="p-2.5 rounded-xl text-text-muted hover:text-primary hover:bg-surface-alt transition-colors cursor-pointer disabled:opacity-50"
+                  title={patient.archived ? 'Unarchive patient' : 'Archive patient'}
+                  aria-label={patient.archived ? `Unarchive ${patient.full_name}` : `Archive ${patient.full_name}`}
+                >
+                  {patient.archived ? <ArchiveRestore size={16} /> : <Archive size={16} />}
+                </button>
+                <button
+                  onClick={() => setRemovePatient(patient)}
+                  className="p-2.5 rounded-xl text-text-muted hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
+                  title="Remove patient"
+                  aria-label={`Remove ${patient.full_name}`}
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
             </div>
           ))
         )}

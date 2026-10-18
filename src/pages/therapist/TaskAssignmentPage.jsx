@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCachedState, hasCache } from '../../hooks/useCachedState'
@@ -11,12 +12,32 @@ import Modal from '../../components/ui/Modal'
 import { Plus, CheckSquare, Trash2, MessageSquare, Clock, Camera, Pencil } from 'lucide-react'
 import ProofPhotos from '../../components/ProofPhotos'
 import PublishTimeField from '../../components/therapist/PublishTimeField'
-import { isScheduled, formatPublishAt, toLocalInputValue } from '../../utils/tasks'
+import { isScheduled, formatPublishAt, toLocalInputValue, getResourceLinks, isIncomplete } from '../../utils/tasks'
 import { toDateStr } from '../../utils/streak'
+import { formatClock, formatExpected } from '../../utils/time'
+import { fetchTherapistPatients } from '../../utils/patients'
+import { createTasksForDates, joinLinks } from '../../utils/assignTask'
+import { LinkListField, DateListField } from '../../components/therapist/TaskFields'
+import { Linkify } from '../../utils/linkify'
 
 const MOOD_EMOJI = {
   excited: '🤩', happy: '😊', calm: '😌', scared: '😨',
   anxious: '😰', angry: '😠', tired: '😴', sad: '😢',
+}
+
+function emptyForm(patientId) {
+  const today = toDateStr(new Date())
+  return {
+    patient_id: patientId,
+    title: '',
+    description: '',
+    assigned_date: today,
+    dates: [today],
+    assigned_time: '09:00',
+    links: [''],
+    requires_proof: false,
+    publish_at: '',
+  }
 }
 
 export default function TaskAssignmentPage() {
@@ -25,16 +46,9 @@ export default function TaskAssignmentPage() {
   const [recentAssignments, setRecentAssignments] = useCachedState('therapist-recent-assignments', [])
   const [pageLoading, setPageLoading] = useState(() => !hasCache('therapist-recent-assignments'))
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({
-    patient_id: '',
-    title: '',
-    description: '',
-    assigned_date: toDateStr(new Date()),
-    assigned_time: '09:00',
-    resource_url: '',
-    requires_proof: false,
-    publish_at: '',
-  })
+  const [form, setForm] = useState(() => emptyForm(''))
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [highlightId, setHighlightId] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [successMsg, setSuccessMsg] = useState('')
@@ -55,12 +69,8 @@ export default function TaskAssignmentPage() {
   }
 
   async function loadPatients() {
-    const { data } = await supabase
-      .from('patient_assignments')
-      .select('patient_id, profiles!patient_assignments_patient_id_fkey(id, full_name)')
-      .eq('assigned_to', profile.id)
-      .eq('relationship', 'therapist')
-    const pts = data?.map((a) => a.profiles) || []
+    const { data } = await fetchTherapistPatients(profile.id)
+    const pts = data.map((a) => a.profiles)
     setPatients(pts)
     if (pts.length > 0 && !form.patient_id) {
       setForm((prev) => ({ ...prev, patient_id: pts[0].id }))
@@ -111,25 +121,45 @@ export default function TaskAssignmentPage() {
   }, [profile])
   /* eslint-enable react-hooks/exhaustive-deps */
 
-  function emptyForm(patientId) {
-    return {
-      patient_id: patientId,
-      title: '',
-      description: '',
-      assigned_date: toDateStr(new Date()),
-      assigned_time: '09:00',
-      resource_url: '',
-      requires_proof: false,
-      publish_at: '',
+  // Dashboard / Today's Tasks deep link: /therapist/assignments?task=<id>
+  /* eslint-disable react-hooks/exhaustive-deps */
+  useEffect(() => {
+    const taskId = searchParams.get('task')
+    if (!taskId || !profile || pageLoading) return
+    let cancelled = false
+    async function focusTask() {
+      let task = recentAssignments.find((t) => t.id === taskId)
+      if (!task) {
+        const { data } = await supabase
+          .from('task_assignments')
+          .select('*, profiles!task_assignments_patient_id_fkey(full_name)')
+          .eq('id', taskId)
+          .maybeSingle()
+        if (cancelled || !data) return
+        task = data
+        setRecentAssignments((prev) => [data, ...prev])
+      }
+      setFilterDate(task.assigned_date)
+      setFilterStatus('')
+      setFilterPatient('')
+      setHighlightId(task.id)
+      setSearchParams({}, { replace: true })
+      setTimeout(() => {
+        document.getElementById(`task-row-${task.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 50)
     }
-  }
+    focusTask()
+    return () => { cancelled = true }
+  }, [searchParams, profile, pageLoading])
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // Validates the schedule; returns the ISO post time, null for "now", or false if invalid
   function resolvePublishAt() {
     if (!form.publish_at) return null
     const at = new Date(form.publish_at)
     if (at <= new Date()) { setError('The post time must be in the future.'); return false }
-    if (at > new Date(`${form.assigned_date}T${form.assigned_time}:00`)) {
+    const firstDate = editingTask ? form.assigned_date : form.dates[0]
+    if (at > new Date(`${firstDate}T${form.assigned_time}:00`)) {
       setError("The post time must be before the task's scheduled date and time.")
       return false
     }
@@ -144,8 +174,9 @@ export default function TaskAssignmentPage() {
       title: task.title || '',
       description: task.description || '',
       assigned_date: task.assigned_date,
+      dates: [task.assigned_date],
       assigned_time: task.assigned_time ? task.assigned_time.slice(0, 5) : '09:00',
-      resource_url: task.resource_url || '',
+      links: getResourceLinks(task).length ? getResourceLinks(task) : [''],
       requires_proof: !!task.requires_proof,
       publish_at: isScheduled(task) ? toLocalInputValue(new Date(task.publish_at)) : '',
     })
@@ -167,7 +198,7 @@ export default function TaskAssignmentPage() {
       description: form.description || null,
       assigned_date: form.assigned_date,
       assigned_time: form.assigned_time,
-      resource_url: form.resource_url || null,
+      resource_url: joinLinks(form.links),
       requires_proof: form.requires_proof,
     }
     // Only touch publish_at when scheduling, or when un-scheduling a pending task
@@ -187,49 +218,41 @@ export default function TaskAssignmentPage() {
 
   async function handleAssign(e) {
     e.preventDefault()
-    if (!form.patient_id || !form.title || !form.assigned_date || !form.assigned_time) return
+    if (editingTask) {
+      if (!form.title || !form.assigned_date || !form.assigned_time) return
+      setError(null)
+      handleUpdate()
+      return
+    }
+    if (!form.patient_id || !form.title || !form.dates.length || !form.assigned_time) return
     setError(null)
-    if (editingTask) { handleUpdate(); return }
     const publishAt = resolvePublishAt()
     if (publishAt === false) return
     setLoading(true)
 
-    const { data: taskData, error: err } = await supabase.from('task_assignments').insert({
-      patient_id: form.patient_id,
-      therapist_id: profile.id,
-      title: form.title,
-      description: form.description || null,
-      assigned_date: form.assigned_date,
-      assigned_time: form.assigned_time,
-      resource_url: form.resource_url || null,
-      requires_proof: form.requires_proof,
-      ...(publishAt ? { publish_at: publishAt } : {}),
-    }).select('id').single()
+    const { error: err, count } = await createTasksForDates({
+      dates: form.dates,
+      publishAt,
+      fields: {
+        patient_id: form.patient_id,
+        therapist_id: profile.id,
+        title: form.title,
+        description: form.description || null,
+        assigned_time: form.assigned_time,
+        resource_url: joinLinks(form.links),
+        requires_proof: form.requires_proof,
+      },
+    })
 
     setLoading(false)
     if (err) { setError('Failed to assign task.'); return }
 
-    // The 7 AM digest queues every reminder for the day, so a task created for
-    // today after it ran has to be scheduled here. Later dates are picked up by
-    // that day's digest.
-    const taskDue = new Date(`${form.assigned_date}T${form.assigned_time}:00`)
-    const isToday = form.assigned_date === toDateStr(new Date())
-    if (!publishAt && isToday && taskDue > new Date()) {
-      supabase.functions.invoke('send-email-reminders', {
-        body: {
-          type: 'task_reminder_immediate',
-          patient_id: form.patient_id,
-          task_id: taskData.id,
-          title: form.title,
-          assigned_date: form.assigned_date,
-          assigned_time: form.assigned_time,
-        },
-      }).catch((err) => console.error('Email function error:', err))
-    }
+    const firstDate = form.dates[0]
     setForm(emptyForm(form.patient_id))
     setShowForm(false)
-    showSuccess(publishAt ? `Task scheduled. It will be posted ${formatPublishAt(publishAt)}.` : 'Task assigned successfully.')
-    setFilterDate(form.assigned_date)
+    const what = count > 1 ? `${count} tasks` : 'Task'
+    showSuccess(publishAt ? `${what} scheduled. Posting starts ${formatPublishAt(publishAt)}.` : `${what} assigned successfully.`)
+    setFilterDate(count > 1 ? '' : firstDate)
     loadRecentAssignments()
   }
 
@@ -244,21 +267,18 @@ export default function TaskAssignmentPage() {
     loadRecentAssignments()
   }
 
-  function formatTime(timeStr) {
-    if (!timeStr) return ''
-    const [h, m] = timeStr.split(':')
-    const date = new Date(2000, 0, 1, parseInt(h), parseInt(m))
-    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-  }
-
   const openTaskDetail = useCallback((task) => {
     setSelectedTask(task)
   }, [])
 
   const filteredAssignments = useMemo(() => {
+    const todayStr = toDateStr(new Date())
     return recentAssignments.filter((a) => {
+      if (a.is_rest_day) return false
       if (filterDate && a.assigned_date !== filterDate) return false
-      if (filterStatus && a.status !== filterStatus) return false
+      if (filterStatus === 'incomplete') {
+        if (!isIncomplete(a, todayStr)) return false
+      } else if (filterStatus && a.status !== filterStatus) return false
       if (filterPatient && a.patient_id !== filterPatient) return false
       return true
     })
@@ -346,7 +366,7 @@ export default function TaskAssignmentPage() {
                     maxLength={2000}
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                {editingTask ? (
                   <Input
                     label="Date"
                     type="date"
@@ -354,25 +374,17 @@ export default function TaskAssignmentPage() {
                     onChange={(e) => setForm({ ...form, assigned_date: e.target.value })}
                     required
                   />
-                  <Input
-                    label="Time"
-                    type="time"
-                    value={form.assigned_time}
-                    onChange={(e) => setForm({ ...form, assigned_time: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-semibold text-text-secondary">Resources (guides, video links, or instructions)</label>
-                  <textarea
-                    className="w-full px-4 py-3 rounded-xl border border-border text-sm bg-surface-alt text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary focus:bg-surface-card resize-none"
-                    rows={2}
-                    placeholder="e.g. https://youtube.com/watch?v=... or describe the resource"
-                    value={form.resource_url}
-                    onChange={(e) => setForm({ ...form, resource_url: e.target.value })}
-                    maxLength={2000}
-                  />
-                </div>
+                ) : (
+                  <DateListField dates={form.dates} onChange={(dates) => setForm({ ...form, dates })} />
+                )}
+                <Input
+                  label="Expected completion time"
+                  type="time"
+                  value={form.assigned_time}
+                  onChange={(e) => setForm({ ...form, assigned_time: e.target.value })}
+                  required
+                />
+                <LinkListField links={form.links} onChange={(links) => setForm({ ...form, links })} />
                 <PublishTimeField
                   value={form.publish_at}
                   onChange={(v) => setForm({ ...form, publish_at: v })}
@@ -394,10 +406,10 @@ export default function TaskAssignmentPage() {
                       Cancel
                     </Button>
                   )}
-                  <Button type="submit" disabled={loading} className="flex-1">
+                  <Button type="submit" disabled={loading || (!editingTask && !form.dates.length)} className="flex-1">
                     {editingTask
                       ? (loading ? 'Saving...' : 'Save Changes')
-                      : (loading ? 'Assigning...' : 'Assign Task')}
+                      : (loading ? 'Assigning...' : form.dates.length > 1 ? `Assign ${form.dates.length} Tasks` : 'Assign Task')}
                   </Button>
                 </div>
               </>
@@ -424,6 +436,7 @@ export default function TaskAssignmentPage() {
             <option value="pending">Pending</option>
             <option value="in_progress">In Progress</option>
             <option value="completed">Completed</option>
+            <option value="incomplete">Incomplete</option>
           </select>
           <select
             value={filterPatient}
@@ -443,7 +456,7 @@ export default function TaskAssignmentPage() {
             <tr className="border-b border-border bg-surface-alt/30">
               <th className="text-left px-4 py-2.5 text-xs font-bold text-text-muted uppercase tracking-wider">Task</th>
               <th className="text-left px-4 py-2.5 text-xs font-bold text-text-muted uppercase tracking-wider hidden sm:table-cell">Patient</th>
-              <th className="text-left px-4 py-2.5 text-xs font-bold text-text-muted uppercase tracking-wider hidden md:table-cell">Time</th>
+              <th className="text-left px-4 py-2.5 text-xs font-bold text-text-muted uppercase tracking-wider hidden md:table-cell">Expected Completion</th>
               <th className="text-left px-4 py-2.5 text-xs font-bold text-text-muted uppercase tracking-wider hidden md:table-cell">Proof</th>
               <th className="text-left px-4 py-2.5 text-xs font-bold text-text-muted uppercase tracking-wider">Status</th>
               <th className="px-4 py-2.5 w-20"></th>
@@ -461,7 +474,10 @@ export default function TaskAssignmentPage() {
                 tasks.map((a) => (
                   <tr
                     key={a.id}
-                    className="border-b border-border last:border-0 cursor-pointer hover:bg-primary-container/10 transition-colors"
+                    id={`task-row-${a.id}`}
+                    className={`border-b border-border last:border-0 cursor-pointer hover:bg-primary-container/10 transition-colors ${
+                      highlightId === a.id ? 'bg-primary-container/30 ring-2 ring-inset ring-primary' : ''
+                    }`}
                     onClick={() => openTaskDetail(a)}
                   >
                     <td className="px-4 py-3">
@@ -472,7 +488,7 @@ export default function TaskAssignmentPage() {
                       <p className="text-xs text-text-muted sm:hidden">{a.profiles?.full_name}</p>
                     </td>
                     <td className="px-4 py-3 text-text-secondary hidden sm:table-cell">{a.profiles?.full_name}</td>
-                    <td className="px-4 py-3 text-text-secondary hidden md:table-cell">{formatTime(a.assigned_time)}</td>
+                    <td className="px-4 py-3 text-text-secondary hidden md:table-cell">{formatClock(a.assigned_time)}</td>
                     <td className="px-4 py-3 hidden md:table-cell">
                       {a.requires_proof && (
                         <Camera size={14} className={a.proof_url ? 'text-success' : 'text-text-muted'} title={a.proof_url ? 'Proof submitted' : 'Proof required'} />
@@ -550,7 +566,7 @@ export default function TaskAssignmentPage() {
               <span className="flex items-center gap-1">
                 <Clock size={14} />
                 {new Date(selectedTask.assigned_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                {selectedTask.assigned_time && ` at ${formatTime(selectedTask.assigned_time)}`}
+                {selectedTask.assigned_time && ` · ${formatExpected(selectedTask.assigned_time)}`}
               </span>
             </div>
 
@@ -561,10 +577,14 @@ export default function TaskAssignmentPage() {
               </div>
             )}
 
-            {selectedTask.resource_url && (
+            {getResourceLinks(selectedTask).length > 0 && (
               <div>
                 <p className="text-xs font-bold text-text-muted uppercase tracking-wider mb-1">Resources</p>
-                <p className="text-sm text-text-secondary break-all">{selectedTask.resource_url}</p>
+                <ul className="space-y-1">
+                  {getResourceLinks(selectedTask).map((link, i) => (
+                    <li key={i} className="text-sm text-text-secondary break-all"><Linkify text={link} /></li>
+                  ))}
+                </ul>
               </div>
             )}
 

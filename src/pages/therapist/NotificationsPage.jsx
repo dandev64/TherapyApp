@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -8,7 +8,7 @@ import { formatRelativeTime } from '../../utils/time'
 import { getNotificationPath } from '../../utils/notificationNav'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
-import { Bell, CheckCircle, AlertTriangle, MessageSquare, Mail, X, Send, Clock, StickyNote } from 'lucide-react'
+import { Bell, CheckCircle, AlertTriangle, MessageSquare, Mail, Send, Clock, StickyNote, Archive, Inbox } from 'lucide-react'
 
 const TYPE_CONFIG = {
   task_completed: { icon: CheckCircle, color: 'text-success', bg: 'bg-success-bg' },
@@ -34,13 +34,21 @@ export default function NotificationsPage() {
   const [hasMore, setHasMore] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const NOTIF_PAGE_SIZE = 50
+  // 'inbox' or 'archived'. Archived = read_at set; notifications can't be deleted.
+  const [view, setView] = useState('inbox')
+  const viewRef = useRef(view)
+  viewRef.current = view
 
-  async function loadNotifications(cancelled) {
-    const { data, error } = await supabase
+  function baseQuery(which = view) {
+    const q = supabase
       .from('notifications')
       .select('id, content, type, patient_id, reference_id, created_at')
       .eq('recipient_id', profile.id)
-      .is('read_at', null)
+    return which === 'archived' ? q.not('read_at', 'is', null) : q.is('read_at', null)
+  }
+
+  async function loadNotifications(cancelled, which = view) {
+    const { data, error } = await baseQuery(which)
       .order('created_at', { ascending: false })
       .limit(NOTIF_PAGE_SIZE)
     if (cancelled) return
@@ -54,11 +62,7 @@ export default function NotificationsPage() {
     if (!notifications.length || loadingMore) return
     setLoadingMore(true)
     const oldest = notifications[notifications.length - 1]
-    const { data } = await supabase
-      .from('notifications')
-      .select('id, content, type, patient_id, reference_id, created_at')
-      .eq('recipient_id', profile.id)
-      .is('read_at', null)
+    const { data } = await baseQuery()
       .lt('created_at', oldest.created_at)
       .order('created_at', { ascending: false })
       .limit(NOTIF_PAGE_SIZE)
@@ -105,6 +109,7 @@ export default function NotificationsPage() {
           filter: `recipient_id=eq.${profile.id}`,
         },
         (payload) => {
+          if (viewRef.current !== 'inbox') return
           setNotifications((prev) => [payload.new, ...(Array.isArray(prev) ? prev : []).filter((n) => n.id !== payload.new.id)])
           // The user is looking at it, so it is already seen
           markAllSeen()
@@ -116,25 +121,29 @@ export default function NotificationsPage() {
   }, [profile?.id])
   /* eslint-enable react-hooks/exhaustive-deps */
 
-  async function dismissNotification(id) {
+  // Archive moves a notification out of the inbox; restore brings it back
+  async function setArchived(id, archived) {
     const { data, error } = await supabase
       .from('notifications')
-      .update({ read_at: new Date().toISOString() })
+      .update({ read_at: archived ? new Date().toISOString() : null })
       .eq('id', id)
-      .select()
+      .select('id')
 
-    if (error) {
-      showToast(`Failed to dismiss: ${error.message}`, 'task_overdue')
-      return
-    }
-
-    if (!data || data.length === 0) {
-      showToast('Dismiss failed: You might not have permission to update this notification.', 'task_overdue')
+    if (error || !data?.length) {
+      showToast(archived ? 'Could not archive this notification.' : 'Could not restore this notification.', 'task_overdue')
       return
     }
 
     setNotifications((prev) => prev.filter((n) => n.id !== id))
-    decrementCount()
+    if (archived) decrementCount()
+  }
+
+  function switchView(next) {
+    if (next === view) return
+    setView(next)
+    setLoading(true)
+    setNotifications([])
+    loadNotifications(false, next)
   }
 
   async function openNotification(n) {
@@ -178,8 +187,7 @@ export default function NotificationsPage() {
       setReplyText('')
       setReplyingTo(null)
 
-      // Mark notification as read (removes it from the list)
-      await dismissNotification(notification.id)
+      showToast('Reply sent.', 'task_completed')
     } catch {
       showToast('Failed to send reply. Please try again.', 'task_overdue')
     } finally {
@@ -207,12 +215,31 @@ export default function NotificationsPage() {
         </p>
       </div>
 
+      <div className="inline-flex p-1 rounded-xl bg-surface-container" role="tablist">
+        {/* eslint-disable-next-line no-unused-vars */}
+        {[['inbox', 'Inbox', Inbox], ['archived', 'Archived', Archive]].map(([key, label, TabIcon]) => (
+          <button
+            key={key}
+            role="tab"
+            aria-selected={view === key}
+            onClick={() => switchView(key)}
+            className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-colors cursor-pointer ${
+              view === key ? 'bg-surface-card text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary'
+            }`}
+          >
+            <TabIcon size={14} /> {label}
+          </button>
+        ))}
+      </div>
+
       <div className="space-y-3">
         {notifications.length === 0 ? (
           <Card>
             <div className="text-center py-12">
               <Bell size={32} className="text-text-muted mx-auto mb-3" />
-              <p className="text-sm text-text-muted">No notifications yet.</p>
+              <p className="text-sm text-text-muted">
+                {view === 'archived' ? 'No archived notifications.' : 'You\u2019re all caught up.'}
+              </p>
             </div>
           </Card>
         ) : (
@@ -221,7 +248,7 @@ export default function NotificationsPage() {
             const config = TYPE_CONFIG[n.type] || TYPE_CONFIG.task_completed
             const Icon = config.icon
             return (
-              <Card key={n.id}>
+              <Card key={n.id} className={view === 'archived' ? 'opacity-75' : ''}>
                 <div className="flex items-start gap-3">
                   <div className={`p-2 rounded-xl ${config.bg} ${config.color} shrink-0`}>
                     <Icon size={18} />
@@ -236,7 +263,7 @@ export default function NotificationsPage() {
                     <p className="text-xs text-text-muted mt-1">{formatRelativeTime(n.created_at)}</p>
 
                     {/* Reply section for task_comment and new_message */}
-                    {(n.type === 'task_comment' || n.type === 'new_message') && (
+                    {view === 'inbox' && (n.type === 'task_comment' || n.type === 'new_message') && (
                       <div className="mt-3">
                         {replyingTo === n.id ? (
                           <div className="flex gap-2">
@@ -285,14 +312,25 @@ export default function NotificationsPage() {
                       </div>
                     )}
                   </div>
-                  <button
-                    onClick={() => dismissNotification(n.id)}
-                    className="p-2.5 -m-2 text-text-muted hover:text-danger shrink-0 cursor-pointer"
-                    title="Dismiss"
-                    aria-label="Dismiss notification"
-                  >
-                    <X size={16} />
-                  </button>
+                  {view === 'inbox' ? (
+                    <button
+                      onClick={() => setArchived(n.id, true)}
+                      className="p-2.5 -m-2 text-text-muted hover:text-primary shrink-0 cursor-pointer"
+                      title="Archive"
+                      aria-label="Archive notification"
+                    >
+                      <Archive size={16} />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setArchived(n.id, false)}
+                      className="p-2.5 -m-2 text-text-muted hover:text-primary shrink-0 cursor-pointer"
+                      title="Move to inbox"
+                      aria-label="Move notification to inbox"
+                    >
+                      <Inbox size={16} />
+                    </button>
+                  )}
                 </div>
               </Card>
             )

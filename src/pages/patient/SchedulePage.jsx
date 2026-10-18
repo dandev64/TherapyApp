@@ -5,9 +5,9 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useCachedState, hasCache } from '../../hooks/useCachedState'
 import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus'
 import { toDateStr } from '../../utils/streak'
-import { formatClock } from '../../utils/time'
-import { postedOnly } from '../../utils/tasks'
-import { ChevronLeft, ChevronRight, CheckCircle, Lock } from 'lucide-react'
+import { formatExpected } from '../../utils/time'
+import { postedOnly, dayStatus, DAY_STATUS_CLASS } from '../../utils/tasks'
+import { ChevronLeft, ChevronRight, CheckCircle, Lock, CalendarOff } from 'lucide-react'
 
 const DAY_HEADERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const FULL_DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
@@ -67,14 +67,16 @@ export default function SchedulePage() {
   }, [profile, currentMonth, refreshKey])
   /* eslint-enable react-hooks/exhaustive-deps */
 
-  // Group tasks by date
-  const tasksByDate = useMemo(() => {
+  // Group tasks by date; "No tasks for today" markers are kept separately
+  const { tasksByDate, restDates } = useMemo(() => {
     const grouped = {}
+    const rest = new Set()
     tasks.forEach((t) => {
+      if (t.is_rest_day) { rest.add(t.assigned_date); return }
       if (!grouped[t.assigned_date]) grouped[t.assigned_date] = []
       grouped[t.assigned_date].push(t)
     })
-    return grouped
+    return { tasksByDate: grouped, restDates: rest }
   }, [tasks])
 
   const selectedTasks = tasksByDate[selectedDate] || []
@@ -177,7 +179,8 @@ export default function SchedulePage() {
               const dayTasks = tasksByDate[dateStr] || []
               const dayCompleted = dayTasks.filter((t) => t.status === 'completed').length
               const dayTotal = dayTasks.length
-              const allDone = dayTotal > 0 && dayCompleted === dayTotal
+              const status = dayStatus({ total: dayTotal, completed: dayCompleted, dateStr, todayStr })
+              const isRest = dayTotal === 0 && restDates.has(dateStr)
               const isToday = dateStr === todayStr
               const isSelected = dateStr === selectedDate
               const hasTherapy = dayTasks.some((t) => t.therapy_type)
@@ -186,13 +189,11 @@ export default function SchedulePage() {
                 <button
                   key={day}
                   onClick={() => setSelectedDate(dateStr)}
-                  aria-label={`${MONTHS[month]} ${day}, ${dayTotal} task${dayTotal !== 1 ? 's' : ''}${isToday ? ', today' : ''}`}
+                  aria-label={`${MONTHS[month]} ${day}, ${isRest ? 'no tasks' : `${dayTotal} task${dayTotal !== 1 ? 's' : ''}`}${status === 'done' ? ', all completed' : status === 'incomplete' ? ', incomplete' : ''}${isToday ? ', today' : ''}`}
                   aria-pressed={isSelected}
-                  className={`rounded-2xl p-1.5 sm:p-3 aspect-square flex flex-col justify-between transition-all cursor-pointer group text-left
-                    ${isToday ? 'bg-primary-container ring-2 ring-primary ring-offset-2' : ''}
-                    ${isSelected && !isToday ? 'bg-primary/10 ring-2 ring-primary/40' : ''}
-                    ${!isToday && !isSelected && allDone ? 'bg-secondary-container/20' : ''}
-                    ${!isToday && !isSelected && !allDone ? 'bg-surface-container-lowest hover:bg-primary-container/20' : ''}
+                  className={`rounded-2xl p-1.5 sm:p-3 aspect-square flex flex-col justify-between transition-all cursor-pointer group text-left hover:brightness-95
+                    ${DAY_STATUS_CLASS[status]}
+                    ${isToday ? 'ring-2 ring-primary ring-offset-2' : isSelected ? 'ring-2 ring-primary/40' : ''}
                   `}
                 >
                   <div>
@@ -204,6 +205,9 @@ export default function SchedulePage() {
                     )}
                   </div>
                   <div>
+                    {isRest && (
+                      <span className="block text-[8px] sm:text-[10px] font-semibold text-text-muted leading-tight">No tasks</span>
+                    )}
                     {hasTherapy && (
                       <span className="inline-block px-1 sm:px-1.5 py-0.5 bg-primary/10 text-primary text-[8px] sm:text-[10px] font-bold rounded-full">
                         therapy
@@ -281,8 +285,8 @@ export default function SchedulePage() {
                             {task.description}
                           </p>
                         )}
-                        <p className="text-sm text-on-surface-variant">
-                          {task.assigned_time ? formatClock(task.assigned_time) : '—'}
+                        <p className="text-xs text-on-surface-variant">
+                          {task.assigned_time ? formatExpected(task.assigned_time) : '—'}
                         </p>
                       </div>
                       <ChevronRight size={14} className="text-text-muted shrink-0" />
@@ -294,7 +298,15 @@ export default function SchedulePage() {
           )}
 
           {selectedTasks.length === 0 && (
-            <p className="text-sm text-outline mt-6">No tasks assigned for this day.</p>
+            restDates.has(selectedDate) ? (
+              <div className="mt-6 rounded-2xl bg-surface-container-low p-5 text-center">
+                <CalendarOff size={20} className="text-primary mx-auto mb-2" />
+                <p className="text-base font-bold text-text-primary">No tasks for today</p>
+                <p className="text-xs text-text-muted mt-1">Your therapist has given you a rest day.</p>
+              </div>
+            ) : (
+              <p className="text-sm text-outline mt-6">No tasks assigned for this day.</p>
+            )
           )}
 
           {isFutureDay && selectedTasks.length > 0 && (

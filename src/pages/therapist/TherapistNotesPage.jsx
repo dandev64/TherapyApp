@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
+import { fetchTherapistPatients } from '../../utils/patients'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCachedState, hasCache } from '../../hooks/useCachedState'
 import Card from '../../components/ui/Card'
@@ -27,11 +28,7 @@ export default function TherapistNotesPage() {
 
   async function loadData() {
     // Step 1: Get therapist's assigned patients
-    const { data: assignments, error: assignErr } = await supabase
-      .from('patient_assignments')
-      .select('patient_id, profiles!patient_assignments_patient_id_fkey(id, full_name)')
-      .eq('assigned_to', profile.id)
-      .eq('relationship', 'therapist')
+    const { data: assignments, error: assignErr } = await fetchTherapistPatients(profile.id)
 
     if (assignErr) {
       console.error('Failed to load patients:', assignErr.message)
@@ -124,7 +121,7 @@ export default function TherapistNotesPage() {
       )}
 
       <div>
-        <h2 className="text-3xl font-extrabold text-text-primary tracking-tight">Client Notes</h2>
+        <h2 className="text-3xl font-extrabold text-text-primary tracking-tight">Patient Feedback</h2>
         <p className="text-text-secondary mt-2">
           Review feedback from your patients&apos; completed tasks
         </p>

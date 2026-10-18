@@ -20,15 +20,12 @@ export default function ProgressPage() {
   useEffect(() => {
     if (!profile) return
 
-    // 90 days covers the streak lookback and the 30-day consistency window
-    const ninetyDaysAgo = new Date()
-    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
+    // Whole history: consistency covers the full course of therapy
 
     supabase
       .from('task_assignments')
       .select('assigned_date, status, is_rest_day')
       .eq('patient_id', profile.id)
-      .gte('assigned_date', toDateStr(ninetyDaysAgo))
       .order('assigned_date', { ascending: false })
       .then(({ data, error: err }) => {
         if (err) {
@@ -55,8 +52,10 @@ export default function ProgressPage() {
     const d = new Date(weekStart)
     d.setDate(weekStart.getDate() + i)
     const dateStr = toDateStr(d)
-    const dayTasks = allTasks.filter((t) => t.assigned_date === dateStr)
+    const dayRows = allTasks.filter((t) => t.assigned_date === dateStr)
+    const dayTasks = dayRows.filter((t) => !t.is_rest_day)
     week.push({
+      rest: dayTasks.length === 0 && dayRows.length > 0,
       dateStr,
       label: DAY_LABELS[d.getDay()],
       day: d.getDate(),
@@ -107,7 +106,7 @@ export default function ProgressPage() {
             <div className="min-w-0">
               <p className="text-2xl sm:text-3xl font-extrabold text-text-primary font-heading">{consistency}%</p>
               <p className="text-xs font-medium text-text-muted mt-0.5">
-                Consistency <span className="whitespace-nowrap">(last 30 days)</span>
+                Consistency <span className="whitespace-nowrap">(overall)</span>
               </p>
             </div>
           </div>
@@ -133,7 +132,7 @@ export default function ProgressPage() {
                 <span className="text-[10px] font-bold text-text-muted uppercase">{d.label}</span>
                 <span className="text-sm font-bold text-text-primary">{d.day}</span>
                 {d.total === 0 ? (
-                  <span className="text-[10px] text-text-muted">—</span>
+                  <span className="text-[10px] text-text-muted">{d.rest ? 'Rest' : '—'}</span>
                 ) : allDone ? (
                   <CheckCircle size={16} className="text-success" />
                 ) : (

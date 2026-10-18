@@ -17,6 +17,9 @@ import TherapistProfilePage from './pages/therapist/TherapistProfilePage'
 import TherapistCalendarPage from './pages/therapist/TherapistCalendarPage'
 import TherapistMessagesPage from './pages/therapist/TherapistMessagesPage'
 import TherapistMessagesInbox from './pages/therapist/TherapistMessagesInbox'
+import TodayTasksPage from './pages/therapist/TodayTasksPage'
+import ConsistencyPage from './pages/therapist/ConsistencyPage'
+import ClientNotesPage from './pages/therapist/ClientNotesPage'
 import PatientDashboard from './pages/patient/PatientDashboard'
 import SchedulePage from './pages/patient/SchedulePage'
 import TaskDetailPage from './pages/patient/TaskDetailPage'
@@ -70,6 +73,10 @@ export default function App() {
             <Route path="calendar" element={<TherapistCalendarPage />} />
             <Route path="assignments" element={<TaskAssignmentPage />} />
             <Route path="notes" element={<TherapistNotesPage />} />
+            <Route path="today" element={<TodayTasksPage />} />
+            <Route path="consistency" element={<ConsistencyPage />} />
+            <Route path="client-notes" element={<ClientNotesPage />} />
+            <Route path="client-notes/recent" element={<ClientNotesPage recent />} />
             <Route path="notifications" element={<NotificationsPage />} />
             <Route path="profile" element={<TherapistProfilePage />} />
             <Route path="messages" element={<TherapistMessagesInbox />} />

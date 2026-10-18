@@ -36,6 +36,7 @@ export default function CaregiverDashboard() {
           .select('patient_id, status')
           .in('patient_id', patientIds)
           .eq('assigned_date', today)
+          .eq('is_rest_day', false)
       : { data: [] }
 
     const tasksByPatient = {}

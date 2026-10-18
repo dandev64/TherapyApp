@@ -59,3 +59,8 @@ export function formatClock(timeStr) {
   if (!timeStr) return ''
   return new Date(`2000-01-01T${timeStr}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
 }
+
+/** "Expected Completion - 9:00 AM" */
+export function formatExpected(timeStr) {
+  return timeStr ? `Expected Completion - ${formatClock(timeStr)}` : ''
+}
