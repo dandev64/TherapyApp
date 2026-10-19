@@ -3,6 +3,27 @@ import { supabase } from '../lib/supabase'
 // Same cap as the proof-video Edge Function; a 60 s clip at the recorder's
 // bitrate is about 10 MB.
 export const MAX_VIDEO_BYTES = 15 * 1024 * 1024
+export const MAX_SECONDS = 60
+
+// ~1.2 Mbps video + 64 kbps audio ≈ 9.5 MB per minute at 720p, which keeps
+// ten days of videos for every patient inside R2's free 10 GB. Used both for
+// recording in the app and for compressing uploaded videos.
+export const VIDEO_BITS = 1_200_000
+export const AUDIO_BITS = 64_000
+
+// MP4 first: it plays everywhere, including on a therapist's iPhone
+const MIME_TYPES = [
+  'video/mp4;codecs=avc1,mp4a.40.2',
+  'video/mp4',
+  'video/webm;codecs=vp9,opus',
+  'video/webm;codecs=vp8,opus',
+  'video/webm',
+]
+
+/** Best MediaRecorder format this browser supports, or '' for its default. */
+export function pickMimeType() {
+  return MIME_TYPES.find((t) => MediaRecorder.isTypeSupported(t)) || ''
+}
 
 async function callProofVideo(body) {
   const { data, error } = await supabase.functions.invoke('proof-video', { body })

@@ -1,25 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { Video, Circle, Square, SwitchCamera, X } from 'lucide-react'
-import { MAX_VIDEO_BYTES } from '../utils/proofVideo'
-
-const MAX_SECONDS = 60
-// ~1.2 Mbps video + 64 kbps audio ≈ 9.5 MB per minute at 720p, which keeps
-// ten days of videos for every patient inside R2's free 10 GB
-const VIDEO_BITS = 1_200_000
-const AUDIO_BITS = 64_000
-
-// MP4 first: it plays everywhere, including on a therapist's iPhone
-const MIME_TYPES = [
-  'video/mp4;codecs=avc1,mp4a.40.2',
-  'video/mp4',
-  'video/webm;codecs=vp9,opus',
-  'video/webm;codecs=vp8,opus',
-  'video/webm',
-]
-
-function pickMimeType() {
-  return MIME_TYPES.find((t) => MediaRecorder.isTypeSupported(t)) || ''
-}
+import { Video, Upload, Circle, Square, SwitchCamera, X } from 'lucide-react'
+import { MAX_VIDEO_BYTES, MAX_SECONDS, VIDEO_BITS, AUDIO_BITS, pickMimeType } from '../utils/proofVideo'
+import { compressVideo, VideoError } from '../utils/videoCompress'
 
 function formatSeconds(s) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
@@ -32,21 +14,25 @@ function canRecordVideo() {
 }
 
 /**
- * Records a proof video in the browser, at a fixed bitrate and capped at
- * 60 seconds. Calls onRecorded({ blob, duration }) when a clip is ready.
- * There is deliberately no gallery upload: proof is recorded live.
+ * Gets a proof video: either recorded in the browser at a fixed bitrate and
+ * capped at 60 seconds, or picked from the gallery and compressed to the
+ * same quality (utils/videoCompress.js). Calls onRecorded({ blob, duration })
+ * when a clip is ready.
  */
 export default function VideoRecorder({ onRecorded }) {
-  // 'idle' | 'starting' | 'preview' | 'recording'
+  // 'idle' | 'starting' | 'preview' | 'recording' | 'processing'
   const [phase, setPhase] = useState('idle')
   const [error, setError] = useState('')
   const [elapsed, setElapsed] = useState(0)
   const [facing, setFacing] = useState('environment')
+  const [progress, setProgress] = useState(0)
 
   const videoRef = useRef(null)
   const streamRef = useRef(null)
   const recorderRef = useRef(null)
   const timerRef = useRef(null)
+  const fileInputRef = useRef(null)
+  const abortRef = useRef(null)
 
   function stopCamera() {
     clearInterval(timerRef.current)
@@ -55,6 +41,7 @@ export default function VideoRecorder({ onRecorded }) {
   }
 
   useEffect(() => () => {
+    abortRef.current?.abort()
     if (recorderRef.current?.state === 'recording') {
       recorderRef.current.ondataavailable = null
       recorderRef.current.onstop = null
@@ -157,29 +144,102 @@ export default function VideoRecorder({ onRecorded }) {
     if (recorderRef.current?.state === 'recording') recorderRef.current.stop()
   }
 
-  if (!canRecordVideo()) {
+  async function handleFileSelect(e) {
+    const file = e.target.files?.[0]
+    if (fileInputRef.current) fileInputRef.current.value = ''
+    if (!file) return
+    if (!file.type.startsWith('video/') && !/\.(mov|mp4|m4v|webm|3gp)$/i.test(file.name)) {
+      setError('Please choose a video file.')
+      return
+    }
+
+    const controller = new AbortController()
+    abortRef.current = controller
+    setError('')
+    setProgress(0)
+    setPhase('processing')
+    try {
+      const result = await compressVideo(file, { onProgress: setProgress, signal: controller.signal })
+      if (controller.signal.aborted) return
+      setPhase('idle')
+      onRecorded(result)
+    } catch (err) {
+      if (err?.name === 'AbortError') return
+      console.error('Video processing failed:', err)
+      setPhase('idle')
+      setError(err instanceof VideoError ? err.message : "Couldn't prepare that video. Please try another one or record it in the app.")
+    } finally {
+      if (abortRef.current === controller) abortRef.current = null
+    }
+  }
+
+  function cancelProcessing() {
+    abortRef.current?.abort()
+    abortRef.current = null
+    setPhase('idle')
+  }
+
+  if (phase === 'processing') {
+    const pct = Math.round(progress * 100)
     return (
-      <p className="text-sm text-text-muted p-4 rounded-xl bg-surface-alt">
-        Video recording isn't supported on this browser. Please submit a photo instead.
-      </p>
+      <div className="space-y-3 p-5 rounded-xl bg-surface-alt">
+        <p className="text-sm font-semibold text-text-primary">Preparing video… {pct}%</p>
+        <div className="h-2 rounded-full bg-border overflow-hidden" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+          <div className="h-full bg-primary transition-[width] duration-300" style={{ width: `${pct}%` }} />
+        </div>
+        <p className="text-xs text-text-muted">Making the video smaller for upload. Please keep this screen open.</p>
+        <button
+          onClick={cancelProcessing}
+          className="text-sm font-semibold text-text-secondary hover:text-text-primary cursor-pointer"
+        >
+          Cancel
+        </button>
+      </div>
     )
   }
 
   if (phase === 'idle') {
+    const recordable = canRecordVideo()
     return (
       <div className="space-y-2">
-        <button
-          onClick={() => openCamera()}
-          className="w-full flex flex-col items-center gap-3 p-8 rounded-xl border-2 border-dashed border-border hover:border-primary/40 hover:bg-surface-alt transition-colors cursor-pointer"
-        >
-          <div className="p-3 rounded-full bg-primary-container">
-            <Video size={24} className="text-primary" />
-          </div>
-          <div className="text-center">
-            <p className="text-sm font-semibold text-text-primary">Record a video</p>
-            <p className="text-xs text-text-muted mt-1">Up to 1 minute, recorded with your camera</p>
-          </div>
-        </button>
+        <div className={`grid gap-2 ${recordable ? 'grid-cols-2' : 'grid-cols-1'}`}>
+          {recordable && (
+            <button
+              onClick={() => openCamera()}
+              className="flex flex-col items-center gap-2 p-5 rounded-xl border-2 border-dashed border-border hover:border-primary/40 hover:bg-surface-alt transition-colors cursor-pointer"
+            >
+              <div className="p-3 rounded-full bg-primary-container">
+                <Video size={22} className="text-primary" />
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-semibold text-text-primary">Record a video</p>
+                <p className="text-xs text-text-muted mt-1">With your camera</p>
+              </div>
+            </button>
+          )}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="flex flex-col items-center gap-2 p-5 rounded-xl border-2 border-dashed border-border hover:border-primary/40 hover:bg-surface-alt transition-colors cursor-pointer"
+          >
+            <div className="p-3 rounded-full bg-primary-container">
+              <Upload size={22} className="text-primary" />
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-semibold text-text-primary">Upload a video</p>
+              <p className="text-xs text-text-muted mt-1">From your gallery</p>
+            </div>
+          </button>
+        </div>
+        <p className="text-xs text-text-muted text-center">Videos can be up to 1 minute long.</p>
+        {/* No `capture` attribute, so phones open the gallery */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="video/*"
+          aria-label="Upload proof video"
+          onChange={handleFileSelect}
+          className="hidden"
+        />
         {error && <p className="text-xs text-danger font-medium">{error}</p>}
       </div>
     )

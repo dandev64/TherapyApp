@@ -94,7 +94,13 @@ The client estimates 56 patients (8 therapists × 7), at least 1 task per weekda
   - `view` returns a 1-hour GET URL, or `{expired:true}`.
 - **Frontend:**
   - `components/VideoRecorder.jsx` uses MediaRecorder at 1.2 Mbps + 64 kbps, which is about 9.5 MB per minute. It prefers MP4 so iPhones can play the videos, and stops automatically at 60 s.
-  - Videos can only be recorded in the app; there is no gallery upload, on purpose.
+  - Patients can also **upload from the gallery** ("Upload a video"). `utils/videoCompress.js#compressVideo` prepares the file:
+    - Clips over 60 s are refused.
+    - Small mp4/webm files of 15 MB or less pass through unchanged.
+    - Everything else is transcoded to ≤720p H.264/AAC MP4 at the same bitrates using **Mediabunny** (pinned 1.61.2, WebCodecs, lazy `import()`). On desktop, a 60 s 1080p clip of 87 MB became 8.7 MB in about 12 s.
+    - If there's no WebCodecs, or the conversion fails, it falls back to real time: canvas `captureStream` plus MediaRecorder.
+    - Gotcha: `new Quality(number)` is a 0–1 *quality level*. Bitrates must be passed as `new Quality({ bitrate })`.
+  - Local testing of the R2 upload must run on port **5173**, the only localhost origin in the bucket's CORS rule. Port 5199 gets a CORS error.
   - Other files: `components/ProofVideo.jsx` (player and "expired" label) and `utils/proofVideo.js` (upload with XHR progress).
   - TaskDetailPage has Photo/Video tabs; either one satisfies `requires_proof`.
 - **Budget:** worst case is 10 days × 56 patients × 15 MB = about 6.3 GB, inside R2's 10 GB free tier. There is deliberately no total-storage check; the user chose that.
