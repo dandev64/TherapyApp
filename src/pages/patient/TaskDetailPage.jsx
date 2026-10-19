@@ -8,11 +8,14 @@ import { compressImage } from '../../utils/imageCompress'
 import { toDateStr } from '../../utils/streak'
 import { formatExpected } from '../../utils/time'
 import ProofPhotos from '../../components/ProofPhotos'
+import ProofVideo from '../../components/ProofVideo'
+import VideoRecorder from '../../components/VideoRecorder'
+import { uploadProofVideo } from '../../utils/proofVideo'
 import { getProofPaths } from '../../utils/proofs'
 import { isScheduled, getResourceLinks } from '../../utils/tasks'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
-import { ArrowLeft, ArrowRight, Camera, Upload, X, CheckSquare, Clock, Lock, Pencil, ImagePlus } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Camera, Upload, X, CheckSquare, Clock, Lock, Pencil, ImagePlus, Video } from 'lucide-react'
 
 const MOODS = [
   { key: 'excited', emoji: '🤩', label: 'Excited' },
@@ -55,6 +58,12 @@ export default function TaskDetailPage() {
   const [newPhotos, setNewPhotos] = useState([])
   const fileInputRef = useRef(null)
 
+  // Proof can be photos or a video recorded in the app
+  const [proofMode, setProofMode] = useState('photo')
+  // Video recorded on this visit: { blob, duration, preview }
+  const [newVideo, setNewVideo] = useState(null)
+  const [videoProgress, setVideoProgress] = useState(null)
+
   async function loadTask(cancelled = false) {
     const { data, error } = await supabase
       .from('task_assignments')
@@ -85,6 +94,8 @@ export default function TaskDetailPage() {
     setStep('proof')
     setEditing(false)
     setNewPhotos([])
+    setNewVideo(null)
+    setProofMode('photo')
     loadTask(cancelled)
     return () => { cancelled = true }
   }, [id])
@@ -125,6 +136,31 @@ export default function TaskDetailPage() {
     })
   }
 
+  function handleVideoRecorded({ blob, duration }) {
+    setNewVideo({ blob, duration, preview: URL.createObjectURL(blob) })
+  }
+
+  function removeNewVideo() {
+    if (newVideo) URL.revokeObjectURL(newVideo.preview)
+    setNewVideo(null)
+  }
+
+  // Uploads the recorded video to R2 and saves it on the task.
+  // Returns the task's proof_video, undefined if there was none, or null on failure.
+  async function uploadVideo() {
+    if (!newVideo) return undefined
+    setVideoProgress(0)
+    try {
+      return await uploadProofVideo(id, newVideo.blob, newVideo.duration, setVideoProgress)
+    } catch (err) {
+      console.error('Video upload failed:', err)
+      showToast(err.message || 'Failed to upload video. Please try again.', 'task_overdue')
+      return null
+    } finally {
+      setVideoProgress(null)
+    }
+  }
+
   // Uploads new photos and returns all storage paths (kept + new), or null on failure
   async function uploadPhotos() {
     const paths = [...keptPaths]
@@ -147,6 +183,7 @@ export default function TaskDetailPage() {
     if (needsProof) return
     setSubmitting(true)
 
+    if ((await uploadVideo()) === null) { setSubmitting(false); return }
     const paths = await uploadPhotos()
     if (!paths) { setSubmitting(false); return }
 
@@ -180,15 +217,24 @@ export default function TaskDetailPage() {
     navigate('/patient/schedule')
   }
 
-  function startEditing() {
+  function startEditing(mode = 'photo') {
     setKeptPaths(getProofPaths(task))
     setNewPhotos([])
+    removeNewVideo()
+    setProofMode(mode)
     setEditing(true)
   }
 
+  function cancelEditing() {
+    setEditing(false)
+    setNewPhotos([])
+    removeNewVideo()
+  }
+
   async function saveEdit() {
-    if (task.requires_proof && keptPaths.length + newPhotos.length === 0) return
+    if (task.requires_proof && keptPaths.length + newPhotos.length === 0 && !newVideo && !task.proof_video) return
     setSubmitting(true)
+    if ((await uploadVideo()) === null) { setSubmitting(false); return }
     const paths = await uploadPhotos()
     if (!paths) { setSubmitting(false); return }
 
@@ -205,6 +251,7 @@ export default function TaskDetailPage() {
     }
     setTask(data)
     setNewPhotos([])
+    removeNewVideo()
     setEditing(false)
     showToast('Submission updated.', 'task_completed')
   }
@@ -231,7 +278,8 @@ export default function TaskDetailPage() {
   const isCompleted = task.status === 'completed'
   const isFuture = task.assigned_date > toDateStr(new Date())
   const photoCount = keptPaths.length + newPhotos.length
-  const needsProof = task.requires_proof && newPhotos.length === 0
+  const needsProof = task.requires_proof && newPhotos.length === 0 && !newVideo
+  const hasSubmittedProof = getProofPaths(task).length > 0 || !!task.proof_video
   const scheduledDate = new Date(task.assigned_date + 'T00:00:00').toLocaleDateString('en-US', {
     month: 'long',
     day: 'numeric',
@@ -304,6 +352,56 @@ export default function TaskDetailPage() {
     </div>
   )
 
+  const videoPicker = newVideo ? (
+    <div className="space-y-1">
+      <div className="relative">
+        <video src={newVideo.preview} controls playsInline className="w-full max-h-80 rounded-xl bg-black" />
+        <button
+          onClick={removeNewVideo}
+          aria-label="Remove video"
+          className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 text-white hover:bg-black/70 cursor-pointer"
+        >
+          <X size={14} />
+        </button>
+      </div>
+      <p className="text-xs text-text-muted">
+        {newVideo.duration}s · {(newVideo.blob.size / 1024 / 1024).toFixed(1)} MB. Tap X to record again.
+      </p>
+    </div>
+  ) : (
+    <VideoRecorder onRecorded={handleVideoRecorded} />
+  )
+
+  const proofTabs = [
+    { key: 'photo', icon: <Camera size={16} />, label: photoCount ? `Photo (${photoCount})` : 'Photo' },
+    { key: 'video', icon: <Video size={16} />, label: newVideo ? 'Video ✓' : 'Video' },
+  ]
+
+  const proofPicker = (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-surface-alt" role="tablist">
+        {proofTabs.map(({ key, icon, label }) => (
+          <button
+            key={key}
+            role="tab"
+            aria-selected={proofMode === key}
+            onClick={() => setProofMode(key)}
+            className={`flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-semibold transition-colors cursor-pointer ${
+              proofMode === key ? 'bg-surface-card text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary'
+            }`}
+          >
+            {icon} {label}
+          </button>
+        ))}
+      </div>
+      {proofMode === 'photo' ? photoPicker : videoPicker}
+    </div>
+  )
+
+  const submitLabel = videoProgress !== null
+    ? `Uploading video ${Math.round(videoProgress * 100)}%`
+    : 'Submitting...'
+
   return (
     <div className="space-y-6 max-w-lg mx-auto">
       <h2 className="text-2xl font-extrabold text-text-primary">{task.title}</h2>
@@ -371,9 +469,9 @@ export default function TaskDetailPage() {
         <Card>
           <div className="flex items-center gap-2 mb-3">
             <CheckSquare size={16} className="text-amber-600" />
-            <p className="text-sm font-bold text-amber-700">Photo proof required to complete</p>
+            <p className="text-sm font-bold text-amber-700">Photo or video proof required to complete</p>
           </div>
-          {photoPicker}
+          {proofPicker}
         </Card>
       )}
 
@@ -419,19 +517,27 @@ export default function TaskDetailPage() {
       )}
 
       {/* Completed: show / edit submission */}
-      {isCompleted && !editing && getProofPaths(task).length > 0 && (
+      {isCompleted && !editing && hasSubmittedProof && (
         <Card>
-          <ProofPhotos task={task} title="Proof Submitted" />
-          <Button variant="secondary" size="sm" className="mt-4" onClick={startEditing}>
+          <div className="space-y-4">
+            <ProofPhotos task={task} title="Proof Submitted" />
+            <ProofVideo task={task} title="Video Submitted" />
+          </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="mt-4"
+            onClick={() => startEditing(task.proof_video && !getProofPaths(task).length ? 'video' : 'photo')}
+          >
             <Pencil size={14} /> Edit submission
           </Button>
         </Card>
       )}
-      {isCompleted && !editing && getProofPaths(task).length === 0 && task.requires_proof && (
+      {isCompleted && !editing && !hasSubmittedProof && task.requires_proof && (
         <Card>
-          <p className="text-sm text-text-muted mb-3">No proof photo on this task.</p>
-          <Button variant="secondary" size="sm" onClick={startEditing}>
-            <ImagePlus size={14} /> Add photo
+          <p className="text-sm text-text-muted mb-3">No proof on this task.</p>
+          <Button variant="secondary" size="sm" onClick={() => startEditing()}>
+            <ImagePlus size={14} /> Add photo or video
           </Button>
         </Card>
       )}
@@ -439,19 +545,25 @@ export default function TaskDetailPage() {
         <Card>
           <p className="text-sm font-bold text-text-primary mb-1">Edit submission</p>
           <p className="text-xs text-text-muted mb-4">
-            Replace or add photos if your therapist asked for a clearer one.
+            Replace or add photos, or record a new video, if your therapist asked for a clearer one.
           </p>
-          {photoPicker}
+          {task.proof_video && !newVideo && proofMode === 'video' && (
+            <div className="mb-3">
+              <ProofVideo task={task} title="Current video" />
+              <p className="text-xs text-text-muted mt-1">Recording a new video replaces this one.</p>
+            </div>
+          )}
+          {proofPicker}
           <div className="flex gap-2 mt-4">
-            <Button variant="secondary" size="sm" onClick={() => { setEditing(false); setNewPhotos([]) }} disabled={submitting}>
+            <Button variant="secondary" size="sm" onClick={cancelEditing} disabled={submitting}>
               Cancel
             </Button>
             <Button
               size="sm"
               onClick={saveEdit}
-              disabled={submitting || (task.requires_proof && photoCount === 0)}
+              disabled={submitting || (task.requires_proof && photoCount === 0 && !newVideo && !task.proof_video)}
             >
-              {submitting ? 'Saving...' : 'Save changes'}
+              {submitting ? (videoProgress !== null ? submitLabel : 'Saving...') : 'Save changes'}
             </Button>
           </div>
         </Card>
@@ -483,7 +595,7 @@ export default function TaskDetailPage() {
         {!isCompleted && !isFuture && step === 'feedback' && (
           <Button onClick={handleComplete} disabled={submitting}>
             {submitting ? (
-              <><Upload size={16} className="animate-pulse" /> Submitting...</>
+              <><Upload size={16} className="animate-pulse" /> {submitLabel}</>
             ) : (
               'Submit'
             )}

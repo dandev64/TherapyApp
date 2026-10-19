@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, CheckCircle, MessageSquare, Clock, CheckSqua
 import Modal from '../ui/Modal'
 import Badge from '../ui/Badge'
 import ProofPhotos from '../ProofPhotos'
+import ProofVideo from '../ProofVideo'
 import { isScheduled, formatPublishAt, dayStatus, DAY_STATUS_CLASS, getResourceLinks } from '../../utils/tasks'
 import { formatExpected } from '../../utils/time'
 import { markRestDay, clearRestDay } from '../../utils/restDay'
@@ -492,6 +493,7 @@ export default function ReadOnlyCalendar({ patientId, therapistId, refreshKey, o
                   )}
 
                   <ProofPhotos task={selectedTask} />
+                  <ProofVideo task={selectedTask} />
                   {selectedTask.requires_proof && (
                     <button
                       onClick={() => requestNewPhoto(selectedTask)}

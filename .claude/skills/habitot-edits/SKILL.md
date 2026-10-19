@@ -75,7 +75,25 @@ Plan: `~/.claude/plans/create-a-plan-for-melodic-crescent.md`. Migration `supaba
 - Archive patients: `patient_assignments.archived_at` via RPC `set_patient_archived`; `utils/patients.js#fetchTherapistPatients` hides archived.
 - Notifications: X removed; Archive sets `read_at`, Inbox/Archived tabs; DELETE policy dropped.
 - Message search in `ChatThread.jsx` (ilike over the conversation, jump to result).
-- **Deferred:** video proof (client to confirm feasibility; photos ~110 KB each vs 20–60 MB per video).
+- Video proof: see the section below.
+
+## Video proof (2026-10-19)
+The client estimates 56 patients (8 therapists × 7), at least 1 task per weekday, and videos of 1 minute or less.
+- **Storage:** Cloudflare R2, private bucket `habitot-proof-videos`. Photos stay in the Supabase `task-proofs` bucket.
+  - An R2 lifecycle rule deletes objects **10 days** after upload. `RETENTION_DAYS` in `src/utils/proofs.js` and `R2_RETENTION_DAYS` (default 10) in the function must match it.
+  - Bucket CORS allows `http://localhost:5173` and `https://habitot.vercel.app`, for GET and PUT with the `content-type` header. A new origin (custom domain, other dev port) has to be added in Cloudflare.
+  - Supabase secrets: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`.
+- **Edge Function `supabase/functions/proof-video`** (deploy: `supabase functions deploy proof-video --project-ref afzprgdowymgvmxtrqzc`):
+  - It signs R2 URLs itself with SigV4 over Web Crypto; there's no SDK.
+  - `upload` signs Content-Length, which enforces the 15 MB cap.
+  - `confirm` writes `task_assignments.proof_video` (`{key,size,uploaded_at,duration}`, migration `migration-2026-10-proof-video.sql`) and deletes the replaced object.
+  - `view` returns a 1-hour GET URL, or `{expired:true}`.
+- **Frontend:**
+  - `components/VideoRecorder.jsx` uses MediaRecorder at 1.2 Mbps + 64 kbps, which is about 9.5 MB per minute. It prefers MP4 so iPhones can play the videos, and stops automatically at 60 s.
+  - Videos can only be recorded in the app; there is no gallery upload, on purpose.
+  - Other files: `components/ProofVideo.jsx` (player and "expired" label) and `utils/proofVideo.js` (upload with XHR progress).
+  - TaskDetailPage has Photo/Video tabs; either one satisfies `requires_proof`.
+- **Budget:** worst case is 10 days × 56 patients × 15 MB = about 6.3 GB, inside R2's 10 GB free tier. There is deliberately no total-storage check; the user chose that.
 
 ## How to work / test
 - Read only the files relevant to the change, then run `npm run build` and `npx eslint src`.

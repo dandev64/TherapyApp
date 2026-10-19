@@ -11,6 +11,7 @@ import Badge from '../../components/ui/Badge'
 import Modal from '../../components/ui/Modal'
 import { Plus, CheckSquare, Trash2, MessageSquare, Clock, Camera, Pencil } from 'lucide-react'
 import ProofPhotos from '../../components/ProofPhotos'
+import ProofVideo from '../../components/ProofVideo'
 import PublishTimeField from '../../components/therapist/PublishTimeField'
 import { isScheduled, formatPublishAt, toLocalInputValue, getResourceLinks, isIncomplete } from '../../utils/tasks'
 import { toDateStr } from '../../utils/streak'
@@ -492,7 +493,7 @@ export default function TaskAssignmentPage() {
                     <td className="px-4 py-3 text-text-secondary hidden md:table-cell">{formatClock(a.assigned_time)}</td>
                     <td className="px-4 py-3 hidden md:table-cell">
                       {a.requires_proof && (
-                        <Camera size={14} className={a.proof_url ? 'text-success' : 'text-text-muted'} title={a.proof_url ? 'Proof submitted' : 'Proof required'} />
+                        <Camera size={14} className={a.proof_url || a.proof_video ? 'text-success' : 'text-text-muted'} title={a.proof_url || a.proof_video ? 'Proof submitted' : 'Proof required'} />
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -616,6 +617,7 @@ export default function TaskAssignmentPage() {
                 )}
 
                 <ProofPhotos task={selectedTask} />
+                <ProofVideo task={selectedTask} />
               </div>
             )}
           </div>
