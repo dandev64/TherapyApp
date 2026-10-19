@@ -156,13 +156,12 @@ export default function PatientDetailPage() {
   }
 
   // Chart period (Week / Month / Overall, with ‹ › for earlier periods).
-  // Consistency follows it; the Assigned/Completed counts stay on this week.
+  // Consistency, Assigned and Completed all follow it (up to today).
   const range = getRange(period, periodOffset, firstTaskDate(allTasks))
-  const consistency = calculateConsistency(allTasks, range).percent
-  const consistencyLabel = period === 'all'
+  const stats = calculateConsistency(allTasks, range)
+  const periodLabel = period === 'all'
     ? 'overall'
     : periodOffset === 0 ? `this ${period}` : range.label
-  const week = calculateConsistency(allTasks, getRange('week'))
   const streak = calculateStreak(allTasks)
   const completionDays = dailyCompletion(allTasks, range)
   const feedbackInRange = feedback.filter((f) => {
@@ -235,8 +234,8 @@ export default function PatientDetailPage() {
                 <Target size={18} className="text-success" />
               </div>
               <div>
-                <p className="text-2xl font-extrabold text-text-primary font-heading">{consistency}%</p>
-                <p className="text-[10px] font-medium text-text-muted">Consistency ({consistencyLabel})</p>
+                <p className="text-2xl font-extrabold text-text-primary font-heading">{stats.percent}%</p>
+                <p className="text-[10px] font-medium text-text-muted">Consistency ({periodLabel})</p>
               </div>
             </div>
           </Card>
@@ -246,8 +245,8 @@ export default function PatientDetailPage() {
                 <ClipboardList size={18} className="text-primary" />
               </div>
               <div>
-                <p className="text-2xl font-extrabold text-text-primary font-heading">{week.total}</p>
-                <p className="text-[10px] font-medium text-text-muted">Assigned (this week)</p>
+                <p className="text-2xl font-extrabold text-text-primary font-heading">{stats.total}</p>
+                <p className="text-[10px] font-medium text-text-muted">Assigned ({periodLabel})</p>
               </div>
             </div>
           </Card>
@@ -257,8 +256,8 @@ export default function PatientDetailPage() {
                 <CheckCircle size={18} className="text-secondary" />
               </div>
               <div>
-                <p className="text-2xl font-extrabold text-text-primary font-heading">{week.completed}</p>
-                <p className="text-[10px] font-medium text-text-muted">Completed (this week){week.missed > 0 ? ` · ${week.missed} missed` : ''}</p>
+                <p className="text-2xl font-extrabold text-text-primary font-heading">{stats.completed}</p>
+                <p className="text-[10px] font-medium text-text-muted">Completed ({periodLabel}){stats.missed > 0 ? ` · ${stats.missed} missed` : ''}</p>
               </div>
             </div>
           </Card>
