@@ -155,13 +155,15 @@ export default function PatientDetailPage() {
     )
   }
 
-  // Consistency covers the whole course of therapy; counts cover this week
-  const consistency = calculateConsistency(allTasks).percent
+  // Chart period (Week / Month / Overall, with ‹ › for earlier periods).
+  // Consistency follows it; the Assigned/Completed counts stay on this week.
+  const range = getRange(period, periodOffset, firstTaskDate(allTasks))
+  const consistency = calculateConsistency(allTasks, range).percent
+  const consistencyLabel = period === 'all'
+    ? 'overall'
+    : periodOffset === 0 ? `this ${period}` : range.label
   const week = calculateConsistency(allTasks, getRange('week'))
   const streak = calculateStreak(allTasks)
-
-  // Chart period (Week / Month / Overall, with ‹ › for earlier periods)
-  const range = getRange(period, periodOffset, firstTaskDate(allTasks))
   const completionDays = dailyCompletion(allTasks, range)
   const feedbackInRange = feedback.filter((f) => {
     const d = toDateStr(new Date(f.created_at))
@@ -234,7 +236,7 @@ export default function PatientDetailPage() {
               </div>
               <div>
                 <p className="text-2xl font-extrabold text-text-primary font-heading">{consistency}%</p>
-                <p className="text-[10px] font-medium text-text-muted">Consistency (overall)</p>
+                <p className="text-[10px] font-medium text-text-muted">Consistency ({consistencyLabel})</p>
               </div>
             </div>
           </Card>

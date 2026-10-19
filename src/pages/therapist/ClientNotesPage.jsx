@@ -1,21 +1,22 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNotifications } from '../../contexts/NotificationContext'
 import { useCachedState, hasCache } from '../../hooks/useCachedState'
 import { fetchTherapistPatients } from '../../utils/patients'
+import { fetchUnreadClientNotes, markClientNoteRead, clientNoteSource } from '../../utils/clientNotes'
 import Card from '../../components/ui/Card'
 import { ArrowLeft, FileText, Mail } from 'lucide-react'
 
-const CACHE_KEY = 'therapist-client-notes-unread'
+const CACHE_KEY = 'therapist-client-notes-unread-all'
 
 const noteDate = (iso) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
 /**
- * Dashboard drill-down: caregiver notes the therapist hasn't read yet.
- * Marking one read removes it here; every note, read or not, is on the
- * Client Notes tab (TherapistNotesPage).
+ * Dashboard drill-down: client notes the therapist hasn't read yet, both
+ * caregiver notes and the comments left when a task is submitted (see
+ * utils/clientNotes.js). Marking one read removes it here; every note, read
+ * or not, is on the Client Notes tab (TherapistNotesPage).
  */
 export default function ClientNotesPage() {
   const { profile } = useAuth()
@@ -37,12 +38,7 @@ export default function ClientNotesPage() {
         if (!cancelled) { setNotes([]); setLoading(false) }
         return
       }
-      const { data, error: err } = await supabase
-        .from('caregiver_notes')
-        .select('*, patient:profiles!caregiver_notes_patient_id_fkey(full_name), caregiver:profiles!caregiver_notes_caregiver_id_fkey(full_name)')
-        .in('patient_id', ids)
-        .is('therapist_read_at', null)
-        .order('created_at', { ascending: false })
+      const { data, error: err } = await fetchUnreadClientNotes(ids)
       if (cancelled) return
       if (err) { setError('Failed to load client notes.'); setLoading(false); return }
       setError(null)
@@ -56,14 +52,14 @@ export default function ClientNotesPage() {
 
   async function markRead(note) {
     setBusyId(note.id)
-    const { error: err } = await supabase.rpc('mark_client_note_read', { p_note_id: note.id })
+    const { error: err } = await markClientNoteRead(note)
     setBusyId(null)
     if (err) {
       console.error('Failed to mark note read:', err.message)
       showToast('Could not mark the note as read. Please try again.', 'task_overdue')
       return
     }
-    setNotes((prev) => prev.filter((n) => n.id !== note.id))
+    setNotes((prev) => prev.filter((n) => !(n.kind === note.kind && n.id === note.id)))
   }
 
   return (
@@ -79,7 +75,7 @@ export default function ClientNotesPage() {
         <div className="flex-1 min-w-0">
           <h2 className="text-3xl font-extrabold text-text-primary tracking-tight">Client Notes</h2>
           <p className="text-text-secondary mt-1">
-            Unread notes from caregivers{notes.length > 0 && ` · ${notes.length} unread`}
+            Unread notes from caregivers and task comments{notes.length > 0 && ` · ${notes.length} unread`}
           </p>
         </div>
         <Link to="/therapist/notes" className="shrink-0 py-2 text-sm font-bold text-primary hover:underline">
@@ -106,7 +102,7 @@ export default function ClientNotesPage() {
         <ul className="space-y-3">
           {notes.map((note) => (
             <li
-              key={note.id}
+              key={`${note.kind}-${note.id}`}
               className="flex items-start gap-4 rounded-2xl border px-5 py-4 bg-primary-container/20 border-primary/30"
             >
               <div className="flex-1 min-w-0">
@@ -114,9 +110,7 @@ export default function ClientNotesPage() {
                   <span className="inline-block w-2 h-2 rounded-full bg-primary mr-2 align-middle" aria-hidden="true" />
                   {note.patient?.full_name || 'Patient'} – {noteDate(note.created_at)}
                 </p>
-                {note.caregiver?.full_name && (
-                  <p className="text-xs text-text-muted mt-0.5">From {note.caregiver.full_name}</p>
-                )}
+                <p className="text-xs text-text-muted mt-0.5">{clientNoteSource(note)}</p>
                 <p className="text-sm text-text-secondary mt-2 whitespace-pre-wrap break-words">{note.content}</p>
               </div>
               <button

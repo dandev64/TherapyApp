@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { fetchAllRows } from '../../utils/fetchAll'
+import { countUnreadClientNotes } from '../../utils/clientNotes'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCachedState, hasCache } from '../../hooks/useCachedState'
 import { calculateStreak, calculateConsistency, getRange, toDateStr } from '../../utils/streak'
@@ -43,14 +44,8 @@ export default function TherapistDashboard() {
           .eq('therapist_id', profile.id)
           .in('patient_id', patientIds))
         : Promise.resolve({ data: [] }),
-      // Only the number of unread notes is shown here
-      patientIds.length
-        ? supabase
-          .from('caregiver_notes')
-          .select('id', { count: 'exact', head: true })
-          .in('patient_id', patientIds)
-          .is('therapist_read_at', null)
-        : Promise.resolve({ count: 0 }),
+      // Only the number of unread client notes (both kinds) is shown here
+      countUnreadClientNotes(patientIds),
       patientIds.length
         ? supabase
           .from('task_feedback')
@@ -112,7 +107,7 @@ export default function TherapistDashboard() {
       avgConsistency: withTasks.length
         ? Math.round(withTasks.reduce((sum, p) => sum + p.consistency, 0) / withTasks.length)
         : 0,
-      notes: notesRes.count || 0,
+      notes: notesRes,
     })
 
     setLoading(false)

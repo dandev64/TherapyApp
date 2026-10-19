@@ -4,6 +4,7 @@ import { fetchTherapistPatients } from '../../utils/patients'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNotifications } from '../../contexts/NotificationContext'
 import { useCachedState, hasCache } from '../../hooks/useCachedState'
+import { markClientNoteRead } from '../../utils/clientNotes'
 import Card from '../../components/ui/Card'
 import Badge from '../../components/ui/Badge'
 import { MessageSquare, ChevronDown, ChevronUp, Mail, MailOpen } from 'lucide-react'
@@ -106,7 +107,7 @@ export default function TherapistNotesPage() {
 
   async function markRead(note) {
     setBusyId(note.id)
-    const { error: err } = await supabase.rpc('mark_client_note_read', { p_note_id: note.id })
+    const { error: err } = await markClientNoteRead(note)
     setBusyId(null)
     if (err) {
       console.error('Failed to mark note read:', err.message)
@@ -117,7 +118,7 @@ export default function TherapistNotesPage() {
     setNotesByPatient((prev) => ({
       ...prev,
       [note.patient_id]: prev[note.patient_id].map((n) =>
-        n.kind === 'caregiver' && n.id === note.id ? { ...n, therapist_read_at: readAt } : n
+        n.kind === note.kind && n.id === note.id ? { ...n, therapist_read_at: readAt } : n
       ),
     }))
   }
@@ -150,7 +151,24 @@ export default function TherapistNotesPage() {
   }
 
   const totalNotes = Object.values(notesByPatient).reduce((sum, arr) => sum + arr.length, 0)
-  const isUnread = (n) => n.kind === 'caregiver' && !n.therapist_read_at
+  // Task comments only have a read status once migration-2026-10-feedback-read.sql has run
+  const isUnread = (n) => n.therapist_read_at === null
+
+  const readToggle = (n) => isUnread(n) ? (
+    <button
+      onClick={() => markRead(n)}
+      disabled={busyId === n.id}
+      title="Mark as read"
+      aria-label="Mark as read"
+      className="shrink-0 p-2.5 rounded-full text-primary hover:bg-primary-container cursor-pointer disabled:opacity-50"
+    >
+      <Mail size={18} />
+    </button>
+  ) : (
+    <span className="shrink-0 p-2.5 text-text-muted" title="Read" aria-label="Read">
+      <MailOpen size={18} />
+    </span>
+  )
 
   return (
     <div className="space-y-8">
@@ -242,55 +260,47 @@ export default function TherapistNotesPage() {
                             {formatDate(n.created_at)}
                           </p>
                         </div>
-                        {isUnread(n) ? (
-                          <button
-                            onClick={() => markRead(n)}
-                            disabled={busyId === n.id}
-                            title="Mark as read"
-                            aria-label="Mark as read"
-                            className="shrink-0 p-2.5 rounded-full text-primary hover:bg-primary-container cursor-pointer disabled:opacity-50"
-                          >
-                            <Mail size={18} />
-                          </button>
-                        ) : (
-                          <span className="shrink-0 p-2.5 text-text-muted" title="Read" aria-label="Read">
-                            <MailOpen size={18} />
-                          </span>
-                        )}
+                        {readToggle(n)}
                       </div>
                     ) : (
                       <div
                         key={`fb-${n.id}`}
-                        className="p-4 rounded-xl bg-surface-alt"
+                        className={`flex items-start gap-3 p-4 rounded-xl ${
+                          isUnread(n) ? 'bg-primary-container/20 border border-primary/30' : 'bg-surface-alt'
+                        }`}
                       >
-                        <div className="flex flex-wrap items-center gap-2 mb-2">
-                          <span className="text-xs font-semibold text-text-primary">
-                            Task feedback{n.task?.title ? ` · ${n.task.title}` : ''}
-                          </span>
-                          {n.task?.therapy_type && (
-                            <Badge color={n.task.therapy_type}>
-                              {n.task.therapy_type}
-                            </Badge>
-                          )}
-                          {n.mood && (
-                            <span className="text-sm" title={n.mood}>
-                              {moodEmojis[n.mood] || n.mood}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2 mb-2">
+                            <span className="text-xs font-semibold text-text-primary">
+                              {isUnread(n) && <span className="inline-block w-2 h-2 rounded-full bg-primary mr-2 align-middle" aria-hidden="true" />}
+                              Task comment{n.task?.title ? ` · ${n.task.title}` : ''}
                             </span>
-                          )}
-                        </div>
-                        <p className="text-sm text-text-secondary">
-                          {n.note}
-                        </p>
-                        <div className="flex items-center gap-3 mt-2">
-                          <p className="text-xs text-text-muted">
-                            {formatDate(n.created_at)}
+                            {n.task?.therapy_type && (
+                              <Badge color={n.task.therapy_type}>
+                                {n.task.therapy_type}
+                              </Badge>
+                            )}
+                            {n.mood && (
+                              <span className="text-sm" title={n.mood}>
+                                {moodEmojis[n.mood] || n.mood}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-text-secondary whitespace-pre-wrap break-words">
+                            {n.note}
                           </p>
-                          {n.task?.assigned_date && (
+                          <div className="flex items-center gap-3 mt-2">
                             <p className="text-xs text-text-muted">
-                              Task date: {formatAssignedDate(n.task.assigned_date)}
+                              {formatDate(n.created_at)}
                             </p>
-                          )}
+                            {n.task?.assigned_date && (
+                              <p className="text-xs text-text-muted">
+                                Task date: {formatAssignedDate(n.task.assigned_date)}
+                              </p>
+                            )}
+                          </div>
                         </div>
+                        {readToggle(n)}
                       </div>
                     ))}
                   </div>
