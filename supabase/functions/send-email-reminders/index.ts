@@ -96,7 +96,7 @@ function buildReminderHtml(firstName: string, taskTitle: string, formattedDate: 
         <p style="margin: 0; font-weight: bold; color: #2c3436;">${taskTitle}</p>
         <p style="margin: 4px 0 0; font-size: 14px; color: #6b7280;">${formattedDate} at ${formattedTime}</p>
       </div>
-      <p>Log in to <a href="https://habitot.app/patient" style="color: #863bff;">HabitOT</a> to complete it.</p>
+      <p>Log in to <a href="https://habitot.vercel.app/patient" style="color: #863bff;">HabitOT</a> to complete it.</p>
       <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
       <p style="font-size: 12px; color: #9ca3af;">
         You received this because email reminders are enabled on your HabitOT account.
