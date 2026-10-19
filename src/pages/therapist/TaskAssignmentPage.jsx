@@ -17,7 +17,7 @@ import { isScheduled, formatPublishAt, toLocalInputValue, getResourceLinks, isIn
 import { toDateStr } from '../../utils/streak'
 import { formatClock, formatExpected } from '../../utils/time'
 import { fetchTherapistPatients } from '../../utils/patients'
-import { createTasksForDates, joinLinks } from '../../utils/assignTask'
+import { createTasksForDates, joinLinks, syncTaskReminder } from '../../utils/assignTask'
 import { LinkListField, DateListField } from '../../components/therapist/TaskFields'
 import { Linkify } from '../../utils/linkify'
 
@@ -211,6 +211,8 @@ export default function TaskAssignmentPage() {
       .eq('id', editingTask.id)
     setLoading(false)
     if (err) { setError('Failed to update task.'); return }
+    // The date or time may have moved: re-time (or drop) today's reminder email
+    syncTaskReminder(editingTask.id)
     closeForm()
     showSuccess('Task updated.')
     setFilterDate(form.assigned_date)
@@ -264,6 +266,7 @@ export default function TaskAssignmentPage() {
     setDeleting(false)
     setDeleteTarget(null)
     if (err) { setError('Failed to delete assignment.'); return }
+    syncTaskReminder(deleteTarget.id)
     showSuccess('Task deleted.')
     loadRecentAssignments()
   }

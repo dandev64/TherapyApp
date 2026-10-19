@@ -8,10 +8,18 @@ export function joinLinks(links) {
 }
 
 /**
- * Inserts one task per date. Tasks due later today get their reminder email
- * queued now, because the 7 AM digest has already run; later dates are picked
- * up by that day's digest.
+ * Re-queues (or cancels) a task's reminder email after it's created, edited,
+ * completed or deleted. The Edge Function reads everything from the task and
+ * only schedules an email for tasks due later today; other days are covered
+ * by that day's 7 AM digest. Fire-and-forget: a failure only affects email.
  */
+export function syncTaskReminder(taskId) {
+  supabase.functions
+    .invoke('send-email-reminders', { body: { type: 'sync_task_reminder', task_id: taskId } })
+    .catch((err) => console.error('Email function error:', err))
+}
+
+/** Inserts one task per date, then queues reminders for any due later today. */
 export async function createTasksForDates({ fields, dates, publishAt }) {
   const rows = dates.map((assigned_date) => ({
     ...fields,
@@ -25,21 +33,8 @@ export async function createTasksForDates({ fields, dates, publishAt }) {
   if (error) return { error }
 
   const today = toDateStr(new Date())
-  const now = new Date()
   for (const task of data || []) {
-    const due = new Date(`${task.assigned_date}T${fields.assigned_time}:00`)
-    if (!publishAt && task.assigned_date === today && due > now) {
-      supabase.functions.invoke('send-email-reminders', {
-        body: {
-          type: 'task_reminder_immediate',
-          patient_id: fields.patient_id,
-          task_id: task.id,
-          title: fields.title,
-          assigned_date: task.assigned_date,
-          assigned_time: fields.assigned_time,
-        },
-      }).catch((err) => console.error('Email function error:', err))
-    }
+    if (task.assigned_date === today) syncTaskReminder(task.id)
   }
   return { error: null, count: rows.length }
 }

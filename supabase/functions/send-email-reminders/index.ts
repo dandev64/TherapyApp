@@ -6,8 +6,11 @@
 //   1. DAILY DIGEST (pg_cron) — runs once at 7 AM Manila, finds every task due
 //      today and hands Resend one scheduled send per task, timed for an hour
 //      before that task is due. Resend holds the queue and delivers on time.
-//   2. TASK REMINDER IMMEDIATE — called by the frontend when a task is created
-//      after the digest has already run; schedules (or sends) that one task.
+//   2. SYNC TASK REMINDER — called by the frontend whenever a task is created,
+//      edited, completed or deleted. Cancels that task's queued email and, if
+//      it still needs one today, queues it again for the right time.
+//      The caller must be the task's therapist or patient (checked from their
+//      login token); everything else is read from the task itself.
 //
 // It used to poll every 15 minutes. That cost ~96 pg_net round trips a day and
 // was responsible for ~70% of all database execution time and 99.8% of write
@@ -39,7 +42,11 @@ const LEAD_MS = 60 * 60 * 1000;
 // ── Email sender via Resend ─────────────────────────────────────────────
 // `sendAt` (ISO 8601) asks Resend to hold the email until then. Resend accepts
 // a schedule up to 30 days out; omitting it sends immediately.
-async function sendEmail(to: string, subject: string, html: string, sendAt?: string) {
+// Resend's reason for the most recent failed send, reported back to callers
+let lastSendError = "";
+
+// Returns Resend's email id (needed to cancel a scheduled send), or null.
+async function sendEmail(to: string, subject: string, html: string, sendAt?: string): Promise<string | null> {
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -56,9 +63,33 @@ async function sendEmail(to: string, subject: string, html: string, sendAt?: str
   });
 
   if (!res.ok) {
-    console.error("Resend error:", await res.text());
+    lastSendError = await res.text();
+    console.error("Resend error:", lastSendError);
+    return null;
   }
-  return res.ok;
+  const data = await res.json().catch(() => ({}));
+  return data.id || "sent";
+}
+
+async function cancelEmail(id: string) {
+  const res = await fetch(`https://api.resend.com/emails/${id}/cancel`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${RESEND_API_KEY}` },
+  });
+  // Already delivered (or never scheduled) can't be cancelled; that's fine
+  if (!res.ok) console.log(`Resend cancel ${id}: ${res.status} ${await res.text()}`);
+}
+
+function escapeHtml(s: string) {
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
+}
+
+// When a task's reminder should go out: an hour before it's due, never in the
+// past, and never before the task is posted to the patient.
+function reminderSendAt(dueAt: Date, publishAt: string | null, now: Date) {
+  let at = Math.max(dueAt.getTime() - LEAD_MS, now.getTime());
+  if (publishAt) at = Math.max(at, new Date(publishAt).getTime());
+  return new Date(at);
 }
 
 // The UTC instant a task is due, from its Manila-local date and time
@@ -78,22 +109,21 @@ async function alreadySent(recipientId: string, type: string, refDate: string) {
   return (count || 0) > 0;
 }
 
-async function logEmail(recipientId: string, type: string, refDate: string) {
-  await supabase.from("email_log").insert({
-    recipient_id: recipientId,
-    email_type: type,
-    reference_date: refDate,
-  });
+async function logEmail(recipientId: string, type: string, refDate: string, providerId: string | null) {
+  const row = { recipient_id: recipientId, email_type: type, reference_date: refDate };
+  const { error } = await supabase.from("email_log").insert({ ...row, provider_id: providerId });
+  // Before migration-2026-10-security.sql adds provider_id, log without it
+  if (error) await supabase.from("email_log").insert(row);
 }
 
 // ── Build reminder email HTML ───────────────────────────────────────────
 function buildReminderHtml(firstName: string, taskTitle: string, formattedDate: string, formattedTime: string) {
   return `
     <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
-      <h2 style="color: #2c3436;">Hi ${firstName}!</h2>
+      <h2 style="color: #2c3436;">Hi ${escapeHtml(firstName)}!</h2>
       <p>Friendly reminder — you have a task coming up soon:</p>
       <div style="background: #f8f9fa; border-left: 4px solid #863bff; padding: 12px 16px; margin: 16px 0; border-radius: 0 8px 8px 0;">
-        <p style="margin: 0; font-weight: bold; color: #2c3436;">${taskTitle}</p>
+        <p style="margin: 0; font-weight: bold; color: #2c3436;">${escapeHtml(taskTitle)}</p>
         <p style="margin: 4px 0 0; font-size: 14px; color: #6b7280;">${formattedDate} at ${formattedTime}</p>
       </div>
       <p>Log in to <a href="https://habitot.vercel.app/patient" style="color: #863bff;">HabitOT</a> to complete it.</p>
@@ -134,6 +164,7 @@ async function scheduleTodaysReminders() {
     .select("id, title, assigned_date, assigned_time, patient_id, publish_at")
     .eq("assigned_date", today)
     .neq("status", "completed")
+    .not("is_rest_day", "is", true)
     .not("assigned_time", "is", null);
 
   if (!tasks || tasks.length === 0) return;
@@ -161,9 +192,9 @@ async function scheduleTodaysReminders() {
       // notification covers this, so an email would only arrive late.
       if (dueAt <= now) continue;
 
-      // Don't email about a task the patient still can't see at send time
-      const sendAt = new Date(Math.max(dueAt.getTime() - LEAD_MS, now.getTime()));
-      if (task.publish_at && new Date(task.publish_at) > sendAt) continue;
+      // Not before the task is posted; skip it if it posts after it's due
+      const sendAt = reminderSendAt(dueAt, task.publish_at, now);
+      if (sendAt >= dueAt) continue;
 
       const emailType = `patient_task_reminder_${task.id}`;
       if (await alreadySent(patient.id, emailType, today)) continue;
@@ -176,40 +207,68 @@ async function scheduleTodaysReminders() {
       const html = buildReminderHtml(firstName, task.title, fDate, fTime);
 
       // Logged at schedule time, so a re-run today won't double-queue it
-      const sent = await sendEmail(patient.email, subject, html, sendAt.toISOString());
-      if (sent) await logEmail(patient.id, emailType, today);
+      const id = await sendEmail(patient.email, subject, html, sendAt.toISOString());
+      if (id) await logEmail(patient.id, emailType, today, id);
     }
   }
 }
 
-// ── 2. One-off reminder: task created after today's digest already ran ──
-// Schedules for an hour before the task, or sends now if that moment passed.
-async function sendTaskReminderImmediate(patientId: string, taskId: string, taskTitle: string, assignedDate: string, assignedTime: string) {
+// ── 2. Keep one task's reminder in step with the task ────────────────────
+// Cancels whatever is queued for the task, then queues a fresh reminder if
+// the task still needs one today. Called after create, edit, complete and
+// delete, so a moved or finished task never gets a stale "due at" email.
+async function syncTaskReminder(taskId: string, callerId: string) {
   const emailType = `patient_task_reminder_${taskId}`;
-  if (await alreadySent(patientId, emailType, assignedDate)) return;
+  const { data: task } = await supabase
+    .from("task_assignments")
+    .select("id, title, assigned_date, assigned_time, patient_id, therapist_id, status, is_rest_day, publish_at")
+    .eq("id", taskId)
+    .maybeSingle();
+
+  // A deleted task can only lose its reminder, so anyone may trigger that
+  if (task && callerId !== task.therapist_id && callerId !== task.patient_id) {
+    return { status: 403, error: "Not your task" };
+  }
+
+  const { data: logs } = await supabase
+    .from("email_log")
+    .select("*")
+    .eq("email_type", emailType);
+  const queued = logs || [];
+  // Rows from before provider ids were stored can't be cancelled: leave them
+  // alone rather than risk sending the reminder twice.
+  if (queued.some((l) => !l.provider_id)) return { status: 200, result: "legacy reminder left as is" };
 
   const now = new Date();
-  const dueAt = taskInstantUtc(assignedDate, assignedTime);
-  if (dueAt <= now) return;
-  const sendAt = new Date(Math.max(dueAt.getTime() - LEAD_MS, now.getTime()));
+  const today = new Date(now.getTime() + MANILA_OFFSET_MS).toISOString().split("T")[0];
+  const dueAt = task?.assigned_time ? taskInstantUtc(task.assigned_date, task.assigned_time) : null;
+  const sendAt = task && dueAt ? reminderSendAt(dueAt, task.publish_at, now) : null;
+  const wanted = !!task && !!dueAt && !!sendAt
+    && task.status !== "completed" && !task.is_rest_day
+    && task.assigned_date === today && sendAt < dueAt;
+
+  for (const log of queued) {
+    if (log.provider_id !== "sent") await cancelEmail(log.provider_id);
+  }
+  if (queued.length) await supabase.from("email_log").delete().eq("email_type", emailType);
+  if (!wanted) return { status: 200, result: queued.length ? "cancelled" : "nothing to do" };
 
   const { data: patient } = await supabase
     .from("profiles")
     .select("id, email, full_name, email_notifications_enabled")
-    .eq("id", patientId)
+    .eq("id", task!.patient_id)
     .single();
+  if (!patient || !patient.email_notifications_enabled) return { status: 200, result: "emails off" };
 
-  if (!patient || !patient.email_notifications_enabled) return;
-
-  const fTime = formatTime(assignedDate, assignedTime);
-  const fDate = formatDate(assignedDate);
+  const fTime = formatTime(task!.assigned_date, task!.assigned_time);
+  const fDate = formatDate(task!.assigned_date);
   const firstName = patient.full_name?.split(" ")[0] || "there";
+  const subject = `HabitOT — Reminder: "${task!.title}" is due at ${fTime}`;
+  const html = buildReminderHtml(firstName, task!.title, fDate, fTime);
 
-  const subject = `HabitOT — Reminder: "${taskTitle}" is due at ${fTime}`;
-  const html = buildReminderHtml(firstName, taskTitle, fDate, fTime);
-
-  const sent = await sendEmail(patient.email, subject, html, sendAt.toISOString());
-  if (sent) await logEmail(patientId, emailType, assignedDate);
+  const id = await sendEmail(patient.email, subject, html, sendAt!.toISOString());
+  if (id) await logEmail(patient.id, emailType, task!.assigned_date, id);
+  return { status: 200, result: id ? "scheduled" : `send failed: ${lastSendError.slice(0, 200)}` };
 }
 
 // ── COMMENTED OUT — previous immediate "task created" email ─────────────
@@ -221,6 +280,13 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
 
 // ── HTTP Handler ────────────────────────────────────────────────────────
 serve(async (req) => {
@@ -237,10 +303,15 @@ serve(async (req) => {
       await scheduleTodaysReminders();
     }
 
-    // Frontend calls this when a task is created after the digest has run
-    if (type === "task_reminder_immediate") {
-      const { patient_id, task_id, title, assigned_date, assigned_time } = body;
-      await sendTaskReminderImmediate(patient_id, task_id, title, assigned_date, assigned_time);
+    // Frontend calls this after creating, editing, completing or deleting a
+    // task. "task_reminder_immediate" is the name older app builds still send.
+    if (type === "sync_task_reminder" || type === "task_reminder_immediate") {
+      const token = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+      const { data: auth } = await supabase.auth.getUser(token);
+      if (!auth?.user) return json({ error: "Not signed in" }, 401);
+      if (typeof body.task_id !== "string") return json({ error: "task_id required" }, 400);
+      const out = await syncTaskReminder(body.task_id, auth.user.id);
+      return json(out, out.status);
     }
 
     return new Response(JSON.stringify({ success: true }), {

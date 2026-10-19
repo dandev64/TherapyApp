@@ -7,7 +7,7 @@ import { REST_DAY_TITLE } from './tasks'
  * (which all skip rest days) need no special casing.
  */
 export async function markRestDay({ therapistId, patientId, date }) {
-  return supabase.from('task_assignments').insert({
+  const res = await supabase.from('task_assignments').insert({
     patient_id: patientId,
     therapist_id: therapistId,
     assigned_date: date,
@@ -15,6 +15,8 @@ export async function markRestDay({ therapistId, patientId, date }) {
     is_rest_day: true,
     status: 'completed',
   })
+  // One rest day per patient per day (unique index): already marked is fine
+  return res.error?.code === '23505' ? { ...res, error: null } : res
 }
 
 export async function clearRestDay({ therapistId, patientId, date }) {

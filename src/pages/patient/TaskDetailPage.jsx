@@ -13,6 +13,7 @@ import VideoRecorder from '../../components/VideoRecorder'
 import { uploadProofVideo } from '../../utils/proofVideo'
 import { getProofPaths } from '../../utils/proofs'
 import { isScheduled, getResourceLinks } from '../../utils/tasks'
+import { syncTaskReminder } from '../../utils/assignTask'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import { ArrowLeft, ArrowRight, Camera, Upload, X, CheckSquare, Clock, Lock, Pencil, ImagePlus, Video } from 'lucide-react'
@@ -207,6 +208,8 @@ export default function TaskDetailPage() {
       setSubmitting(false)
       return
     }
+    // Done early: don't send the "due soon" email
+    syncTaskReminder(id)
 
     if (selectedMood) {
       const { error: fbErr } = await supabase.from('task_feedback').insert({
