@@ -80,12 +80,14 @@ export default function TaskDetailPage() {
     setTask(data)
     setLoading(false)
 
-    // Auto-mark as in_progress if still pending (not for future days, which are view-only)
+    // Auto-mark as in_progress if still pending (not for future days, which are view-only).
+    // Conditional on 'pending' so a late response can't undo a completion.
     if (data && data.status === 'pending' && data.assigned_date <= toDateStr(new Date())) {
       await supabase
         .from('task_assignments')
         .update({ status: 'in_progress' })
         .eq('id', id)
+        .eq('status', 'pending')
     }
   }
 
