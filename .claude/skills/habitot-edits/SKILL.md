@@ -68,7 +68,11 @@ Item IDs: B = bugs, Q = quick wins, L = logic, F = features.
 Plan: `~/.claude/plans/create-a-plan-for-melodic-crescent.md`. Migration `supabase/migration-2026-10-revisions-2.sql` (+ `-verify.sql`) must be pasted by the user.
 - Dashboard cards are links → `/therapist/patients`, `/therapist/today` (TodayTasksPage), `/therapist/consistency` (ConsistencyPage, no sidebar entry), `/therapist/client-notes/recent`. Task Completion + Mood charts removed from the dashboard; they live on PatientDetailPage with a Week/Month/Overall `PeriodToggle`.
 - Timeframes (`src/utils/streak.js`): `getRange(period, offset, firstDate)` (week = Sun–Sat), `calculateConsistency(tasks, range?)` (no range = overall), `dailyCompletion`. Consistency = whole history; assigned/completed/missed = this week. Shared chart `components/therapist/CompletionChart.jsx`.
-- Naming: old `/therapist/notes` (task feedback) is now **Patient Feedback**; **Client Notes** = `caregiver_notes` at `/therapist/client-notes`, read via `therapist_read_at` + RPC `mark_client_note_read`. Dashboard card counts unread.
+- Naming (client revised this on 2026-10-19; there is no "Patient Feedback" tab any more):
+  - The sidebar tab **Client Notes** is `/therapist/notes` (`TherapistNotesPage`). Per patient, it merges task-feedback comments with `caregiver_notes`, newest first, and caregiver notes can be marked read there.
+  - The dashboard card "Unread Client Notes" goes to `/therapist/client-notes/recent` (`ClientNotesPage`). That page lists **only unread** caregiver notes; marking one read removes it. Its "See All Client Notes" link goes to `/therapist/notes`.
+  - `/therapist/client-notes` redirects to `/therapist/notes`.
+  - Read status uses `therapist_read_at` and RPC `mark_client_note_read`.
 - "No tasks for today" = `task_assignments` row with `is_rest_day = true`, no time (`utils/restDay.js`); excluded from counts everywhere; trigger skips its notification.
 - Multiple links stored newline-separated in `resource_url` (`getResourceLinks`, `joinLinks`); multiple dates insert one row per date (`utils/assignTask.js`, `components/therapist/TaskFields.jsx`).
 - Calendar colours: `dayStatus` / `DAY_STATUS_CLASS` in `utils/tasks.js` (green done, red incomplete for today/past only). "Incomplete" filter is derived (past + not completed).

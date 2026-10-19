@@ -17,7 +17,6 @@ import {
   MessageSquare,
   Sun,
   Moon,
-  Smile,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
@@ -36,8 +35,7 @@ const navItems = {
     { to: '/therapist/patients', icon: Users, label: 'Patients' },
     { to: '/therapist/calendar', icon: CalendarDays, label: 'Calendar' },
     { to: '/therapist/assignments', icon: ClipboardList, label: 'Task Assignment' },
-    { to: '/therapist/notes', icon: Smile, label: 'Patient Feedback' },
-    { to: '/therapist/client-notes', icon: FileText, label: 'Client Notes' },
+    { to: '/therapist/notes', icon: FileText, label: 'Client Notes' },
     { to: '/therapist/messages', icon: MessageSquare, label: 'Messages' },
     { to: '/therapist/notifications', icon: Bell, label: 'Notifications' },
     { to: '/therapist/profile', icon: User, label: 'Profile' },

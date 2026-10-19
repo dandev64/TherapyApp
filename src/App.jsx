@@ -75,8 +75,8 @@ export default function App() {
             <Route path="notes" element={<TherapistNotesPage />} />
             <Route path="today" element={<TodayTasksPage />} />
             <Route path="consistency" element={<ConsistencyPage />} />
-            <Route path="client-notes" element={<ClientNotesPage />} />
-            <Route path="client-notes/recent" element={<ClientNotesPage recent />} />
+            <Route path="client-notes" element={<Navigate to="/therapist/notes" replace />} />
+            <Route path="client-notes/recent" element={<ClientNotesPage />} />
             <Route path="notifications" element={<NotificationsPage />} />
             <Route path="profile" element={<TherapistProfilePage />} />
             <Route path="messages" element={<TherapistMessagesInbox />} />

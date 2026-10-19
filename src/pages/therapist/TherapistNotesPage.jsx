@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { fetchTherapistPatients } from '../../utils/patients'
 import { useAuth } from '../../contexts/AuthContext'
+import { useNotifications } from '../../contexts/NotificationContext'
 import { useCachedState, hasCache } from '../../hooks/useCachedState'
 import Card from '../../components/ui/Card'
 import Badge from '../../components/ui/Badge'
-import { MessageSquare, ChevronDown, ChevronUp, User } from 'lucide-react'
+import { MessageSquare, ChevronDown, ChevronUp, Mail, MailOpen } from 'lucide-react'
 
 const moodEmojis = {
   excited: '🤩',
@@ -18,13 +19,21 @@ const moodEmojis = {
   sad: '😢',
 }
 
+/**
+ * Client Notes tab: per patient, the comments left with completed tasks
+ * (task_feedback.note) and the notes written by their caregivers
+ * (caregiver_notes), newest first. Unread caregiver notes can be marked read
+ * here or from the dashboard's unread list (ClientNotesPage).
+ */
 export default function TherapistNotesPage() {
   const { profile } = useAuth()
+  const { showToast } = useNotifications()
   const [patients, setPatients] = useCachedState('client-notes-patients', [])
-  const [feedbackByPatient, setFeedbackByPatient] = useCachedState('client-notes-feedback', {})
+  const [notesByPatient, setNotesByPatient] = useCachedState('client-notes-by-patient', {})
   const [loading, setLoading] = useState(() => !hasCache('client-notes-patients'))
   const [expandedPatient, setExpandedPatient] = useState(null)
   const [error, setError] = useState(null)
+  const [busyId, setBusyId] = useState(null)
 
   async function loadData() {
     // Step 1: Get therapist's assigned patients
@@ -42,35 +51,48 @@ export default function TherapistNotesPage() {
     setPatients(patientList)
 
     if (patientIds.length === 0) {
-      setFeedbackByPatient({})
+      setNotesByPatient({})
       setLoading(false)
       return
     }
 
-    // Step 2: Get task feedback with task details for all patients
-    const { data: feedback, error: fbErr } = await supabase
-      .from('task_feedback')
-      .select('*, task:task_assignments!task_feedback_task_assignment_id_fkey(title, therapy_type, assigned_date)')
-      .in('patient_id', patientIds)
-      .not('note', 'is', null)
-      .order('created_at', { ascending: false })
+    // Step 2: Task feedback comments and caregiver notes for all patients
+    const [fbRes, cgRes] = await Promise.all([
+      supabase
+        .from('task_feedback')
+        .select('*, task:task_assignments!task_feedback_task_assignment_id_fkey(title, therapy_type, assigned_date)')
+        .in('patient_id', patientIds)
+        .not('note', 'is', null)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('caregiver_notes')
+        .select('*, caregiver:profiles!caregiver_notes_caregiver_id_fkey(full_name)')
+        .in('patient_id', patientIds)
+        .order('created_at', { ascending: false }),
+    ])
 
-    if (fbErr) {
-      console.error('Failed to load feedback:', fbErr.message)
+    if (fbRes.error || cgRes.error) {
+      console.error('Failed to load client notes:', (fbRes.error || cgRes.error).message)
       setError('Failed to load client notes.')
       setLoading(false)
       return
     }
 
-    // Filter out feedback with empty notes and group by patient_id
+    // Skip empty feedback comments, tag each note with its kind, group by patient
+    const notes = [
+      ...(fbRes.data || [])
+        .filter((fb) => fb.note && fb.note.trim())
+        .map((fb) => ({ ...fb, kind: 'feedback' })),
+      ...(cgRes.data || []).map((n) => ({ ...n, kind: 'caregiver' })),
+    ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+
     const grouped = {}
-    ;(feedback || []).forEach((fb) => {
-      if (!fb.note || !fb.note.trim()) return
-      if (!grouped[fb.patient_id]) grouped[fb.patient_id] = []
-      grouped[fb.patient_id].push(fb)
+    notes.forEach((n) => {
+      if (!grouped[n.patient_id]) grouped[n.patient_id] = []
+      grouped[n.patient_id].push(n)
     })
 
-    setFeedbackByPatient(grouped)
+    setNotesByPatient(grouped)
     setError(null)
     setLoading(false)
   }
@@ -80,6 +102,24 @@ export default function TherapistNotesPage() {
 
   function togglePatient(patientId) {
     setExpandedPatient(expandedPatient === patientId ? null : patientId)
+  }
+
+  async function markRead(note) {
+    setBusyId(note.id)
+    const { error: err } = await supabase.rpc('mark_client_note_read', { p_note_id: note.id })
+    setBusyId(null)
+    if (err) {
+      console.error('Failed to mark note read:', err.message)
+      showToast('Could not mark the note as read. Please try again.', 'task_overdue')
+      return
+    }
+    const readAt = new Date().toISOString()
+    setNotesByPatient((prev) => ({
+      ...prev,
+      [note.patient_id]: prev[note.patient_id].map((n) =>
+        n.kind === 'caregiver' && n.id === note.id ? { ...n, therapist_read_at: readAt } : n
+      ),
+    }))
   }
 
   function formatDate(dateStr) {
@@ -109,7 +149,8 @@ export default function TherapistNotesPage() {
     )
   }
 
-  const totalNotes = Object.values(feedbackByPatient).reduce((sum, arr) => sum + arr.length, 0)
+  const totalNotes = Object.values(notesByPatient).reduce((sum, arr) => sum + arr.length, 0)
+  const isUnread = (n) => n.kind === 'caregiver' && !n.therapist_read_at
 
   return (
     <div className="space-y-8">
@@ -121,9 +162,9 @@ export default function TherapistNotesPage() {
       )}
 
       <div>
-        <h2 className="text-3xl font-extrabold text-text-primary tracking-tight">Patient Feedback</h2>
+        <h2 className="text-3xl font-extrabold text-text-primary tracking-tight">Client Notes</h2>
         <p className="text-text-secondary mt-2">
-          Review feedback from your patients&apos; completed tasks
+          Notes from your patients and their caregivers
         </p>
       </div>
 
@@ -141,16 +182,17 @@ export default function TherapistNotesPage() {
           <div className="text-center py-8">
             <MessageSquare size={32} className="text-text-muted mx-auto mb-3" />
             <p className="text-sm text-text-muted">
-              No task feedback notes from your patients yet.
+              No client notes yet.
             </p>
           </div>
         </Card>
       ) : (
         <div className="space-y-4">
           {patients.map((patient) => {
-            const notes = feedbackByPatient[patient.id] || []
+            const notes = notesByPatient[patient.id] || []
             if (notes.length === 0) return null
             const isExpanded = expandedPatient === patient.id
+            const unread = notes.filter(isUnread).length
 
             return (
               <Card key={patient.id}>
@@ -169,6 +211,7 @@ export default function TherapistNotesPage() {
                         </p>
                         <p className="text-xs text-text-muted">
                           {notes.length} {notes.length === 1 ? 'note' : 'notes'}
+                          {unread > 0 && <span className="text-primary font-semibold"> · {unread} unread</span>}
                         </p>
                       </div>
                     </div>
@@ -180,38 +223,71 @@ export default function TherapistNotesPage() {
 
                 {isExpanded && (
                   <div className="mt-4 pt-4 border-t border-border-light space-y-3">
-                    {notes.map((fb) => (
+                    {notes.map((n) => n.kind === 'caregiver' ? (
                       <div
-                        key={fb.id}
+                        key={`cg-${n.id}`}
+                        className={`flex items-start gap-3 p-4 rounded-xl ${
+                          isUnread(n) ? 'bg-primary-container/20 border border-primary/30' : 'bg-surface-alt'
+                        }`}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-text-primary mb-2">
+                            {isUnread(n) && <span className="inline-block w-2 h-2 rounded-full bg-primary mr-2 align-middle" aria-hidden="true" />}
+                            From {n.caregiver?.full_name || 'caregiver'}
+                          </p>
+                          <p className="text-sm text-text-secondary whitespace-pre-wrap break-words">
+                            {n.content}
+                          </p>
+                          <p className="text-xs text-text-muted mt-2">
+                            {formatDate(n.created_at)}
+                          </p>
+                        </div>
+                        {isUnread(n) ? (
+                          <button
+                            onClick={() => markRead(n)}
+                            disabled={busyId === n.id}
+                            title="Mark as read"
+                            aria-label="Mark as read"
+                            className="shrink-0 p-2.5 rounded-full text-primary hover:bg-primary-container cursor-pointer disabled:opacity-50"
+                          >
+                            <Mail size={18} />
+                          </button>
+                        ) : (
+                          <span className="shrink-0 p-2.5 text-text-muted" title="Read" aria-label="Read">
+                            <MailOpen size={18} />
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <div
+                        key={`fb-${n.id}`}
                         className="p-4 rounded-xl bg-surface-alt"
                       >
-                        <div className="flex items-center gap-2 mb-2">
-                          {fb.task?.title && (
-                            <span className="text-xs font-semibold text-text-primary">
-                              {fb.task.title}
-                            </span>
-                          )}
-                          {fb.task?.therapy_type && (
-                            <Badge color={fb.task.therapy_type}>
-                              {fb.task.therapy_type}
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                          <span className="text-xs font-semibold text-text-primary">
+                            Task feedback{n.task?.title ? ` · ${n.task.title}` : ''}
+                          </span>
+                          {n.task?.therapy_type && (
+                            <Badge color={n.task.therapy_type}>
+                              {n.task.therapy_type}
                             </Badge>
                           )}
-                          {fb.mood && (
-                            <span className="text-sm" title={fb.mood}>
-                              {moodEmojis[fb.mood] || fb.mood}
+                          {n.mood && (
+                            <span className="text-sm" title={n.mood}>
+                              {moodEmojis[n.mood] || n.mood}
                             </span>
                           )}
                         </div>
                         <p className="text-sm text-text-secondary">
-                          {fb.note}
+                          {n.note}
                         </p>
                         <div className="flex items-center gap-3 mt-2">
                           <p className="text-xs text-text-muted">
-                            {formatDate(fb.created_at)}
+                            {formatDate(n.created_at)}
                           </p>
-                          {fb.task?.assigned_date && (
+                          {n.task?.assigned_date && (
                             <p className="text-xs text-text-muted">
-                              Task date: {formatAssignedDate(fb.task.assigned_date)}
+                              Task date: {formatAssignedDate(n.task.assigned_date)}
                             </p>
                           )}
                         </div>
