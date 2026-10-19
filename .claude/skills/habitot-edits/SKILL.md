@@ -73,6 +73,9 @@ Plan: `~/.claude/plans/create-a-plan-for-melodic-crescent.md`. Migration `supaba
   - The dashboard card "Unread Client Notes" goes to `/therapist/client-notes/recent` (`ClientNotesPage`). That page lists **only unread** caregiver notes; marking one read removes it. Its "See All Client Notes" link goes to `/therapist/notes`.
   - `/therapist/client-notes` redirects to `/therapist/notes`.
   - Read status uses `therapist_read_at` and RPC `mark_client_note_read`.
+  - Since 2026-10-20, task comments (`task_feedback.note`) also have `therapist_read_at`, set via RPC `mark_task_feedback_read` (migration `migration-2026-10-feedback-read.sql`). They count as unread client notes too.
+  - Shared logic for both kinds of note is in `utils/clientNotes.js`: `fetchUnreadClientNotes`, `countUnreadClientNotes`, `markClientNoteRead`.
+- Patient page: Consistency follows the period toggle via `calculateConsistency(allTasks, range)`. The Overall period's key is `'all'`. The Assigned/Completed cards stay on this week.
 - "No tasks for today" = `task_assignments` row with `is_rest_day = true`, no time (`utils/restDay.js`); excluded from counts everywhere; trigger skips its notification.
 - Multiple links stored newline-separated in `resource_url` (`getResourceLinks`, `joinLinks`); multiple dates insert one row per date (`utils/assignTask.js`, `components/therapist/TaskFields.jsx`).
 - Calendar colours: `dayStatus` / `DAY_STATUS_CLASS` in `utils/tasks.js` (green done, red incomplete for today/past only). "Incomplete" filter is derived (past + not completed).
