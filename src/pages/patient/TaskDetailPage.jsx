@@ -151,7 +151,12 @@ export default function TaskDetailPage() {
     if (!newVideo) return undefined
     setVideoProgress(0)
     try {
-      return await uploadProofVideo(id, newVideo.blob, newVideo.duration, setVideoProgress)
+      return await uploadProofVideo(id, newVideo.blob, newVideo.duration, {
+        onProgress: setVideoProgress,
+        // Remember the upload so tapping Submit again doesn't send the file twice
+        uploadedKey: newVideo.key,
+        onUploaded: (key) => setNewVideo((v) => (v ? { ...v, key } : v)),
+      })
     } catch (err) {
       console.error('Video upload failed:', err)
       showToast(err.message || 'Failed to upload video. Please try again.', 'task_overdue')

@@ -73,15 +73,23 @@ function uriEncode(s: string) {
 }
 
 /**
- * Signed URL for one R2 object. Every header in `headers` is signed, so the
- * request must send exactly those values (e.g. Content-Length caps the size).
+ * Signed URL for one R2 object (or the bucket itself when `key` is empty).
+ * Every header in `headers` is signed, so the request must send exactly those
+ * values (e.g. Content-Length caps the size). `params` are extra query
+ * parameters, such as a ListObjectsV2 prefix.
  */
-async function presign(method: string, key: string, expiresSec: number, headers: Record<string, string> = {}) {
+async function presign(
+  method: string,
+  key: string,
+  expiresSec: number,
+  headers: Record<string, string> = {},
+  params: Record<string, string> = {},
+) {
   const now = new Date();
   const amzDate = now.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
   const day = amzDate.slice(0, 8);
   const scope = `${day}/auto/s3/aws4_request`;
-  const path = `/${R2_BUCKET}/${key.split("/").map(uriEncode).join("/")}`;
+  const path = key ? `/${R2_BUCKET}/${key.split("/").map(uriEncode).join("/")}` : `/${R2_BUCKET}`;
 
   const allHeaders: Record<string, string> = { host: R2_HOST };
   for (const [k, v] of Object.entries(headers)) allHeaders[k.toLowerCase()] = String(v);
@@ -89,6 +97,7 @@ async function presign(method: string, key: string, expiresSec: number, headers:
   const signedHeaders = names.join(";");
 
   const query: Record<string, string> = {
+    ...params,
     "X-Amz-Algorithm": "AWS4-HMAC-SHA256",
     "X-Amz-Credential": `${R2_ACCESS_KEY_ID}/${scope}`,
     "X-Amz-Date": amzDate,
@@ -149,6 +158,37 @@ async function canView(userId: string, task: Task) {
   return (data?.length ?? 0) > 0;
 }
 
+// Size of an uploaded object, or null if R2 doesn't have it. Retries briefly:
+// confirm runs right after the browser's PUT, and a miss there makes the
+// patient upload the whole video again.
+async function headSize(key: string): Promise<number | null> {
+  let status = 0;
+  for (const delay of [0, 500, 1000, 2000]) {
+    if (delay) await new Promise((r) => setTimeout(r, delay));
+    const res = await fetch(await presign("HEAD", key, 60), { method: "HEAD" });
+    status = res.status;
+    if (res.ok) return Number(res.headers.get("content-length") || 0);
+  }
+  console.error(`proof-video: HEAD ${key} still ${status} after retries`);
+  return null;
+}
+
+// Every object stored for a task: one per upload attempt
+async function listTaskObjects(task: Task): Promise<string[]> {
+  const prefix = `${task.patient_id}/${task.id}-`;
+  const res = await fetch(await presign("GET", "", 60, {}, { "list-type": "2", prefix }));
+  if (!res.ok) {
+    console.error("proof-video: list failed", res.status, await res.text());
+    return [];
+  }
+  const xml = await res.text();
+  return [...xml.matchAll(/<Key>([^<]+)<\/Key>/g)].map((m) => m[1]);
+}
+
+async function deleteObject(key: string) {
+  await fetch(await presign("DELETE", key, 60), { method: "DELETE" }).catch(() => {});
+}
+
 function isExpired(video: Task["proof_video"]) {
   if (!video) return true;
   return Date.now() - new Date(video.uploaded_at).getTime() > RETENTION_DAYS * 24 * 60 * 60 * 1000;
@@ -191,9 +231,10 @@ Deno.serve(async (req) => {
       const key = String(body.key || "");
       if (!key.startsWith(`${task.patient_id}/${task.id}-`)) return json({ error: "Invalid key" }, 400);
 
-      const head = await fetch(await presign("HEAD", key, 60), { method: "HEAD" });
-      if (!head.ok) return json({ error: "Upload not found" }, 400);
-      const size = Number(head.headers.get("content-length") || 0);
+      const size = await headSize(key);
+      if (size === null) {
+        return json({ error: "The video didn't finish uploading. Please tap Submit again." }, 409);
+      }
 
       const duration = Math.round(Number(body.duration) || 0) || null;
       const proofVideo = { key, size, uploaded_at: new Date().toISOString(), duration };
@@ -203,11 +244,11 @@ Deno.serve(async (req) => {
         .eq("id", task.id);
       if (error) return json({ error: error.message }, 500);
 
-      // The replaced video would expire on its own; deleting it now frees the space sooner
-      if (task.proof_video?.key && task.proof_video.key !== key) {
-        await fetch(await presign("DELETE", task.proof_video.key, 60), { method: "DELETE" }).catch(() => {});
-      }
-      return json({ proof_video: proofVideo });
+      // One video per task: remove the one it replaces and any leftovers from
+      // failed attempts. They'd expire on their own; this frees the space sooner.
+      const stale = (await listTaskObjects(task)).filter((k) => k !== key);
+      await Promise.all(stale.map(deleteObject));
+      return json({ proof_video: proofVideo, removed: stale.length });
     }
 
     if (body.action === "view") {

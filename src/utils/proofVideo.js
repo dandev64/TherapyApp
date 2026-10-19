@@ -45,34 +45,48 @@ function uploadType(blob) {
 }
 
 /**
- * Uploads a recorded proof video straight to R2 through a signed link and
- * records it on the task. Returns the task's new proof_video value.
- * onProgress receives a fraction from 0 to 1.
+ * Uploads a proof video straight to R2 through a signed link and records it
+ * on the task. Returns the task's new proof_video value.
+ * - onProgress receives a fraction from 0 to 1.
+ * - onUploaded(key) fires once the file is in R2. Pass that key back as
+ *   uploadedKey on a retry so only the confirm step is repeated, instead of
+ *   uploading (and storing) the same video twice.
  */
-export async function uploadProofVideo(taskId, blob, duration, onProgress) {
-  const contentType = uploadType(blob)
-  const { url, key } = await callProofVideo({
-    action: 'upload',
-    task_id: taskId,
-    size: blob.size,
-    content_type: contentType,
-  })
+export async function uploadProofVideo(taskId, blob, duration, { onProgress, uploadedKey, onUploaded } = {}) {
+  let key = uploadedKey
+  if (!key) {
+    const contentType = uploadType(blob)
+    const link = await callProofVideo({
+      action: 'upload',
+      task_id: taskId,
+      size: blob.size,
+      content_type: contentType,
+    })
 
-  // XHR rather than fetch, because fetch can't report upload progress
-  await new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest()
-    xhr.open('PUT', url)
-    xhr.setRequestHeader('Content-Type', contentType)
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) onProgress?.(e.loaded / e.total)
-    }
-    xhr.onload = () => (xhr.status < 300 ? resolve() : reject(new Error(`Video upload failed (${xhr.status})`)))
-    xhr.onerror = () => reject(new Error('Video upload failed. Please check your connection.'))
-    xhr.send(blob)
-  })
+    // XHR rather than fetch, because fetch can't report upload progress
+    await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+      xhr.open('PUT', link.url)
+      xhr.setRequestHeader('Content-Type', contentType)
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) onProgress?.(e.loaded / e.total)
+      }
+      xhr.onload = () => (xhr.status < 300 ? resolve() : reject(new Error(`Video upload failed (${xhr.status})`)))
+      xhr.onerror = () => reject(new Error('Video upload failed. Please check your connection.'))
+      xhr.send(blob)
+    })
+    key = link.key
+    onUploaded?.(key)
+  }
 
-  const { proof_video } = await callProofVideo({ action: 'confirm', task_id: taskId, key, duration })
-  return proof_video
+  // Saving can briefly miss a file that just landed; one quiet retry first
+  const confirm = () => callProofVideo({ action: 'confirm', task_id: taskId, key, duration })
+  try {
+    return (await confirm()).proof_video
+  } catch {
+    await new Promise((r) => setTimeout(r, 1500))
+    return (await confirm()).proof_video
+  }
 }
 
 /** { url } to play the task's video, or { expired: true } once it's been deleted. */
