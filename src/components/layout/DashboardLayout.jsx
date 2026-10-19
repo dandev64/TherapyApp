@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import Sidebar from './Sidebar'
@@ -17,7 +18,16 @@ export default function DashboardLayout() {
         }`}
       >
         <div className="max-w-5xl mx-auto">
-          <Outlet />
+          {/* Pages are lazy-loaded: keep the sidebar and tab bar while one loads */}
+          <Suspense
+            fallback={
+              <div className="flex items-center justify-center py-20">
+                <div className="w-8 h-8 border-[3px] border-primary/20 border-t-primary rounded-full animate-spin" />
+              </div>
+            }
+          >
+            <Outlet />
+          </Suspense>
         </div>
       </main>
     </div>

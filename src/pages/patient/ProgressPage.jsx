@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
+import { fetchAllRows } from '../../utils/fetchAll'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCachedState, hasCache } from '../../hooks/useCachedState'
 import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus'
@@ -22,11 +23,11 @@ export default function ProgressPage() {
 
     // Whole history: consistency covers the full course of therapy
 
-    supabase
+    fetchAllRows(() => supabase
       .from('task_assignments')
       .select('assigned_date, status, is_rest_day')
       .eq('patient_id', profile.id)
-      .order('assigned_date', { ascending: false })
+      .order('assigned_date', { ascending: false }))
       .then(({ data, error: err }) => {
         if (err) {
           setError('Failed to load progress data. Please try again.')

@@ -105,6 +105,29 @@ The client estimates 56 patients (8 therapists × 7), at least 1 task per weekda
   - TaskDetailPage has Photo/Video tabs; either one satisfies `requires_proof`.
 - **Budget:** worst case is 10 days × 56 patients × 15 MB = about 6.3 GB, inside R2's 10 GB free tier. There is deliberately no total-storage check; the user chose that.
 
+## Full-app test & fixes (2026-10-20)
+- **Security** (`supabase/migration-2026-10-security.sql` + `-verify.sql`, pasted by the user). The user chose to leave C1 (open therapist signup) out. The migration adds:
+  - Trigger `protect_profile_columns`: users can't change their own `email`/`role`.
+  - Trigger `limit_patient_task_updates`: patients may only change `status`, `completed_at`, `proof_url`, `proof_urls`. **A new patient-editable task column must be added to its `allowed` array.**
+  - The messages INSERT check now requires a `patient_assignments` link between sender and recipient. The task_feedback INSERT check requires the task to be the patient's own.
+  - Cron-only functions have their grants revoked. `check_overdue_tasks` gets a real caller check and an advisory lock.
+  - Unique index `task_assignments_one_rest_day`; `restDay.js` treats a 23505 as success.
+  - `email_log.provider_id`.
+- **Reminder emails**: `utils/assignTask.js#syncTaskReminder(taskId)` → `send-email-reminders` `{type:'sync_task_reminder', task_id}`.
+  - Called after create (today only), edit, delete (TaskAssignmentPage) and complete (TaskDetailPage).
+  - The function checks the caller's JWT (task's therapist or patient), cancels the queued Resend email (`/emails/{id}/cancel`) and re-queues it if still needed. The send time is never before `publish_at`.
+  - The old body type `task_reminder_immediate` is accepted, with the same check. Titles are HTML-escaped.
+  - **Open issue:** Resend rejects sends because the `itsbydan.com` domain isn't verified, so no reminder emails were going out. `email_log` was empty for 7 days. The user must verify the domain in Resend or change `FROM_EMAIL`.
+- **Efficiency:**
+  - All pages except login/signup are `React.lazy` (App.jsx), with Suspense in DashboardLayout. The main bundle went from 984 KB to 455 KB (277 → 133 KB gzipped).
+  - `utils/fetchAll.js#fetchAllRows` pages through full-history task queries, since Supabase caps responses at 1000 rows and `.range` can't exceed that.
+  - The dashboard counts unread client notes with a head/count query.
+  - ChatThread relies on NotificationContext's `messageTick` (no own channel; 30 s fallback poll).
+  - ProofPhotos signs with `createSignedUrls` in one call.
+- Login keeps deep links: ProtectedRoute passes `state.from`, and LoginPage returns there if the path is the user's role's.
+- Patient lookup by email is lowercased.
+- Test scripts (session scratchpad, not in the repo): `crawl.cjs` (every route, phone + desktop), `flows.cjs` (19 flow and edge-case checks), `sec-check.mjs` (security probes, each reverted), `email-fn-test.mjs`. Run them on port 5173, or 4173 for `vite preview`.
+
 ## How to work / test
 - Read only the files relevant to the change, then run `npm run build` and `npx eslint src`.
 - New DB changes go in a new `supabase/migration-*.sql` plus a `-verify.sql`; the user pastes them into the SQL Editor after pushing. The Supabase CLI *is* authenticated and linked here (`supabase db query --linked -o table "..."`, `supabase inspect db ...`, `supabase functions deploy`), so use it for read-only checks; don't run destructive SQL against production without asking.

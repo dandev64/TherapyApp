@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, Navigate } from 'react-router-dom'
+import { Link, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../lib/supabase'
 import Input from '../../components/ui/Input'
@@ -8,6 +8,7 @@ import Button from '../../components/ui/Button'
 
 export default function LoginPage() {
   const { user, profile, profileError, signIn } = useAuth()
+  const location = useLocation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -15,9 +16,13 @@ export default function LoginPage() {
   const [resetSent, setResetSent] = useState(false)
   const [resetLoading, setResetLoading] = useState(false)
 
-  // Already logged in — redirect to dashboard
+  // Logged in: go back to the page that sent them here (if it's one of their
+  // role's pages), otherwise to their dashboard
   if (user && profile) {
-    return <Navigate to={`/${profile.role}`} replace />
+    const from = location.state?.from
+    const home = `/${profile.role}`
+    const target = from?.pathname?.startsWith(home) ? `${from.pathname}${from.search || ''}` : home
+    return <Navigate to={target} replace />
   }
 
   async function handleSubmit(e) {

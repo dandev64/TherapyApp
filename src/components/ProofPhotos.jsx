@@ -2,13 +2,16 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { getProofPaths } from '../utils/proofs'
 
-async function toViewableUrl(path) {
+/** Viewable URLs for a task's photos, signing all stored paths in one request. */
+async function toViewableUrls(paths) {
   // Old records store full public URLs; new records store just the file path
-  if (path.startsWith('http')) return path
-  const { data } = await supabase.storage.from('task-proofs').createSignedUrl(path, 3600)
-  if (data?.signedUrl) return data.signedUrl
-  // Fallback in case the bucket is still public
-  return supabase.storage.from('task-proofs').getPublicUrl(path).data?.publicUrl || null
+  const stored = paths.filter((p) => !p.startsWith('http'))
+  const signed = {}
+  if (stored.length) {
+    const { data } = await supabase.storage.from('task-proofs').createSignedUrls(stored, 3600)
+    ;(data || []).forEach((d) => { if (d.signedUrl) signed[d.path] = d.signedUrl })
+  }
+  return paths.map((p) => (p.startsWith('http') ? p : signed[p] || null))
 }
 
 /** Grid of a task's proof photos, each opening full size in a new tab. */
@@ -19,9 +22,11 @@ export default function ProofPhotos({ task, title = 'Proof Photo' }) {
 
   useEffect(() => {
     let cancelled = false
-    Promise.all(paths.map((p) => toViewableUrl(p).catch(() => null))).then((res) => {
-      if (!cancelled) setUrls(res.filter(Boolean))
-    })
+    toViewableUrls(paths)
+      .then((res) => {
+        if (!cancelled) setUrls(res.filter(Boolean))
+      })
+      .catch(() => {})
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key])

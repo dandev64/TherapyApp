@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { fetchAllRows } from '../../utils/fetchAll'
 import { useAuth } from '../../contexts/AuthContext'
 import { calculateStreak, calculateConsistency, toDateStr, getRange, firstTaskDate, dailyCompletion } from '../../utils/streak'
 import { createTasksForDates, joinLinks } from '../../utils/assignTask'
@@ -60,12 +61,12 @@ export default function PatientDetailPage() {
         .select('id, full_name, email, condition')
         .eq('id', patientId)
         .single(),
-      supabase
+      fetchAllRows(() => supabase
         .from('task_assignments')
         .select('assigned_date, status, is_rest_day')
         .eq('patient_id', patientId)
         .eq('therapist_id', profile.id)
-        .order('assigned_date', { ascending: false }),
+        .order('assigned_date', { ascending: false })),
       supabase
         .from('task_feedback')
         .select('mood, created_at')

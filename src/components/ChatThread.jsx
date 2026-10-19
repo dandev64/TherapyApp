@@ -8,8 +8,9 @@ import Button from './ui/Button'
 import { Send, ArrowLeft, Search, X, ArrowDown } from 'lucide-react'
 
 const MESSAGE_PAGE_SIZE = 50
-// Fallback refresh while a chat is open, in case Realtime is disconnected
-const POLL_MS = 5000
+// New messages arrive through NotificationContext's realtime listener
+// (messageTick below). This slow poll only covers a dropped connection.
+const POLL_MS = 30000
 const MESSAGE_FIELDS = 'id, sender_id, recipient_id, content, created_at, read_at'
 const SEARCH_LIMIT = 50
 
@@ -129,28 +130,11 @@ export default function ChatThread({ otherId }) {
     setMessages([])
     loadInitial()
 
-    const channel = supabase
-      .channel(`chat-${otherId}-${Math.random().toString(36).slice(2)}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages', filter: `recipient_id=eq.${profile.id}` },
-        (payload) => {
-          const msg = payload.new
-          if (msg.sender_id !== otherId) return
-          mergeMessages([msg])
-          markRead([msg])
-        }
-      )
-      .subscribe()
-
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') loadNewer()
     }, POLL_MS)
 
-    return () => {
-      clearInterval(interval)
-      supabase.removeChannel(channel)
-    }
+    return () => clearInterval(interval)
   }, [profile?.id, otherId])
 
   // The global listener saw a new message for us: pull it in

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { fetchAllRows } from '../../utils/fetchAll'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCachedState, hasCache } from '../../hooks/useCachedState'
 import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus'
@@ -67,11 +68,11 @@ export default function PatientDashboard() {
   }
 
   async function loadStreakData(cancelled = false) {
-    const { data, error: err } = await supabase
+    const { data, error: err } = await fetchAllRows(() => supabase
       .from('task_assignments')
       .select('assigned_date, status, is_rest_day')
       .eq('patient_id', profile.id)
-      .order('assigned_date', { ascending: false })
+      .order('assigned_date', { ascending: false }))
     if (cancelled) return
     if (!err) setAllTasks(data || [])
   }

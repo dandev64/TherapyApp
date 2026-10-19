@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { fetchAllRows } from '../../utils/fetchAll'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCachedState, hasCache } from '../../hooks/useCachedState'
 import { calculateConsistency, dailyCompletion, firstTaskDate, getRange } from '../../utils/streak'
@@ -39,11 +40,11 @@ export default function ConsistencyPage() {
       if (pErr) { setError('Failed to load patients.'); setLoading(false); return }
       const ids = links.map((l) => l.patient_id)
       const { data, error: tErr } = ids.length
-        ? await supabase
+        ? await fetchAllRows(() => supabase
           .from('task_assignments')
           .select('patient_id, assigned_date, status, is_rest_day')
           .eq('therapist_id', profile.id)
-          .in('patient_id', ids)
+          .in('patient_id', ids))
         : { data: [] }
       if (cancelled) return
       if (tErr) { setError('Failed to load tasks.'); setLoading(false); return }

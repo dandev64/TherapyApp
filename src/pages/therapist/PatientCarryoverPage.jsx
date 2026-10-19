@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { fetchAllRows } from '../../utils/fetchAll'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCachedState, hasCache } from '../../hooks/useCachedState'
 import { calculateStreak, calculateConsistency, toDateStr, getRange } from '../../utils/streak'
@@ -46,11 +47,11 @@ export default function PatientCarryoverPage() {
     const patientIds = assignments.map((a) => a.patient_id)
     if (patientIds.length === 0) { setPatients([]); setLoading(false); return }
 
-    const { data: tasks } = await supabase
+    const { data: tasks } = await fetchAllRows(() => supabase
       .from('task_assignments')
       .select('patient_id, assigned_date, status, is_rest_day')
       .eq('therapist_id', profile.id)
-      .in('patient_id', patientIds)
+      .in('patient_id', patientIds))
 
     const byPatient = {}
     ;(tasks || []).forEach((t) => {
@@ -116,7 +117,7 @@ export default function PatientCarryoverPage() {
     const { data: patientProfile } = await supabase
       .from('profiles')
       .select('id, role')
-      .eq('email', patientEmail.trim())
+      .eq('email', patientEmail.trim().toLowerCase())
       .single()
 
     if (!patientProfile) {
