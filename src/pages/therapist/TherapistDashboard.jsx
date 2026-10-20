@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { fetchAllRows } from '../../utils/fetchAll'
+import { fetchPatientSummaries, emptySummary } from '../../utils/stats'
 import { countUnreadClientNotes } from '../../utils/clientNotes'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCachedState, hasCache } from '../../hooks/useCachedState'
-import { calculateStreak, calculateConsistency, getRange, toDateStr } from '../../utils/streak'
+import { getRange } from '../../utils/streak'
 import { fetchTherapistPatients } from '../../utils/patients'
 import { MOOD_CONFIG } from '../../components/therapist/PatientMoodChart'
 import Card from '../../components/ui/Card'
@@ -27,7 +27,6 @@ export default function TherapistDashboard() {
   const reqRef = useRef({ cancelled: false })
 
   async function loadDashboard(req = reqRef.current) {
-    const today = toDateStr(new Date())
     const week = getRange('week')
 
     const { data: patients, error: patientsErr } = await fetchTherapistPatients(profile.id)
@@ -38,16 +37,10 @@ export default function TherapistDashboard() {
     }
     const patientIds = patients.map((p) => p.patient_id)
 
-    // Whole history for this therapist's tasks: consistency is measured over
-    // the full course of therapy, missed/assigned counts over the current week.
+    // Per patient stats, computed in the database: consistency over the full
+    // course of therapy, missed tasks over the current week
     const [tasksRes, notesRes, moodRes] = await Promise.all([
-      patientIds.length
-        ? fetchAllRows(() => supabase
-          .from('task_assignments')
-          .select('id, patient_id, assigned_date, status, is_rest_day')
-          .eq('therapist_id', profile.id)
-          .in('patient_id', patientIds))
-        : Promise.resolve({ data: [] }),
+      fetchPatientSummaries(patientIds),
       // Only the number of unread client notes (both kinds) is shown here
       countUnreadClientNotes(patientIds),
       patientIds.length
@@ -67,28 +60,10 @@ export default function TherapistDashboard() {
     }
     setError(null)
 
-    const allTasks = tasksRes.data || []
-    const byPatient = {}
-    allTasks.forEach((t) => {
-      if (!byPatient[t.patient_id]) byPatient[t.patient_id] = []
-      byPatient[t.patient_id].push(t)
-    })
-
-    const patientDetails = patients.map((p) => {
-      const tasks = byPatient[p.patient_id] || []
-      const todayRows = tasks.filter((t) => t.assigned_date === today)
-      const todayTasks = todayRows.filter((t) => !t.is_rest_day)
-      return {
-        ...p.profiles,
-        totalToday: todayTasks.length,
-        completedToday: todayTasks.filter((t) => t.status === 'completed').length,
-        restDayToday: todayRows.some((t) => t.is_rest_day),
-        streak: calculateStreak(tasks),
-        consistency: calculateConsistency(tasks).percent,
-        hasTasks: calculateConsistency(tasks).total > 0,
-        missed: calculateConsistency(tasks, week).missed,
-      }
-    })
+    const patientDetails = patients.map((p) => ({
+      ...p.profiles,
+      ...(tasksRes.data[p.patient_id] || emptySummary()),
+    }))
 
     setEnrichedPatients(patientDetails)
     setPatientsWithoutTasks(patientDetails.filter((p) => p.totalToday === 0 && !p.restDayToday))

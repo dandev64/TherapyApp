@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../../lib/supabase'
-import { fetchAllRows } from '../../utils/fetchAll'
+import { fetchDailyTaskRows } from '../../utils/stats'
 import { useAuth } from '../../contexts/AuthContext'
-import { useCachedState, hasCache } from '../../hooks/useCachedState'
-import { calculateConsistency, dailyCompletion, firstTaskDate, getRange } from '../../utils/streak'
+import { useCachedState } from '../../hooks/useCachedState'
+import { calculateConsistency, dailyCompletion, firstTaskDate, getRange, toDateStr } from '../../utils/streak'
 import { fetchTherapistPatients } from '../../utils/patients'
 import PeriodToggle from '../../components/PeriodToggle'
 import CompletionChart from '../../components/therapist/CompletionChart'
@@ -25,8 +24,9 @@ export default function ConsistencyPage() {
   const { profile } = useAuth()
   const navigate = useNavigate()
   const [patients, setPatients] = useCachedState('therapist-consistency-patients', [])
-  const [tasks, setTasks] = useCachedState('therapist-consistency-tasks', [])
-  const [loading, setLoading] = useState(() => !hasCache('therapist-consistency-tasks'))
+  // Rows for the period on screen only, so not cached across visits
+  const [tasks, setTasks] = useState([])
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [period, setPeriod] = useState('week')
   const [offset, setOffset] = useState(0)
@@ -37,15 +37,13 @@ export default function ConsistencyPage() {
     let cancelled = false
     async function load() {
       const { data: links, error: pErr } = await fetchTherapistPatients(profile.id)
+      if (cancelled) return
       if (pErr) { setError('Failed to load patients.'); setLoading(false); return }
       const ids = links.map((l) => l.patient_id)
-      const { data, error: tErr } = ids.length
-        ? await fetchAllRows(() => supabase
-          .from('task_assignments')
-          .select('id, patient_id, assigned_date, status, is_rest_day')
-          .eq('therapist_id', profile.id)
-          .in('patient_id', ids))
-        : { data: [] }
+      // Only the period on screen, as daily counts from the database. Overall
+      // starts at the first task, which the counts themselves reveal.
+      const span = period === 'all' ? { from: null, to: toDateStr(new Date()) } : getRange(period, offset)
+      const { data, error: tErr } = await fetchDailyTaskRows(ids, span.from, span.to)
       if (cancelled) return
       if (tErr) { setError('Failed to load tasks.'); setLoading(false); return }
       setError(null)
@@ -55,7 +53,7 @@ export default function ConsistencyPage() {
     }
     load()
     return () => { cancelled = true }
-  }, [profile])
+  }, [profile, period, offset])
   /* eslint-enable react-hooks/exhaustive-deps */
 
   const range = getRange(period, offset, firstTaskDate(tasks))
@@ -95,7 +93,14 @@ export default function ConsistencyPage() {
         <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 font-medium">{error}</div>
       )}
 
-      <PeriodToggle period={period} onPeriodChange={setPeriod} offset={offset} onOffsetChange={setOffset} label={range.label} />
+      {/* Each period is fetched on its own, so show the spinner while it loads */}
+      <PeriodToggle
+        period={period}
+        onPeriodChange={(p) => { if (p !== period) { setLoading(true); setPeriod(p) } }}
+        offset={offset}
+        onOffsetChange={(o) => { if (o !== offset) { setLoading(true); setOffset(o) } }}
+        label={range.label}
+      />
 
       {loading ? (
         <div className="flex items-center justify-center py-20">

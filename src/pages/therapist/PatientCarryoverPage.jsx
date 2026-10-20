@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { fetchAllRows } from '../../utils/fetchAll'
+import { fetchPatientSummaries, emptySummary } from '../../utils/stats'
 import { useAuth } from '../../contexts/AuthContext'
 import { useCachedState, hasCache } from '../../hooks/useCachedState'
-import { calculateStreak, calculateConsistency, toDateStr, getRange } from '../../utils/streak'
+import { toDateStr } from '../../utils/streak'
 import { fetchTherapistPatients } from '../../utils/patients'
 import { markRestDay, clearRestDay } from '../../utils/restDay'
 import PatientCard from '../../components/therapist/PatientCard'
@@ -37,9 +37,6 @@ export default function PatientCarryoverPage() {
   }
 
   async function loadPatients() {
-    const today = toDateStr(new Date())
-    const week = getRange('week')
-
     const { data: assignments, error: err } = await fetchTherapistPatients(profile.id, { includeArchived: true })
     if (err) { setError('Failed to load patients.'); setLoading(false); return }
     setError(null)
@@ -47,36 +44,17 @@ export default function PatientCarryoverPage() {
     const patientIds = assignments.map((a) => a.patient_id)
     if (patientIds.length === 0) { setPatients([]); setLoading(false); return }
 
-    const { data: tasks, error: tErr } = await fetchAllRows(() => supabase
-      .from('task_assignments')
-      .select('id, patient_id, assigned_date, status, is_rest_day')
-      .eq('therapist_id', profile.id)
-      .in('patient_id', patientIds))
-    // Without tasks every patient would show 0% and no tasks today
+    // Per patient stats, computed in the database: consistency over the whole
+    // course of therapy, missed tasks this week only
+    const { data: summaries, error: tErr } = await fetchPatientSummaries(patientIds)
+    // Without stats every patient would show 0% and no tasks today
     if (tErr) { setError('Failed to load patients.'); setLoading(false); return }
 
-    const byPatient = {}
-    ;(tasks || []).forEach((t) => {
-      if (!byPatient[t.patient_id]) byPatient[t.patient_id] = []
-      byPatient[t.patient_id].push(t)
-    })
-
-    // Consistency over the whole course of therapy, missed tasks this week only
-    const patientDetails = assignments.map((a) => {
-      const all = byPatient[a.patient_id] || []
-      const todayRows = all.filter((t) => t.assigned_date === today)
-      const todayTasks = todayRows.filter((t) => !t.is_rest_day)
-      return {
-        ...a.profiles,
-        archived: !!a.archived_at,
-        totalToday: todayTasks.length,
-        completedToday: todayTasks.filter((t) => t.status === 'completed').length,
-        restDayToday: todayRows.some((t) => t.is_rest_day),
-        streak: calculateStreak(all),
-        consistency: calculateConsistency(all).percent,
-        missed: calculateConsistency(all, week).missed,
-      }
-    })
+    const patientDetails = assignments.map((a) => ({
+      ...a.profiles,
+      archived: !!a.archived_at,
+      ...(summaries[a.patient_id] || emptySummary()),
+    }))
 
     setPatients(patientDetails)
     setLoading(false)
