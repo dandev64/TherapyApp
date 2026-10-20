@@ -80,10 +80,13 @@ export default function TaskAssignmentPage() {
 
   // Bumped per load so a slower, older response can't overwrite a newer one
   const loadIdRef = useRef(0)
+  // Rows the server has returned for the current filters. Load more pages from
+  // here, not from the list length: a deep-linked task can be added to the list.
+  const serverRowsRef = useRef(0)
 
   async function loadRecentAssignments(append = false) {
     const loadId = ++loadIdRef.current
-    const offset = append ? recentAssignments.length : 0
+    const offset = append ? serverRowsRef.current : 0
     // Filter on the server: filtering a page of the newest rows on the client
     // left "today" empty once more than a page of future tasks existed
     let query = supabase
@@ -123,8 +126,12 @@ export default function TaskAssignmentPage() {
 
     if (loadId !== loadIdRef.current) return
     const mapped = (data || []).map((t) => ({ ...t, feedback: fbMap[t.id] || null }))
+    serverRowsRef.current = offset + mapped.length
     if (append) {
-      setRecentAssignments((prev) => [...prev, ...mapped])
+      setRecentAssignments((prev) => {
+        const have = new Set(prev.map((t) => t.id))
+        return [...prev, ...mapped.filter((t) => !have.has(t.id))]
+      })
     } else {
       setRecentAssignments(mapped)
     }
