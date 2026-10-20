@@ -230,13 +230,23 @@ export default function TaskDetailPage() {
     })
 
     if (taskErr) {
-      // The retry uploads the photos again, so don't keep this set
-      const fresh = paths.filter((p) => !keptPaths.includes(p))
-      if (fresh.length) await supabase.storage.from('task-proofs').remove(fresh)
       console.error('Failed to complete task:', taskErr.message)
-      showToast('Failed to complete task. Please try again.', 'task_overdue')
-      setSubmitting(false)
-      return
+      // The request can succeed even when its response is lost: check before
+      // treating it as a failure, or we'd delete the proof of a completed task
+      const { data: current, error: readErr } = await supabase
+        .from('task_assignments')
+        .select('status')
+        .eq('id', id)
+        .maybeSingle()
+      if (readErr || current?.status !== 'completed') {
+        // Definitely not completed: the retry uploads the photos again, so drop
+        // this set. If even the check failed, keep them rather than guess.
+        const fresh = paths.filter((p) => !keptPaths.includes(p))
+        if (!readErr && fresh.length) await supabase.storage.from('task-proofs').remove(fresh)
+        showToast('Failed to complete task. Please try again.', 'task_overdue')
+        setSubmitting(false)
+        return
+      }
     }
     // Done early: don't send the "due soon" email
     syncTaskReminder(id)
