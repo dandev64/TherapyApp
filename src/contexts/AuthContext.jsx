@@ -4,13 +4,32 @@ import { clearDataCache } from '../hooks/useCachedState'
 
 const AuthContext = createContext({})
 
+// Survives a reload of the tab, so refreshing the reset page doesn't skip it
+const RECOVERY_KEY = 'habitot-password-recovery'
+function readRecoveryFlag() {
+  try { return sessionStorage.getItem(RECOVERY_KEY) === '1' } catch { return false }
+}
+function writeRecoveryFlag(on) {
+  try {
+    if (on) sessionStorage.setItem(RECOVERY_KEY, '1')
+    else sessionStorage.removeItem(RECOVERY_KEY)
+  } catch { /* storage unavailable: the flag lasts until reload */ }
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [profileError, setProfileError] = useState(null)
   // Signed in from a password reset link: the user must set a new password
-  const [passwordRecovery, setPasswordRecovery] = useState(recoveryLinkOpened)
+  const [passwordRecovery, setPasswordRecoveryState] = useState(() => {
+    if (recoveryLinkOpened) writeRecoveryFlag(true)
+    return recoveryLinkOpened || readRecoveryFlag()
+  })
+  function setPasswordRecovery(on) {
+    writeRecoveryFlag(on)
+    setPasswordRecoveryState(on)
+  }
   const currentUserIdRef = useRef(null)
 
   // Listen to auth state changes (keep callback synchronous — no await)
