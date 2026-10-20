@@ -26,9 +26,7 @@ export async function fetchUnreadClientNotes(patientIds) {
       .not('note', 'is', null)
       .is('therapist_read_at', null),
   ])
-  if (cg.error) return { data: null, error: cg.error }
-  // Task comments only have a read status once migration-2026-10-feedback-read.sql has run
-  if (fb.error) console.warn('Unread task comments unavailable:', fb.error.message)
+  if (cg.error || fb.error) return { data: null, error: cg.error || fb.error }
 
   const notes = [
     ...(cg.data || []).map((n) => ({ ...n, kind: 'caregiver' })),
@@ -39,7 +37,7 @@ export async function fetchUnreadClientNotes(patientIds) {
   return { data: notes, error: null }
 }
 
-/** Number of unread notes of both kinds, counted on the server. */
+/** Number of unread notes of both kinds, counted on the server; null if it couldn't be counted. */
 export async function countUnreadClientNotes(patientIds) {
   if (!patientIds.length) return 0
   const [cg, fb] = await Promise.all([
@@ -55,7 +53,11 @@ export async function countUnreadClientNotes(patientIds) {
       .not('note', 'is', null)
       .is('therapist_read_at', null),
   ])
-  return (cg.count || 0) + (fb.error ? 0 : fb.count || 0)
+  if (cg.error || fb.error) {
+    console.error('Failed to count unread client notes:', (cg.error || fb.error).message)
+    return null
+  }
+  return (cg.count || 0) + (fb.count || 0)
 }
 
 /** Marks one note read; only the patient's therapist can. */

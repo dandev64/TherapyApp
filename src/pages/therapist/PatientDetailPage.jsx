@@ -44,6 +44,7 @@ export default function PatientDetailPage() {
   const [feedbackNotes, setFeedbackNotes] = useState([])
   const [remarks, setRemarks] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(null)
 
   // Assign task state
   const [showAssign, setShowAssign] = useState(false)
@@ -86,6 +87,10 @@ export default function PatientDetailPage() {
     ])
 
     if (req.cancelled) return
+    // Stats from a failed query would read as 0% / no tasks: say so instead
+    const failed = [patientRes, tasksRes, feedbackRes, notesRes, remarksRes].find((r) => r.error)
+    if (failed) console.error('Failed to load patient:', failed.error.message)
+    setLoadError(failed ? "Some of this patient's data failed to load. Refresh to try again." : null)
     setPatient(patientRes.data)
     setAllTasks(tasksRes.data || [])
     setFeedback(feedbackRes.data || [])
@@ -175,6 +180,8 @@ export default function PatientDetailPage() {
 
   return (
     <div className="space-y-8">
+      {loadError && <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 font-medium">{loadError}</div>}
+
       {/* Header */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
         <button

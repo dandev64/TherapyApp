@@ -30,7 +30,7 @@ export default function CaregiverDashboard() {
     setError(null)
 
     const patientIds = (assignments || []).map((a) => a.patient_id)
-    const { data: allTodayTasks } = patientIds.length > 0
+    const { data: allTodayTasks, error: tErr } = patientIds.length > 0
       ? await supabase
           .from('task_assignments')
           .select('patient_id, status')
@@ -38,6 +38,7 @@ export default function CaregiverDashboard() {
           .eq('assigned_date', today)
           .eq('is_rest_day', false)
       : { data: [] }
+    if (tErr) { setError('Failed to load data.'); setLoading(false); return }
 
     const tasksByPatient = {}
     ;(allTodayTasks || []).forEach((t) => {

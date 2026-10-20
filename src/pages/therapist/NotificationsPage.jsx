@@ -28,6 +28,7 @@ export default function NotificationsPage() {
   const [cachedNotifications, setNotifications] = useCachedState(cacheKey, [])
   const notifications = Array.isArray(cachedNotifications) ? cachedNotifications : []
   const [loading, setLoading] = useState(() => !hasCache(cacheKey))
+  const [loadError, setLoadError] = useState(null)
   const [replyingTo, setReplyingTo] = useState(null)
   const [replyText, setReplyText] = useState('')
   const [replySending, setReplySending] = useState(false)
@@ -52,7 +53,13 @@ export default function NotificationsPage() {
       .order('created_at', { ascending: false })
       .limit(NOTIF_PAGE_SIZE)
     if (cancelled) return
-    if (error) console.error('Failed to load notifications:', error.message)
+    if (error) {
+      console.error('Failed to load notifications:', error.message)
+      setLoadError('Failed to load notifications. Please try again.')
+      setLoading(false)
+      return
+    }
+    setLoadError(null)
     setNotifications(data || [])
     setHasMore((data || []).length === NOTIF_PAGE_SIZE)
     setLoading(false)
@@ -232,8 +239,10 @@ export default function NotificationsPage() {
         ))}
       </div>
 
+      {loadError && <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 font-medium">{loadError}</div>}
+
       <div className="space-y-3">
-        {notifications.length === 0 ? (
+        {loadError ? null : notifications.length === 0 ? (
           <Card>
             <div className="text-center py-12">
               <Bell size={32} className="text-text-muted mx-auto mb-3" />

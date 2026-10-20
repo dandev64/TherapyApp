@@ -47,11 +47,13 @@ export default function PatientCarryoverPage() {
     const patientIds = assignments.map((a) => a.patient_id)
     if (patientIds.length === 0) { setPatients([]); setLoading(false); return }
 
-    const { data: tasks } = await fetchAllRows(() => supabase
+    const { data: tasks, error: tErr } = await fetchAllRows(() => supabase
       .from('task_assignments')
       .select('id, patient_id, assigned_date, status, is_rest_day')
       .eq('therapist_id', profile.id)
       .in('patient_id', patientIds))
+    // Without tasks every patient would show 0% and no tasks today
+    if (tErr) { setError('Failed to load patients.'); setLoading(false); return }
 
     const byPatient = {}
     ;(tasks || []).forEach((t) => {

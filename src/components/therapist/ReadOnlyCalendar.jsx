@@ -32,6 +32,7 @@ export default function ReadOnlyCalendar({ patientId, therapistId, refreshKey, o
   })
   const [selectedDate, setSelectedDate] = useState(toDateStr(new Date()))
   const [tasks, setTasks] = useState([])
+  const [loadError, setLoadError] = useState(null)
   const [feedbackMap, setFeedbackMap] = useState({})
   const [remarks, setRemarks] = useState({})
   // Draft + status are tied to the date they were made on, so switching days resets them
@@ -84,18 +85,22 @@ export default function ReadOnlyCalendar({ patientId, therapistId, refreshKey, o
       ])
       if (cancelled) return
       if (tasksRes.error) console.error('Failed to load calendar tasks:', tasksRes.error.message)
+      if (remarksRes.error) console.error('Failed to load remarks:', remarksRes.error.message)
       const monthTasks = tasksRes.data || []
 
       const completedIds = monthTasks.filter((t) => t.status === 'completed').map((t) => t.id)
       const fbMap = {}
       if (completedIds.length) {
-        const { data: fbData } = await supabase
+        const { data: fbData, error: fbErr } = await supabase
           .from('task_feedback')
           .select('task_assignment_id, mood, note, created_at')
           .in('task_assignment_id', completedIds)
         ;(fbData || []).forEach((fb) => { fbMap[fb.task_assignment_id] = fb })
+        if (fbErr) console.error('Failed to load moods:', fbErr.message)
       }
       if (cancelled) return
+      // An empty month would look like "no tasks": say it failed instead
+      setLoadError(tasksRes.error ? 'Failed to load this month. Try again.' : null)
 
       setTasks(monthTasks)
       const remarksMap = {}
@@ -203,6 +208,7 @@ export default function ReadOnlyCalendar({ patientId, therapistId, refreshKey, o
 
   return (
     <div>
+      {loadError && <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 font-medium">{loadError}</div>}
       <div className="flex items-center justify-between mb-4">
         <h4 className="text-lg font-bold text-text-primary">
           {MONTHS[month]} {year}

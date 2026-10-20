@@ -89,6 +89,7 @@ export default function TherapistDashboard() {
     setEnrichedPatients(patientDetails)
     setPatientsWithoutTasks(patientDetails.filter((p) => p.totalToday === 0 && !p.restDayToday))
 
+    if (moodRes.error) console.error('Failed to load moods:', moodRes.error.message)
     const moods = moodRes.data || []
     if (moods.length) {
       const counts = {}
@@ -107,7 +108,8 @@ export default function TherapistDashboard() {
       avgConsistency: withTasks.length
         ? Math.round(withTasks.reduce((sum, p) => sum + p.consistency, 0) / withTasks.length)
         : 0,
-      notes: notesRes,
+      // null = the count failed: show a dash rather than a false 0
+      notes: notesRes ?? '–',
     })
 
     setLoading(false)
