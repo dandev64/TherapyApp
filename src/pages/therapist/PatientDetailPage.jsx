@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { fetchAllRows } from '../../utils/fetchAll'
@@ -55,7 +55,11 @@ export default function PatientDetailPage() {
   const [assignError, setAssignError] = useState('')
   const [calendarRefreshKey, setCalendarRefreshKey] = useState(0)
 
-  async function loadAll(req = {}) {
+  // The page's current request: reloads (after an assign, a remark, Retry) join
+  // it, so they're cancelled too if the page moves on while they run
+  const reqRef = useRef({ cancelled: false })
+
+  async function loadAll(req = reqRef.current) {
     const [patientRes, tasksRes, feedbackRes, notesRes, remarksRes] = await Promise.all([
       supabase
         .from('profiles')
@@ -104,6 +108,7 @@ export default function PatientDetailPage() {
     if (!profile || !patientId) return
     // An object, not a boolean, so the loaders see the cleanup's change
     const req = { cancelled: false }
+    reqRef.current = req
     // Same component when moving patient to patient: don't show the old one while loading
     setPatient(null)
     setAllTasks([])

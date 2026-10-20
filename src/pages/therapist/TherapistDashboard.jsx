@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { fetchAllRows } from '../../utils/fetchAll'
@@ -22,7 +22,11 @@ export default function TherapistDashboard() {
   const [loading, setLoading] = useState(() => !hasCache('therapist-dash-stats'))
   const [error, setError] = useState(null)
 
-  async function loadDashboard(req = {}) {
+  // The page's current request: reloads (after an assign, a remark, Retry) join
+  // it, so they're cancelled too if the page moves on while they run
+  const reqRef = useRef({ cancelled: false })
+
+  async function loadDashboard(req = reqRef.current) {
     const today = toDateStr(new Date())
     const week = getRange('week')
 
@@ -120,6 +124,7 @@ export default function TherapistDashboard() {
     if (!profile) return
     // An object, not a boolean, so the loaders see the cleanup's change
     const req = { cancelled: false }
+    reqRef.current = req
     loadDashboard(req)
     return () => { req.cancelled = true }
   }, [profile])
