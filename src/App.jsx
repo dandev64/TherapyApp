@@ -54,9 +54,10 @@ function RootRedirect() {
 // A password reset link signs the user in; keep them on the reset page until
 // they've chosen a new password
 function RecoveryRedirect() {
-  const { passwordRecovery } = useAuth()
+  const { passwordRecovery, user } = useAuth()
   const { pathname } = useLocation()
-  if (passwordRecovery && pathname !== '/reset-password') return <Navigate to="/reset-password" replace />
+  // Only while the link actually signed them in; otherwise sign-in must stay reachable
+  if (passwordRecovery && user && pathname !== '/reset-password') return <Navigate to="/reset-password" replace />
   return null
 }
 

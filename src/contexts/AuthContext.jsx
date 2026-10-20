@@ -66,6 +66,12 @@ export function AuthProvider({ children }) {
     return () => subscription.unsubscribe()
   }, [])
 
+  // A reset link that didn't sign anyone in (expired, or the exchange failed)
+  // leaves nothing to reset: drop the flag so the tab isn't held on that page
+  useEffect(() => {
+    if (!loading && !user && passwordRecovery) setPasswordRecovery(false)
+  }, [loading, user, passwordRecovery])
+
   // Fetch profile reactively when user id changes
   /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
