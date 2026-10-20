@@ -7,7 +7,7 @@ description: Record of the client-requested HabitOT website edits (from HabitOT-
 
 Source: `c:\Users\danme\Downloads\HabitOT-website-development-edits.pdf` (12 pages). Do NOT re-read the PDF; this file is the working copy.
 
-**Current DB state (tables, policies, triggers, RPCs, cron): read `database.md` in this folder.**
+**Current DB state (tables, policies, triggers, RPCs, cron): read `database.md` in this folder.** The `migration-2026-10-*.sql` files named below were deleted once applied; see them with `git show 99fb1e7:supabase/<file>`.
 
 Stack: Vite + React 19 + Tailwind 4 + Supabase (`src/lib/supabase.js`). Base schema `supabase/schema.sql` + `supabase/migration.sql`. This round's DB changes: `supabase/migration-2026-10-client-edits.sql` and `supabase/migration-2026-10-scheduled-tasks.sql` (both run on the live DB, 2026-10-04). Times are local UTC+8 (Asia/Manila).
 
@@ -135,7 +135,7 @@ The client estimates 56 patients (8 therapists × 7), at least 1 task per weekda
 
 ## How to work / test
 - Read only the files relevant to the change, then run `npm run build` and `npx eslint src`.
-- New DB changes go in a new `supabase/migration-*.sql`; the user pastes it into the SQL Editor. A `-verify.sql` is temporary: delete it once it passes. Update `database.md` in the same commit. The Supabase CLI *is* authenticated and linked here (`supabase db query --linked -o table "..."`, `supabase inspect db ...`, `supabase functions deploy`), so use it for read-only checks; don't run destructive SQL against production without asking.
+- New DB changes go in a new `supabase/migration-*.sql`; the user pastes it into the SQL Editor. Then update `database.md`; the migration (and any `-verify.sql`) can be deleted once applied. The Supabase CLI *is* authenticated and linked here (`supabase db query --linked -o table "..."`, `supabase inspect db ...`, `supabase functions deploy`), so use it for read-only checks; don't run destructive SQL against production without asking.
 - Keep frontend changes working before a migration runs, e.g. `select('*')` and only send new columns when they're used.
 - Local run: `.env.local` (gitignored) points at the live project `afzprgdowymgvmxtrqzc`. Start with `npx vite --port 5199`.
 - Test accounts: `therapst1@gmail.com` (note the spelling) and `patient1@gmail.com`; ask the user for the password. They are linked (therapist ↔ patient).

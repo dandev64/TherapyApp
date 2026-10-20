@@ -21,7 +21,7 @@
 //   1. Sign up at https://resend.com and get an API key
 //   2. Set the secret:  supabase secrets set RESEND_API_KEY=re_xxxxx
 //   3. Deploy:  supabase functions deploy send-email-reminders
-//   4. Run supabase/migration-2026-10-disk-io.sql to set up pg_cron
+//   4. pg_cron job patient-daily-email-digest calls this daily (see .claude/skills/habitot-edits/database.md)
 // ─────────────────────────────────────────────────────────────────────────
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";

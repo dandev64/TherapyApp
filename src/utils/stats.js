@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabase'
 import { getRange, toDateStr } from './streak'
 
 /*
- * Task stats computed in the database (migration-2026-10-stats.sql), so the
+ * Task stats computed in the database (therapist_patient_summary / therapist_daily_counts), so the
  * therapist pages don't download every task ever assigned. The SQL follows the
  * same rules as streak.js; "today" and the week come from the browser.
  */

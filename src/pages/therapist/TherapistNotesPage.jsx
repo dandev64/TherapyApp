@@ -151,7 +151,7 @@ export default function TherapistNotesPage() {
   }
 
   const totalNotes = Object.values(notesByPatient).reduce((sum, arr) => sum + arr.length, 0)
-  // Task comments only have a read status once migration-2026-10-feedback-read.sql has run
+  // Notes and task comments are unread until therapist_read_at is set
   const isUnread = (n) => n.therapist_read_at === null
 
   const readToggle = (n) => isUnread(n) ? (

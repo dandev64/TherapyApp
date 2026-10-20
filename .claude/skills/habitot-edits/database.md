@@ -1,10 +1,17 @@
 # HabitOT database: current live state
 
-This file is compiled from `supabase/schema.sql`, `supabase/migration.sql` and every `supabase/migration-2026-10-*.sql`. It was checked against the live project `afzprgdowymgvmxtrqzc` on 2026-10-21 using `pg_policies`, `pg_proc`, `pg_trigger`, `cron.job` and `pg_indexes`.
+This file is compiled from `supabase/schema.sql`, `supabase/migration.sql` and the `supabase/migration-2026-10-*.sql` files. It was checked against the live project `afzprgdowymgvmxtrqzc` on 2026-10-21 using `pg_policies`, `pg_proc`, `pg_trigger`, `cron.job` and `pg_indexes`.
 
-It describes **what is live now**. Where a later migration redefined something, only the latest version is shown. Read the SQL files only when you need a full function body. Live is the source of truth, so check `supabase db query --linked` if anything here looks off.
+The October migration files were deleted once applied, because this file replaces them. To read one, run `git show 99fb1e7:supabase/<file>`.
 
-**When the DB changes,** update this file in the same commit as the new migration.
+It describes **what is live now**. Where a later migration redefined something, only the latest version is shown. Live is the source of truth, so check `supabase db query --linked` if anything here looks off. For a full function body, run `select pg_get_functiondef('public.<name>'::regproc)`.
+
+**When the DB changes,** follow these steps:
+1. Write a new `supabase/migration-*.sql`.
+2. The user pastes it into the SQL Editor.
+3. Update this file.
+
+Once a migration is applied and recorded here, its file can be deleted.
 
 ## Conventions
 - **Time zone:** dates are Asia/Manila (UTC+8). SQL uses `(now() AT TIME ZONE 'Asia/Manila')::date`. The stats RPCs take "today" from the browser.
@@ -143,6 +150,7 @@ The old 15-minute `patient-task-reminder` job was removed in disk-io.sql: pg_net
 - The anon key in `migration-2026-10-disk-io.sql` is the public anon key, not a secret. The cron secret lives only in Vault.
 
 ## File map (in the order they were applied)
+The October files exist only in git history: `git show 99fb1e7:supabase/<file>`.
 - `schema.sql`: base tables (profiles, patient_assignments, task_templates, task_assignments, caregiver_notes, note_replies), first policies, and `handle_new_user`.
 - `migration.sql`: adds task_feedback, daily_remarks, messages, notifications and email_log. Also profiles.condition, rest days, template repeats, notification triggers, `current_user_role`, `check_overdue_tasks`, the `task-proofs` bucket and its storage policies, and the `cleanup-email-log` cron.
 - `migration-2026-10-client-edits.sql`: notifications.seen_at and new types, proof_urls, therapist_remarks, `notify_patient_new_task`, `notify_new_remark`, `generate_patient_task_reminders`, and the 5-min reminder cron.
