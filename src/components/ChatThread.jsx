@@ -73,15 +73,10 @@ export default function ChatThread({ otherId }) {
   async function markRead(list) {
     const unread = list.filter((m) => m.recipient_id === profile.id && !m.read_at)
     if (!unread.length) return
-    const ids = unread.map((m) => m.id)
-    const now = new Date().toISOString()
-    await supabase.from('messages').update({ read_at: now }).in('id', ids)
-    await supabase
-      .from('notifications')
-      .update({ read_at: now, seen_at: now })
-      .eq('recipient_id', profile.id)
-      .eq('type', 'new_message')
-      .in('reference_id', ids)
+    // Also marks their new_message notifications read. Only the RPC can set
+    // read_at: recipients can't update message rows directly.
+    const { error } = await supabase.rpc('mark_messages_read', { p_ids: unread.map((m) => m.id) })
+    if (error) console.error('Failed to mark messages read:', error.message)
     refreshCount()
   }
 
