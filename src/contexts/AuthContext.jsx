@@ -30,6 +30,9 @@ export function AuthProvider({ children }) {
         const newId = newUser?.id ?? null
         const changed = newId !== currentUserIdRef.current
         currentUserIdRef.current = newId
+        // Pages cache data under fixed keys: never show one user's data to the
+        // next, however the switch happened (sign-out, expiry, another tab)
+        if (changed) clearDataCache()
         setUser(newUser)
         if (!newUser) {
           setProfile(null)
