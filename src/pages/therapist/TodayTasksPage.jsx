@@ -24,7 +24,9 @@ export default function TodayTasksPage() {
     if (!profile) return
     let cancelled = false
     async function load() {
-      const { data: patients } = await fetchTherapistPatients(profile.id)
+      const { data: patients, error: pErr } = await fetchTherapistPatients(profile.id)
+      if (cancelled) return
+      if (pErr) { setError('Failed to load today’s tasks.'); setLoading(false); return }
       const ids = patients.map((p) => p.patient_id)
       if (!ids.length) { if (!cancelled) { setTasks([]); setLoading(false) } return }
       const { data, error: err } = await supabase

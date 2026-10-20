@@ -73,7 +73,9 @@ export default function PatientDashboard() {
       .select('id, assigned_date, status, is_rest_day')
       .eq('patient_id', profile.id))
     if (req.cancelled) return
-    if (!err) setAllTasks(data || [])
+    // Keep the last known streak rather than dropping it to 0
+    if (err) console.error('Failed to load streak:', err.message)
+    else setAllTasks(data || [])
   }
 
   async function loadRemarks(req = {}) {

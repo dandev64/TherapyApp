@@ -52,11 +52,13 @@ export default function CaregiverDashboard() {
     })
     setPatients(patientDetails)
 
-    const { count } = await supabase
+    const { count, error: nErr } = await supabase
       .from('caregiver_notes')
       .select('id', { count: 'exact', head: true })
       .eq('caregiver_id', profile.id)
-    setNoteCount(count || 0)
+    if (nErr) console.error('Failed to count notes:', nErr.message)
+    // A failed count shows a dash, not a false 0
+    setNoteCount(nErr ? '–' : count || 0)
     setLoading(false)
   }
 
