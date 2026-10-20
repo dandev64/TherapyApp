@@ -46,6 +46,8 @@ export default function SchedulePage() {
     const { year, month } = currentMonth
     const startOfMonth = toDateStr(new Date(year, month, 1))
     const endOfMonth = toDateStr(new Date(year, month + 1, 0))
+    // Clicking through months quickly: only the last month asked for may land
+    let cancelled = false
 
     supabase
       .from('task_assignments')
@@ -55,6 +57,7 @@ export default function SchedulePage() {
       .lte('assigned_date', endOfMonth)
       .order('assigned_time', { ascending: true })
       .then(({ data, error: err }) => {
+        if (cancelled) return
         if (err) {
           setError('Failed to load schedule. Please try again.')
           setLoading(false)
@@ -64,6 +67,7 @@ export default function SchedulePage() {
         setTasks(postedOnly(data))
         setLoading(false)
       })
+    return () => { cancelled = true }
   }, [profile, currentMonth, refreshKey])
   /* eslint-enable react-hooks/exhaustive-deps */
 
