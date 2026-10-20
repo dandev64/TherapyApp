@@ -100,8 +100,8 @@ export default function TaskDetailPage() {
     setLoading(true)
     setStep('proof')
     setEditing(false)
-    setNewPhotos([])
-    setNewVideo(null)
+    clearNewPhotos()
+    removeNewVideo()
     setProofMode('photo')
     loadTask(req)
     return () => { req.cancelled = true }
@@ -147,10 +147,28 @@ export default function TaskDetailPage() {
     setNewVideo({ blob, duration, preview: URL.createObjectURL(blob) })
   }
 
-  function removeNewVideo() {
-    if (newVideo) URL.revokeObjectURL(newVideo.preview)
-    setNewVideo(null)
+  // Preview URLs pin the photo/video in memory until revoked
+  function clearNewPhotos() {
+    setNewPhotos((prev) => {
+      prev.forEach((p) => URL.revokeObjectURL(p.preview))
+      return []
+    })
   }
+
+  function removeNewVideo() {
+    setNewVideo((v) => {
+      if (v) URL.revokeObjectURL(v.preview)
+      return null
+    })
+  }
+
+  // Leaving the page (including after submitting) frees whatever is still previewed
+  const previewsRef = useRef({ photos: [], video: null })
+  previewsRef.current = { photos: newPhotos, video: newVideo }
+  useEffect(() => () => {
+    previewsRef.current.photos.forEach((p) => URL.revokeObjectURL(p.preview))
+    if (previewsRef.current.video) URL.revokeObjectURL(previewsRef.current.video.preview)
+  }, [])
 
   // Uploads the recorded video to R2 and saves it on the task.
   // Returns the task's proof_video, undefined if there was none, or null on failure.
@@ -233,7 +251,7 @@ export default function TaskDetailPage() {
 
   function startEditing(mode = 'photo') {
     setKeptPaths(getProofPaths(task))
-    setNewPhotos([])
+    clearNewPhotos()
     removeNewVideo()
     setProofMode(mode)
     setEditing(true)
@@ -241,7 +259,7 @@ export default function TaskDetailPage() {
 
   function cancelEditing() {
     setEditing(false)
-    setNewPhotos([])
+    clearNewPhotos()
     removeNewVideo()
   }
 
@@ -264,7 +282,7 @@ export default function TaskDetailPage() {
       return
     }
     setTask(data)
-    setNewPhotos([])
+    clearNewPhotos()
     removeNewVideo()
     setEditing(false)
     showToast('Submission updated.', 'task_completed')
