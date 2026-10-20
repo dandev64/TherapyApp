@@ -33,8 +33,12 @@ export default function VideoRecorder({ onRecorded }) {
   const timerRef = useRef(null)
   const fileInputRef = useRef(null)
   const abortRef = useRef(null)
+  // Bumped whenever the camera is stopped, so a getUserMedia call still waiting
+  // (e.g. on the permission prompt) knows its stream is no longer wanted
+  const cameraIdRef = useRef(0)
 
   function stopCamera() {
+    cameraIdRef.current++
     clearInterval(timerRef.current)
     streamRef.current?.getTracks().forEach((t) => t.stop())
     streamRef.current = null
@@ -54,15 +58,22 @@ export default function VideoRecorder({ onRecorded }) {
     setError('')
     setPhase('starting')
     stopCamera()
+    const cameraId = cameraIdRef.current
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode },
         audio: true,
       })
+      // Closed, unmounted or reopened while waiting: release it, or the camera stays on
+      if (cameraId !== cameraIdRef.current) {
+        stream.getTracks().forEach((t) => t.stop())
+        return
+      }
       streamRef.current = stream
       if (videoRef.current) videoRef.current.srcObject = stream
       setPhase('preview')
     } catch (err) {
+      if (cameraId !== cameraIdRef.current) return
       console.error('Camera error:', err)
       setPhase('idle')
       setError(
