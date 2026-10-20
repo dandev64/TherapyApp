@@ -13,6 +13,7 @@ export default function PatientMessagesInbox() {
   const navigate = useNavigate()
   const [conversations, setConversations] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [search, setSearch] = useState('')
 
   useEffect(() => {
@@ -21,40 +22,36 @@ export default function PatientMessagesInbox() {
 
     async function loadConversations() {
       // Get all assigned therapists
-      const { data: assignments } = await supabase
+      const { data: assignments, error: aErr } = await supabase
         .from('patient_assignments')
         .select('assigned_to, profiles!patient_assignments_assigned_to_fkey(id, full_name, email)')
         .eq('patient_id', profile.id)
         .eq('relationship', 'therapist')
 
+      if (aErr) {
+        if (!cancelled) { setError('Failed to load conversations.'); setLoading(false) }
+        return
+      }
       if (!assignments || assignments.length === 0) {
         if (!cancelled) { setConversations([]); setLoading(false) }
         return
       }
 
-      const therapistIds = assignments.map((a) => a.assigned_to)
-
-      // Get latest message for each conversation
-      const { data: msgs } = await supabase
-        .from('messages')
-        .select('id, sender_id, recipient_id, content, created_at, read_at')
-        .or(
-          `and(sender_id.eq.${profile.id},recipient_id.in.(${therapistIds.join(',')})),and(sender_id.in.(${therapistIds.join(',')}),recipient_id.eq.${profile.id})`
-        )
-        .order('created_at', { ascending: false })
-
-      // Group by therapist and get latest + unread count
-      const byTherapist = {}
-      ;(msgs || []).forEach((m) => {
-        const tid = m.sender_id === profile.id ? m.recipient_id : m.sender_id
-        if (!byTherapist[tid]) byTherapist[tid] = { latest: m, unread: 0 }
-        if (m.recipient_id === profile.id && !m.read_at) byTherapist[tid].unread++
+      // One row per conversation: the latest message and the unread count
+      const { data: rows, error: mErr } = await supabase.rpc('inbox_conversations')
+      if (mErr) {
+        if (!cancelled) { setError('Failed to load conversations.'); setLoading(false) }
+        return
+      }
+      const byPeer = {}
+      ;(rows || []).forEach((r) => {
+        byPeer[r.peer_id] = { latest: r, unread: Number(r.unread) }
       })
 
       const convos = assignments.map((a) => ({
         therapist: a.profiles,
-        latest: byTherapist[a.assigned_to]?.latest || null,
-        unread: byTherapist[a.assigned_to]?.unread || 0,
+        latest: byPeer[a.assigned_to]?.latest || null,
+        unread: byPeer[a.assigned_to]?.unread || 0,
       }))
 
       // Sort: unread first, then by latest message time
@@ -67,6 +64,7 @@ export default function PatientMessagesInbox() {
       })
 
       if (cancelled) return
+      setError(null)
       setConversations(convos)
       setLoading(false)
     }
@@ -97,6 +95,10 @@ export default function PatientMessagesInbox() {
         </p>
       </div>
 
+      {error && (
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 font-medium">{error}</div>
+      )}
+
       <div className="relative">
         <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" />
         <input
@@ -109,7 +111,7 @@ export default function PatientMessagesInbox() {
       </div>
 
       <div className="space-y-2">
-        {filtered.length === 0 ? (
+        {error ? null : filtered.length === 0 ? (
           <Card>
             <p className="text-sm text-text-muted text-center py-8">
               {conversations.length === 0
