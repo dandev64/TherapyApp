@@ -48,11 +48,17 @@ export default function NotificationsPage() {
     return which === 'archived' ? q.not('read_at', 'is', null) : q.is('read_at', null)
   }
 
-  async function loadNotifications(cancelled, which = view) {
+  // Bumped per load (and on tab switch) so an older response, e.g. Inbox
+  // arriving after the user switched to Archived, is dropped
+  const loadIdRef = useRef(0)
+
+  async function loadNotifications(which = view) {
+    const loadId = ++loadIdRef.current
     const { data, error } = await baseQuery(which)
       .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
       .limit(NOTIF_PAGE_SIZE)
-    if (cancelled) return
+    if (loadId !== loadIdRef.current) return
     if (error) {
       console.error('Failed to load notifications:', error.message)
       setLoadError('Failed to load notifications. Please try again.')
@@ -68,11 +74,22 @@ export default function NotificationsPage() {
   async function loadMoreNotifications() {
     if (!notifications.length || loadingMore) return
     setLoadingMore(true)
+    const loadId = loadIdRef.current
     const oldest = notifications[notifications.length - 1]
-    const { data } = await baseQuery()
-      .lt('created_at', oldest.created_at)
+    // Cursor on (created_at, id): rows inserted together share a created_at,
+    // and "created_at < oldest" alone skipped the rest of such a batch
+    const { data, error } = await baseQuery()
+      .or(`created_at.lt."${oldest.created_at}",and(created_at.eq."${oldest.created_at}",id.lt.${oldest.id})`)
       .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
       .limit(NOTIF_PAGE_SIZE)
+    if (loadId !== loadIdRef.current) { setLoadingMore(false); return }
+    if (error) {
+      console.error('Failed to load more notifications:', error.message)
+      showToast('Could not load more notifications.', 'task_overdue')
+      setLoadingMore(false)
+      return
+    }
     setNotifications((prev) => [...prev, ...(data || [])])
     setHasMore((data || []).length === NOTIF_PAGE_SIZE)
     setLoadingMore(false)
@@ -91,7 +108,7 @@ export default function NotificationsPage() {
       } catch (err) {
         console.error('Overdue check failed:', err)
       }
-      if (!cancelled) await loadNotifications(cancelled)
+      if (!cancelled) await loadNotifications()
       // Opening this tab clears the red badge
       if (!cancelled) markAllSeen()
     }
@@ -150,7 +167,7 @@ export default function NotificationsPage() {
     setView(next)
     setLoading(true)
     setNotifications([])
-    loadNotifications(false, next)
+    loadNotifications(next)
   }
 
   async function openNotification(n) {
