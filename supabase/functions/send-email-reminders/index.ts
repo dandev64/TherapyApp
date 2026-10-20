@@ -269,10 +269,17 @@ async function syncTaskReminder(taskId: string, callerId: string) {
     && task.status !== "completed" && !task.is_rest_day
     && task.assigned_date === today && sendAt < dueAt;
 
-  for (const log of queued) {
-    if (log.provider_id !== "sent" && log.provider_id !== PENDING) await cancelEmail(log.provider_id);
+  // Cancel what the delete actually removed, not the earlier read: a digest
+  // send can store its email id in between, and that email must go too
+  if (queued.length) {
+    const { data: removed } = await supabase.from("email_log")
+      .delete().eq("email_type", emailType).select("provider_id");
+    for (const log of removed || []) {
+      if (log.provider_id && log.provider_id !== "sent" && log.provider_id !== PENDING) {
+        await cancelEmail(log.provider_id);
+      }
+    }
   }
-  if (queued.length) await supabase.from("email_log").delete().eq("email_type", emailType);
   if (!wanted) return { status: 200, result: queued.length ? "cancelled" : "nothing to do" };
 
   const { data: patient } = await supabase
