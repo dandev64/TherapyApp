@@ -222,12 +222,13 @@ export default function TaskDetailPage() {
 
     // Completes the task and saves the mood/comment in one transaction, so the
     // comment can't be lost after the task is marked done
-    const { error: taskErr } = await supabase.rpc('complete_task', {
+    const { data: outcome, error: taskErr } = await supabase.rpc('complete_task', {
       p_task_id: id,
       p_proof_urls: paths,
       p_mood: selectedMood || null,
       p_note: feedbackNote.trim() || null,
     })
+    let alreadyDone = outcome === 'already_completed'
 
     if (taskErr) {
       console.error('Failed to complete task:', taskErr.message)
@@ -235,7 +236,7 @@ export default function TaskDetailPage() {
       // treating it as a failure, or we'd delete the proof of a completed task
       const { data: current, error: readErr } = await supabase
         .from('task_assignments')
-        .select('status')
+        .select('status, proof_url')
         .eq('id', id)
         .maybeSingle()
       if (readErr || current?.status !== 'completed') {
@@ -247,6 +248,21 @@ export default function TaskDetailPage() {
         setSubmitting(false)
         return
       }
+      // Completed: by this submit if it holds these photos, otherwise earlier
+      // (another device). Without photos there's no telling, so count it as ours.
+      alreadyDone = paths.length > 0 && current.proof_url !== paths[0]
+    }
+
+    if (alreadyDone) {
+      // Nothing from this submission was saved: say so, and don't leave its
+      // photos behind. The patient can still edit the existing submission.
+      const fresh = paths.filter((p) => !keptPaths.includes(p))
+      if (fresh.length) await supabase.storage.from('task-proofs').remove(fresh)
+      showToast("This task was already submitted, so this submission wasn't saved. Tap Edit submission to change it.", 'task_overdue')
+      setSubmitting(false)
+      clearNewPhotos()
+      loadTask()
+      return
     }
     // Done early: don't send the "due soon" email
     syncTaskReminder(id)
