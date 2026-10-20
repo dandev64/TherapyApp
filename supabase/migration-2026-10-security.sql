@@ -1,7 +1,6 @@
 -- ============================================
 -- HabitOT — Security fixes from the Oct 2026 review
 -- Run in the Supabase SQL Editor. Safe to re-run. Paste the whole file at once.
--- Then run migration-2026-10-security-verify.sql.
 --
 -- Not included (by decision): therapist signup, therapist visibility of all
 -- profiles and the patient-linking policy stay as they are.
@@ -195,5 +194,4 @@ DROP POLICY IF EXISTS "Patients can upload proof" ON storage.objects;
 DROP POLICY IF EXISTS "Patients can update own proofs" ON storage.objects;
 
 -- ============================================
--- Done. Now run migration-2026-10-security-verify.sql to confirm.
 -- ============================================

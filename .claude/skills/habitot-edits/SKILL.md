@@ -7,6 +7,8 @@ description: Record of the client-requested HabitOT website edits (from HabitOT-
 
 Source: `c:\Users\danme\Downloads\HabitOT-website-development-edits.pdf` (12 pages). Do NOT re-read the PDF; this file is the working copy.
 
+**Current DB state (tables, policies, triggers, RPCs, cron): read `database.md` in this folder.**
+
 Stack: Vite + React 19 + Tailwind 4 + Supabase (`src/lib/supabase.js`). Base schema `supabase/schema.sql` + `supabase/migration.sql`. This round's DB changes: `supabase/migration-2026-10-client-edits.sql` and `supabase/migration-2026-10-scheduled-tasks.sql` (both run on the live DB, 2026-10-04). Times are local UTC+8 (Asia/Manila).
 
 ## Status (as of 2026-10-04)
@@ -65,7 +67,7 @@ Item IDs: B = bugs, Q = quick wins, L = logic, F = features.
 - **DB triggers**: message → notification for any sender; `notify_patient_new_task` (sets `reference_id`, skips scheduled tasks); `notify_new_remark`.
 
 ## Round 2 (`HabitOT-Product-Development-Revisions-2-2.pdf`, 2026-10-18, commit bd2d9e0)
-Plan: `~/.claude/plans/create-a-plan-for-melodic-crescent.md`. Migration `supabase/migration-2026-10-revisions-2.sql` (+ `-verify.sql`) must be pasted by the user.
+Plan: `~/.claude/plans/create-a-plan-for-melodic-crescent.md`. Migration `supabase/migration-2026-10-revisions-2.sql` (applied).
 - Dashboard cards are links → `/therapist/patients`, `/therapist/today` (TodayTasksPage), `/therapist/consistency` (ConsistencyPage, no sidebar entry), `/therapist/client-notes/recent`. Task Completion + Mood charts removed from the dashboard; they live on PatientDetailPage with a Week/Month/Overall `PeriodToggle`.
 - Timeframes (`src/utils/streak.js`): `getRange(period, offset, firstDate)` (week = Sun–Sat), `calculateConsistency(tasks, range?)` (no range = overall), `dailyCompletion`. Consistency = whole history; assigned/completed/missed = this week. Shared chart `components/therapist/CompletionChart.jsx`.
 - Naming (client revised this on 2026-10-19; there is no "Patient Feedback" tab any more):
@@ -109,7 +111,7 @@ The client estimates 56 patients (8 therapists × 7), at least 1 task per weekda
 - **Budget:** worst case is 10 days × 56 patients × 15 MB = about 6.3 GB, inside R2's 10 GB free tier. There is deliberately no total-storage check; the user chose that.
 
 ## Full-app test & fixes (2026-10-20)
-- **Security** (`supabase/migration-2026-10-security.sql` + `-verify.sql`, pasted by the user). The user chose to leave C1 (open therapist signup) out. The migration adds:
+- **Security** (`supabase/migration-2026-10-security.sql`, applied). The user chose to leave C1 (open therapist signup) out. The migration adds:
   - Trigger `protect_profile_columns`: users can't change their own `email`/`role`.
   - Trigger `limit_patient_task_updates`: patients may only change `status`, `completed_at`, `proof_url`, `proof_urls`. **A new patient-editable task column must be added to its `allowed` array.**
   - The messages INSERT check now requires a `patient_assignments` link between sender and recipient. The task_feedback INSERT check requires the task to be the patient's own.
@@ -133,7 +135,7 @@ The client estimates 56 patients (8 therapists × 7), at least 1 task per weekda
 
 ## How to work / test
 - Read only the files relevant to the change, then run `npm run build` and `npx eslint src`.
-- New DB changes go in a new `supabase/migration-*.sql` plus a `-verify.sql`; the user pastes them into the SQL Editor after pushing. The Supabase CLI *is* authenticated and linked here (`supabase db query --linked -o table "..."`, `supabase inspect db ...`, `supabase functions deploy`), so use it for read-only checks; don't run destructive SQL against production without asking.
+- New DB changes go in a new `supabase/migration-*.sql`; the user pastes it into the SQL Editor. A `-verify.sql` is temporary: delete it once it passes. Update `database.md` in the same commit. The Supabase CLI *is* authenticated and linked here (`supabase db query --linked -o table "..."`, `supabase inspect db ...`, `supabase functions deploy`), so use it for read-only checks; don't run destructive SQL against production without asking.
 - Keep frontend changes working before a migration runs, e.g. `select('*')` and only send new columns when they're used.
 - Local run: `.env.local` (gitignored) points at the live project `afzprgdowymgvmxtrqzc`. Start with `npx vite --port 5199`.
 - Test accounts: `therapst1@gmail.com` (note the spelling) and `patient1@gmail.com`; ask the user for the password. They are linked (therapist ↔ patient).

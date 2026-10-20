@@ -14,5 +14,4 @@
 ALTER TABLE public.task_assignments ADD COLUMN IF NOT EXISTS proof_video jsonb;
 
 -- ============================================
--- Done. Now run migration-2026-10-proof-video-verify.sql to confirm.
 -- ============================================

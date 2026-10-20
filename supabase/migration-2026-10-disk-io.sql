@@ -119,6 +119,5 @@ SELECT cron.schedule(
 
 
 -- ============================================
--- Done. Now run migration-2026-10-disk-io-verify.sql to confirm.
 -- (Separate file because the SQL Editor only shows the last result set.)
 -- ============================================

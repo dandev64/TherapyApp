@@ -116,5 +116,4 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
 -- ============================================
--- Done. Now run migration-2026-10-revisions-2-verify.sql to confirm.
 -- ============================================

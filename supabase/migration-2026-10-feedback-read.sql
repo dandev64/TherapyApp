@@ -42,5 +42,4 @@ REVOKE ALL ON FUNCTION public.mark_task_feedback_read(uuid) FROM public, anon;
 GRANT EXECUTE ON FUNCTION public.mark_task_feedback_read(uuid) TO authenticated;
 
 -- ============================================
--- Done. Now run migration-2026-10-feedback-read-verify.sql to confirm.
 -- ============================================
