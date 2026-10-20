@@ -54,7 +54,7 @@ export default function CaregiverDashboard() {
 
     const { count } = await supabase
       .from('caregiver_notes')
-      .select('id', { count: 'exact' })
+      .select('id', { count: 'exact', head: true })
       .eq('caregiver_id', profile.id)
     setNoteCount(count || 0)
     setLoading(false)
