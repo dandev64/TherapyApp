@@ -193,20 +193,23 @@ export default function TaskDetailPage() {
 
   // Uploads new photos and returns all storage paths (kept + new), or null on failure
   async function uploadPhotos() {
-    const paths = [...keptPaths]
-    for (const [i, { file }] of newPhotos.entries()) {
+    const stamp = Date.now()
+    const results = await Promise.all(newPhotos.map(async ({ file }, i) => {
       const ext = file.name.split('.').pop() || 'jpg'
-      const filePath = `${profile.id}/${id}-${Date.now()}-${i}.${ext}`
+      const filePath = `${profile.id}/${id}-${stamp}-${i}.${ext}`
       const { error } = await supabase.storage
         .from('task-proofs')
         .upload(filePath, file, { upsert: true })
-      if (error) {
-        showToast('Failed to upload proof photo. Please try again.', 'task_overdue')
-        return null
-      }
-      paths.push(filePath)
+      return error ? null : filePath
+    }))
+    const uploaded = results.filter(Boolean)
+    if (uploaded.length < results.length) {
+      // Don't leave the ones that did upload behind; the retry uploads them again
+      if (uploaded.length) await supabase.storage.from('task-proofs').remove(uploaded)
+      showToast('Failed to upload proof photo. Please try again.', 'task_overdue')
+      return null
     }
-    return paths
+    return [...keptPaths, ...uploaded]
   }
 
   async function handleComplete() {
@@ -217,33 +220,23 @@ export default function TaskDetailPage() {
     const paths = await uploadPhotos()
     if (!paths) { setSubmitting(false); return }
 
-    const { error: taskErr } = await supabase
-      .from('task_assignments')
-      .update({
-        status: 'completed',
-        completed_at: new Date().toISOString(),
-        proof_url: paths[0] || null,
-        proof_urls: paths.length ? paths : null,
-      })
-      .eq('id', id)
+    // Completes the task and saves the mood/comment in one transaction, so the
+    // comment can't be lost after the task is marked done
+    const { error: taskErr } = await supabase.rpc('complete_task', {
+      p_task_id: id,
+      p_proof_urls: paths,
+      p_mood: selectedMood || null,
+      p_note: feedbackNote.trim() || null,
+    })
 
     if (taskErr) {
+      console.error('Failed to complete task:', taskErr.message)
       showToast('Failed to complete task. Please try again.', 'task_overdue')
       setSubmitting(false)
       return
     }
     // Done early: don't send the "due soon" email
     syncTaskReminder(id)
-
-    if (selectedMood) {
-      const { error: fbErr } = await supabase.from('task_feedback').insert({
-        task_assignment_id: id,
-        patient_id: profile.id,
-        mood: selectedMood,
-        note: feedbackNote.trim() || null,
-      })
-      if (fbErr) console.error('Failed to save feedback:', fbErr)
-    }
 
     setSubmitting(false)
     navigate('/patient/schedule')
@@ -280,6 +273,12 @@ export default function TaskDetailPage() {
     if (error) {
       showToast('Failed to update your submission. Please try again.', 'task_overdue')
       return
+    }
+    // Photos taken off the submission are no longer referenced anywhere
+    const dropped = getProofPaths(task).filter((p) => !paths.includes(p) && !p.startsWith('http'))
+    if (dropped.length) {
+      const { error: rmErr } = await supabase.storage.from('task-proofs').remove(dropped)
+      if (rmErr) console.error('Failed to delete removed photos:', rmErr.message)
     }
     setTask(data)
     clearNewPhotos()
