@@ -70,9 +70,8 @@ export default function PatientDashboard() {
   async function loadStreakData(req = {}) {
     const { data, error: err } = await fetchAllRows(() => supabase
       .from('task_assignments')
-      .select('assigned_date, status, is_rest_day')
-      .eq('patient_id', profile.id)
-      .order('assigned_date', { ascending: false }))
+      .select('id, assigned_date, status, is_rest_day')
+      .eq('patient_id', profile.id))
     if (req.cancelled) return
     if (!err) setAllTasks(data || [])
   }

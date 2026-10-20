@@ -40,7 +40,7 @@ export default function TherapistDashboard() {
       patientIds.length
         ? fetchAllRows(() => supabase
           .from('task_assignments')
-          .select('patient_id, assigned_date, status, is_rest_day')
+          .select('id, patient_id, assigned_date, status, is_rest_day')
           .eq('therapist_id', profile.id)
           .in('patient_id', patientIds))
         : Promise.resolve({ data: [] }),

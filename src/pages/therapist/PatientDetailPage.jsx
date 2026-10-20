@@ -63,10 +63,9 @@ export default function PatientDetailPage() {
         .single(),
       fetchAllRows(() => supabase
         .from('task_assignments')
-        .select('assigned_date, status, is_rest_day')
+        .select('id, assigned_date, status, is_rest_day')
         .eq('patient_id', patientId)
-        .eq('therapist_id', profile.id)
-        .order('assigned_date', { ascending: false })),
+        .eq('therapist_id', profile.id)),
       supabase
         .from('task_feedback')
         .select('mood, created_at')

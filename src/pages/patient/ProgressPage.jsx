@@ -25,9 +25,8 @@ export default function ProgressPage() {
 
     fetchAllRows(() => supabase
       .from('task_assignments')
-      .select('assigned_date, status, is_rest_day')
-      .eq('patient_id', profile.id)
-      .order('assigned_date', { ascending: false }))
+      .select('id, assigned_date, status, is_rest_day')
+      .eq('patient_id', profile.id))
       .then(({ data, error: err }) => {
         if (err) {
           setError('Failed to load progress data. Please try again.')
