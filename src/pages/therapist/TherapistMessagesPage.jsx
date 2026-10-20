@@ -3,5 +3,6 @@ import ChatThread from '../../components/ChatThread'
 
 export default function TherapistMessagesPage() {
   const { patientId } = useParams()
-  return <ChatThread otherId={patientId} />
+  // Keyed so switching conversations starts a fresh thread
+  return <ChatThread key={patientId} otherId={patientId} />
 }

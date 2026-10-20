@@ -55,6 +55,9 @@ export default function ChatThread({ otherId }) {
   const inputRef = useRef(null)
   const messagesRef = useRef(messages)
   messagesRef.current = messages
+  // False once this thread unmounts, so a late response can't mark messages
+  // read that were never on screen
+  const activeRef = useRef(true)
 
   const conversationFilter = profile
     ? `and(sender_id.eq.${profile.id},recipient_id.eq.${otherId}),and(sender_id.eq.${otherId},recipient_id.eq.${profile.id})`
@@ -90,6 +93,7 @@ export default function ChatThread({ otherId }) {
         .order('created_at', { ascending: false })
         .limit(MESSAGE_PAGE_SIZE),
     ])
+    if (!activeRef.current) return
     if (otherRes.error) console.error('Failed to load contact:', otherRes.error.message)
     if (msgRes.error) console.error('Failed to load messages:', msgRes.error.message)
     setOther(otherRes.data)
@@ -112,6 +116,7 @@ export default function ChatThread({ otherId }) {
       .limit(MESSAGE_PAGE_SIZE)
     if (newest) query = query.gt('created_at', newest.created_at)
     const { data } = await query
+    if (!activeRef.current) return
     if (data?.length) {
       mergeMessages(data)
       markRead(data)
@@ -121,6 +126,7 @@ export default function ChatThread({ otherId }) {
   /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (!profile || !otherId) return
+    activeRef.current = true
     setLoading(true)
     setMessages([])
     loadInitial()
@@ -129,7 +135,10 @@ export default function ChatThread({ otherId }) {
       if (document.visibilityState === 'visible') loadNewer()
     }, POLL_MS)
 
-    return () => clearInterval(interval)
+    return () => {
+      activeRef.current = false
+      clearInterval(interval)
+    }
   }, [profile?.id, otherId])
 
   // The global listener saw a new message for us: pull it in

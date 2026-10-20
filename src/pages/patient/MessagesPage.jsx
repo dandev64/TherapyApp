@@ -3,5 +3,6 @@ import ChatThread from '../../components/ChatThread'
 
 export default function MessagesPage() {
   const { recipientId } = useParams()
-  return <ChatThread otherId={recipientId} />
+  // Keyed so switching conversations starts a fresh thread
+  return <ChatThread key={recipientId} otherId={recipientId} />
 }
