@@ -50,7 +50,7 @@ export default function PatientDashboard() {
   const [error, setError] = useState(null)
   const refreshKey = useRefreshOnFocus()
 
-  async function loadTasks(cancelled = false) {
+  async function loadTasks(req = {}) {
     const today = toDateStr(new Date())
     const { data, error: err } = await supabase
       .from('task_assignments')
@@ -58,7 +58,7 @@ export default function PatientDashboard() {
       .eq('patient_id', profile.id)
       .eq('assigned_date', today)
       .order('created_at', { ascending: true })
-    if (cancelled) return
+    if (req.cancelled) return
     if (err) { setError('Failed to load tasks. Please try again.'); setLoading(false); return }
     setError(null)
     const rows = postedOnly(data)
@@ -67,24 +67,24 @@ export default function PatientDashboard() {
     setLoading(false)
   }
 
-  async function loadStreakData(cancelled = false) {
+  async function loadStreakData(req = {}) {
     const { data, error: err } = await fetchAllRows(() => supabase
       .from('task_assignments')
       .select('assigned_date, status, is_rest_day')
       .eq('patient_id', profile.id)
       .order('assigned_date', { ascending: false }))
-    if (cancelled) return
+    if (req.cancelled) return
     if (!err) setAllTasks(data || [])
   }
 
-  async function loadRemarks(cancelled = false) {
+  async function loadRemarks(req = {}) {
     const { data, error: err } = await supabase
       .from('therapist_remarks')
       .select('id, date, content, therapist:profiles!therapist_remarks_therapist_id_fkey(full_name)')
       .eq('patient_id', profile.id)
       .order('date', { ascending: false })
       .limit(10)
-    if (cancelled) return
+    if (req.cancelled) return
     if (err) console.error('Failed to load remarks:', err.message)
     else setRemarks(data || [])
   }
@@ -92,11 +92,12 @@ export default function PatientDashboard() {
   /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (!profile) return
-    let cancelled = false
-    loadTasks(cancelled)
-    loadStreakData(cancelled)
-    loadRemarks(cancelled)
-    return () => { cancelled = true }
+    // An object, not a boolean, so the loaders see the cleanup's change
+    const req = { cancelled: false }
+    loadTasks(req)
+    loadStreakData(req)
+    loadRemarks(req)
+    return () => { req.cancelled = true }
   }, [profile, refreshKey])
   /* eslint-enable react-hooks/exhaustive-deps */
 

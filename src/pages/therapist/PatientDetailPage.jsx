@@ -54,7 +54,7 @@ export default function PatientDetailPage() {
   const [assignError, setAssignError] = useState('')
   const [calendarRefreshKey, setCalendarRefreshKey] = useState(0)
 
-  async function loadAll(cancelled = false) {
+  async function loadAll(req = {}) {
     const [patientRes, tasksRes, feedbackRes, notesRes, remarksRes] = await Promise.all([
       supabase
         .from('profiles')
@@ -86,7 +86,7 @@ export default function PatientDetailPage() {
         .limit(20),
     ])
 
-    if (cancelled) return
+    if (req.cancelled) return
     setPatient(patientRes.data)
     setAllTasks(tasksRes.data || [])
     setFeedback(feedbackRes.data || [])
@@ -98,9 +98,14 @@ export default function PatientDetailPage() {
   /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (!profile || !patientId) return
-    let cancelled = false
-    loadAll(cancelled)
-    return () => { cancelled = true }
+    // An object, not a boolean, so the loaders see the cleanup's change
+    const req = { cancelled: false }
+    // Same component when moving patient to patient: don't show the old one while loading
+    setPatient(null)
+    setAllTasks([])
+    setLoading(true)
+    loadAll(req)
+    return () => { req.cancelled = true }
   }, [profile, patientId])
   /* eslint-enable react-hooks/exhaustive-deps */
 

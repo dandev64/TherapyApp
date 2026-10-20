@@ -22,7 +22,7 @@ export default function TherapistDashboard() {
   const [loading, setLoading] = useState(() => !hasCache('therapist-dash-stats'))
   const [error, setError] = useState(null)
 
-  async function loadDashboard(cancelled = false) {
+  async function loadDashboard(req = {}) {
     const today = toDateStr(new Date())
     const week = getRange('week')
 
@@ -55,7 +55,7 @@ export default function TherapistDashboard() {
         : Promise.resolve({ data: [] }),
     ])
 
-    if (cancelled) return
+    if (req.cancelled) return
     if (tasksRes.error) {
       setError('Failed to load dashboard data. Please try again.')
       setLoading(false)
@@ -116,9 +116,10 @@ export default function TherapistDashboard() {
   /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (!profile) return
-    let cancelled = false
-    loadDashboard(cancelled)
-    return () => { cancelled = true }
+    // An object, not a boolean, so the loaders see the cleanup's change
+    const req = { cancelled: false }
+    loadDashboard(req)
+    return () => { req.cancelled = true }
   }, [profile])
   /* eslint-enable react-hooks/exhaustive-deps */
 

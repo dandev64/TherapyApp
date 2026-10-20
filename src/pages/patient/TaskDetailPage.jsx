@@ -65,13 +65,13 @@ export default function TaskDetailPage() {
   const [newVideo, setNewVideo] = useState(null)
   const [videoProgress, setVideoProgress] = useState(null)
 
-  async function loadTask(cancelled = false) {
+  async function loadTask(req = {}) {
     const { data, error } = await supabase
       .from('task_assignments')
       .select('*')
       .eq('id', id)
       .single()
-    if (cancelled) return
+    if (req.cancelled) return
     if (error || isScheduled(data)) {
       if (error) console.error('Failed to load task:', error.message)
       setLoading(false)
@@ -93,14 +93,18 @@ export default function TaskDetailPage() {
 
   /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
-    let cancelled = false
+    // An object, not a boolean, so the loaders see the cleanup's change
+    const req = { cancelled: false }
+    // Same component when moving task to task: don't show the old task while loading
+    setTask(null)
+    setLoading(true)
     setStep('proof')
     setEditing(false)
     setNewPhotos([])
     setNewVideo(null)
     setProofMode('photo')
-    loadTask(cancelled)
-    return () => { cancelled = true }
+    loadTask(req)
+    return () => { req.cancelled = true }
   }, [id])
   /* eslint-enable react-hooks/exhaustive-deps */
 
