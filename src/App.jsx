@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { NotificationProvider } from './contexts/NotificationContext'
@@ -11,6 +11,7 @@ import SignUpPage from './pages/auth/SignUpPage'
 
 // Pages load on first visit, so patients never download therapist pages
 // (or the charts library) and the first load stays small.
+const ResetPasswordPage = lazy(() => import('./pages/auth/ResetPasswordPage'))
 const TherapistDashboard = lazy(() => import('./pages/therapist/TherapistDashboard'))
 const PatientCarryoverPage = lazy(() => import('./pages/therapist/PatientCarryoverPage'))
 const PatientDetailPage = lazy(() => import('./pages/therapist/PatientDetailPage'))
@@ -50,6 +51,15 @@ function RootRedirect() {
   return <Navigate to={`/${profile.role}`} replace />
 }
 
+// A password reset link signs the user in; keep them on the reset page until
+// they've chosen a new password
+function RecoveryRedirect() {
+  const { passwordRecovery } = useAuth()
+  const { pathname } = useLocation()
+  if (passwordRecovery && pathname !== '/reset-password') return <Navigate to="/reset-password" replace />
+  return null
+}
+
 export default function App() {
   return (
     <ThemeProvider>
@@ -57,12 +67,14 @@ export default function App() {
       <AuthProvider>
       <NotificationProvider>
         <ToastContainer />
+        <RecoveryRedirect />
         {/* Safety net: pages normally suspend inside DashboardLayout */}
         <Suspense fallback={null}>
         <Routes>
           <Route path="/" element={<RootRedirect />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignUpPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
 
           {/* Therapist Routes */}
           <Route

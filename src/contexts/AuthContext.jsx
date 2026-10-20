@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase, recoveryLinkOpened } from '../lib/supabase'
 import { clearDataCache } from '../hooks/useCachedState'
 
 const AuthContext = createContext({})
@@ -9,6 +9,8 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [profileError, setProfileError] = useState(null)
+  // Signed in from a password reset link: the user must set a new password
+  const [passwordRecovery, setPasswordRecovery] = useState(recoveryLinkOpened)
   const currentUserIdRef = useRef(null)
 
   // Listen to auth state changes (keep callback synchronous — no await)
@@ -21,7 +23,9 @@ export function AuthProvider({ children }) {
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (event, session) => {
+        if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
+        if (event === 'SIGNED_OUT') setPasswordRecovery(false)
         const newUser = session?.user ?? null
         const newId = newUser?.id ?? null
         const changed = newId !== currentUserIdRef.current
@@ -112,7 +116,10 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, profile, loading, profileError, signUp, signIn, signOut, refreshProfile }}
+      value={{
+        user, profile, loading, profileError, signUp, signIn, signOut, refreshProfile,
+        passwordRecovery, finishPasswordRecovery: () => setPasswordRecovery(false),
+      }}
     >
       {children}
     </AuthContext.Provider>

@@ -9,4 +9,9 @@ if (!supabaseUrl || !supabaseAnonKey) {
   )
 }
 
+// Read before the client consumes the URL: a password reset link lands with
+// type=recovery in the hash. Backs up the PASSWORD_RECOVERY event, which can
+// fire before the app has subscribed to auth changes.
+export const recoveryLinkOpened = /type=recovery/.test(window.location.hash)
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
