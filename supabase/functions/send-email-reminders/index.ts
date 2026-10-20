@@ -47,7 +47,7 @@ let lastSendError = "";
 
 // Returns Resend's email id (needed to cancel a scheduled send), or null.
 async function sendEmail(to: string, subject: string, html: string, sendAt?: string): Promise<string | null> {
-  const res = await fetch("https://api.resend.com/emails", {
+  const post = () => fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${RESEND_API_KEY}`,
@@ -61,6 +61,12 @@ async function sendEmail(to: string, subject: string, html: string, sendAt?: str
       ...(sendAt ? { scheduled_at: sendAt } : {}),
     }),
   });
+  let res = await post();
+  // Rate limited (the digest sends back to back): wait and try once more
+  if (res.status === 429) {
+    await new Promise((r) => setTimeout(r, 1500));
+    res = await post();
+  }
 
   if (!res.ok) {
     lastSendError = await res.text();
@@ -70,6 +76,9 @@ async function sendEmail(to: string, subject: string, html: string, sendAt?: str
   const data = await res.json().catch(() => ({}));
   return data.id || "sent";
 }
+
+// Placeholder provider_id while a digest send is in flight (see claimEmail)
+const PENDING = "pending";
 
 async function cancelEmail(id: string) {
   const res = await fetch(`https://api.resend.com/emails/${id}/cancel`, {
@@ -99,21 +108,24 @@ function taskInstantUtc(date: string, time: string) {
 }
 
 // ── Prevent duplicate emails ────────────────────────────────────────────
-async function alreadySent(recipientId: string, type: string, refDate: string) {
-  const { count } = await supabase
-    .from("email_log")
-    .select("id", { count: "exact", head: true })
-    .eq("recipient_id", recipientId)
-    .eq("email_type", type)
-    .eq("reference_date", refDate);
-  return (count || 0) > 0;
+async function logEmail(recipientId: string, type: string, refDate: string, providerId: string | null) {
+  const { error } = await supabase.from("email_log").upsert(
+    { recipient_id: recipientId, email_type: type, reference_date: refDate, provider_id: providerId },
+    { onConflict: "recipient_id,email_type,reference_date" },
+  );
+  if (error) console.error("email_log write failed:", error.message);
 }
 
-async function logEmail(recipientId: string, type: string, refDate: string, providerId: string | null) {
-  const row = { recipient_id: recipientId, email_type: type, reference_date: refDate };
-  const { error } = await supabase.from("email_log").insert({ ...row, provider_id: providerId });
-  // Before migration-2026-10-security.sql adds provider_id, log without it
-  if (error) await supabase.from("email_log").insert(row);
+// Reserves this email before sending it. The unique index on email_log means
+// only one of two overlapping runs gets the row, so a reminder can't be
+// queued twice. Returns false if it's already claimed or logged.
+async function claimEmail(recipientId: string, type: string, refDate: string) {
+  const { error } = await supabase.from("email_log").insert(
+    { recipient_id: recipientId, email_type: type, reference_date: refDate, provider_id: PENDING },
+  );
+  if (!error) return true;
+  if (error.code !== "23505") console.error("email_log claim failed:", error.message);
+  return false;
 }
 
 // ── Build reminder email HTML ───────────────────────────────────────────
@@ -159,7 +171,7 @@ async function scheduleTodaysReminders() {
     .toISOString()
     .split("T")[0];
 
-  const { data: tasks } = await supabase
+  const { data: tasks, error: tasksErr } = await supabase
     .from("task_assignments")
     .select("id, title, assigned_date, assigned_time, patient_id, publish_at")
     .eq("assigned_date", today)
@@ -167,6 +179,7 @@ async function scheduleTodaysReminders() {
     .not("is_rest_day", "is", true)
     .not("assigned_time", "is", null);
 
+  if (tasksErr) throw new Error(`Failed to load today's tasks: ${tasksErr.message}`);
   if (!tasks || tasks.length === 0) return;
 
   // Group by patient
@@ -197,7 +210,7 @@ async function scheduleTodaysReminders() {
       if (sendAt >= dueAt) continue;
 
       const emailType = `patient_task_reminder_${task.id}`;
-      if (await alreadySent(patient.id, emailType, today)) continue;
+      if (!(await claimEmail(patient.id, emailType, today))) continue;
 
       const fTime = formatTime(task.assigned_date, task.assigned_time);
       const fDate = formatDate(task.assigned_date);
@@ -206,9 +219,12 @@ async function scheduleTodaysReminders() {
       const subject = `HabitOT — Reminder: "${task.title}" is due at ${fTime}`;
       const html = buildReminderHtml(firstName, task.title, fDate, fTime);
 
-      // Logged at schedule time, so a re-run today won't double-queue it
+      // Claimed before sending, so a re-run today won't double-queue it
       const id = await sendEmail(patient.email, subject, html, sendAt.toISOString());
-      if (id) await logEmail(patient.id, emailType, today, id);
+      const match = { recipient_id: patient.id, email_type: emailType, reference_date: today };
+      if (id) await supabase.from("email_log").update({ provider_id: id }).match(match);
+      // Not sent: release the claim so the next run can try again
+      else await supabase.from("email_log").delete().match(match).eq("provider_id", PENDING);
     }
   }
 }
@@ -248,7 +264,7 @@ async function syncTaskReminder(taskId: string, callerId: string) {
     && task.assigned_date === today && sendAt < dueAt;
 
   for (const log of queued) {
-    if (log.provider_id !== "sent") await cancelEmail(log.provider_id);
+    if (log.provider_id !== "sent" && log.provider_id !== PENDING) await cancelEmail(log.provider_id);
   }
   if (queued.length) await supabase.from("email_log").delete().eq("email_type", emailType);
   if (!wanted) return { status: 200, result: queued.length ? "cancelled" : "nothing to do" };
@@ -295,11 +311,16 @@ serve(async (req) => {
   }
 
   try {
-    const body = await req.json().catch(() => ({ type: "all" }));
+    const body = await req.json().catch(() => ({}));
     const { type } = body;
 
-    // pg_cron calls this once a day at 7 AM Manila
+    // pg_cron calls this once a day at 7 AM Manila. Only the cron job knows the
+    // secret (kept in Vault); the anon key alone is public.
     if (type === "patient" || type === "all") {
+      const { data: secret, error } = await supabase.rpc("get_email_cron_secret");
+      if (error || !secret || req.headers.get("x-cron-secret") !== secret) {
+        return json({ error: "Not allowed" }, 401);
+      }
       await scheduleTodaysReminders();
     }
 
