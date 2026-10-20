@@ -230,6 +230,9 @@ export default function TaskDetailPage() {
     })
 
     if (taskErr) {
+      // The retry uploads the photos again, so don't keep this set
+      const fresh = paths.filter((p) => !keptPaths.includes(p))
+      if (fresh.length) await supabase.storage.from('task-proofs').remove(fresh)
       console.error('Failed to complete task:', taskErr.message)
       showToast('Failed to complete task. Please try again.', 'task_overdue')
       setSubmitting(false)
