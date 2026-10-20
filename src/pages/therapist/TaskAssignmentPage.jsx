@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -78,15 +78,32 @@ export default function TaskAssignmentPage() {
     }
   }
 
+  // Bumped per load so a slower, older response can't overwrite a newer one
+  const loadIdRef = useRef(0)
+
   async function loadRecentAssignments(append = false) {
+    const loadId = ++loadIdRef.current
     const offset = append ? recentAssignments.length : 0
-    const { data, error: err } = await supabase
+    // Filter on the server: filtering a page of the newest rows on the client
+    // left "today" empty once more than a page of future tasks existed
+    let query = supabase
       .from('task_assignments')
       .select('*, profiles!task_assignments_patient_id_fkey(full_name)')
       .eq('therapist_id', profile.id)
+      .eq('is_rest_day', false)
+    if (filterDate) query = query.eq('assigned_date', filterDate)
+    if (filterPatient) query = query.eq('patient_id', filterPatient)
+    if (filterStatus === 'incomplete') {
+      // Same rule as isIncomplete(): not completed and its day has passed
+      query = query.neq('status', 'completed').lt('assigned_date', toDateStr(new Date()))
+    } else if (filterStatus) {
+      query = query.eq('status', filterStatus)
+    }
+    const { data, error: err } = await query
       .order('assigned_date', { ascending: false })
       .order('created_at', { ascending: false })
       .range(offset, offset + PAGE_SIZE - 1)
+    if (loadId !== loadIdRef.current) return
     if (err) { setError('Failed to load assignments.'); setPageLoading(false); return }
     setError(null)
 
@@ -104,6 +121,7 @@ export default function TaskAssignmentPage() {
       })
     }
 
+    if (loadId !== loadIdRef.current) return
     const mapped = (data || []).map((t) => ({ ...t, feedback: fbMap[t.id] || null }))
     if (append) {
       setRecentAssignments((prev) => [...prev, ...mapped])
@@ -115,11 +133,12 @@ export default function TaskAssignmentPage() {
 
   /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
-    if (profile) {
-      loadPatients()
-      loadRecentAssignments()
-    }
+    if (profile) loadPatients()
   }, [profile])
+
+  useEffect(() => {
+    if (profile) loadRecentAssignments()
+  }, [profile, filterDate, filterStatus, filterPatient])
   /* eslint-enable react-hooks/exhaustive-deps */
 
   // Dashboard / Today's Tasks deep link: /therapist/assignments?task=<id>
@@ -471,7 +490,7 @@ export default function TaskAssignmentPage() {
             {filteredAssignments.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-4 py-8 text-center text-sm text-text-muted">
-                  {recentAssignments.length === 0 ? 'No assignments yet. Create one to get started.' : 'No assignments match the selected filters.'}
+                  {!filterDate && !filterStatus && !filterPatient ? 'No assignments yet. Create one to get started.' : 'No assignments match the selected filters.'}
                 </td>
               </tr>
             ) : (
