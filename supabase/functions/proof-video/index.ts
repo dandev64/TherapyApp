@@ -238,15 +238,28 @@ Deno.serve(async (req) => {
 
       const duration = Math.round(Number(body.duration) || 0) || null;
       const proofVideo = { key, size, uploaded_at: new Date().toISOString(), duration };
-      const { error } = await supabase
+      // Keys end in the upload time, so they sort oldest to newest. Only save
+      // over an older video (or the same one, when a confirm is retried):
+      // with two confirms in flight (two tabs), the older
+      // one must not replace the newer one.
+      const { data: saved, error } = await supabase
         .from("task_assignments")
         .update({ proof_video: proofVideo })
-        .eq("id", task.id);
+        .eq("id", task.id)
+        .or(`proof_video.is.null,proof_video->>key.lte."${key}"`)
+        .select("id");
       if (error) return json({ error: error.message }, 500);
+      if (!saved?.length) {
+        // A newer video is already saved: this upload is the leftover
+        await deleteObject(key);
+        const current = await loadTask(task.id);
+        return json({ proof_video: current?.proof_video ?? null, removed: 1 });
+      }
 
-      // One video per task: remove the one it replaces and any leftovers from
-      // failed attempts. They'd expire on their own; this frees the space sooner.
-      const stale = (await listTaskObjects(task)).filter((k) => k !== key);
+      // One video per task: remove the ones it replaces and leftovers from
+      // failed attempts (older keys only, never a newer upload still being
+      // confirmed). They'd expire on their own; this frees the space sooner.
+      const stale = (await listTaskObjects(task)).filter((k) => k < key);
       await Promise.all(stale.map(deleteObject));
       return json({ proof_video: proofVideo, removed: stale.length });
     }
