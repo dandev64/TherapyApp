@@ -8,7 +8,8 @@ async function toViewableUrls(paths) {
   const stored = paths.filter((p) => !p.startsWith('http'))
   const signed = {}
   if (stored.length) {
-    const { data } = await supabase.storage.from('task-proofs').createSignedUrls(stored, 3600)
+    const { data, error } = await supabase.storage.from('task-proofs').createSignedUrls(stored, 3600)
+    if (error) throw error
     ;(data || []).forEach((d) => { if (d.signedUrl) signed[d.path] = d.signedUrl })
   }
   return paths.map((p) => (p.startsWith('http') ? p : signed[p] || null))
@@ -18,15 +19,20 @@ async function toViewableUrls(paths) {
 export default function ProofPhotos({ task, title = 'Proof Photo' }) {
   const paths = getProofPaths(task)
   const key = paths.join('|')
-  const [urls, setUrls] = useState([])
+  // null while loading; [] when none could be loaded
+  const [urls, setUrls] = useState(null)
 
   useEffect(() => {
     let cancelled = false
+    setUrls(null)
     toViewableUrls(paths)
       .then((res) => {
         if (!cancelled) setUrls(res.filter(Boolean))
       })
-      .catch(() => {})
+      .catch((err) => {
+        console.error('Failed to load proof photos:', err.message)
+        if (!cancelled) setUrls([])
+      })
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key])
@@ -38,8 +44,10 @@ export default function ProofPhotos({ task, title = 'Proof Photo' }) {
       <p className="text-xs font-bold text-text-muted uppercase tracking-wider mb-2">
         {title}{paths.length > 1 ? `s (${paths.length})` : ''}
       </p>
-      {urls.length === 0 ? (
+      {urls === null ? (
         <p className="text-sm text-text-muted">Loading proof image...</p>
+      ) : urls.length === 0 ? (
+        <p className="text-sm text-text-muted">Couldn&apos;t load the proof image. Refresh to try again.</p>
       ) : (
         <div className={`grid gap-2 ${urls.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
           {urls.map((url) => (
