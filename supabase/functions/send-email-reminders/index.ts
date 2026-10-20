@@ -222,7 +222,13 @@ async function scheduleTodaysReminders() {
       // Claimed before sending, so a re-run today won't double-queue it
       const id = await sendEmail(patient.email, subject, html, sendAt.toISOString());
       const match = { recipient_id: patient.id, email_type: emailType, reference_date: today };
-      if (id) await supabase.from("email_log").update({ provider_id: id }).match(match);
+      if (id) {
+        const { data: kept } = await supabase.from("email_log")
+          .update({ provider_id: id }).match(match).eq("provider_id", PENDING).select("id");
+        // A task sync replaced or removed the claim while this was sending (the
+        // task changed, or it queued its own reminder): this email is stale
+        if (!kept?.length && id !== "sent") await cancelEmail(id);
+      }
       // Not sent: release the claim so the next run can try again
       else await supabase.from("email_log").delete().match(match).eq("provider_id", PENDING);
     }
