@@ -20,6 +20,7 @@ import { fetchTherapistPatients } from '../../utils/patients'
 import { createTasksForDates, joinLinks, syncTaskReminder } from '../../utils/assignTask'
 import { LinkListField, DateListField } from '../../components/therapist/TaskFields'
 import { Linkify } from '../../utils/linkify'
+import { deleteTaskWithMedia } from '../../utils/proofVideo'
 
 const MOOD_EMOJI = {
   excited: '🤩', happy: '😊', calm: '😌', scared: '😨',
@@ -288,10 +289,11 @@ export default function TaskAssignmentPage() {
   async function confirmDelete() {
     if (!deleteTarget) return
     setDeleting(true)
-    const { error: err } = await supabase.from('task_assignments').delete().eq('id', deleteTarget.id)
+    // Also removes the task's proof photos and video
+    const err = await deleteTaskWithMedia(deleteTarget.id).then(() => null, (e) => e)
     setDeleting(false)
     setDeleteTarget(null)
-    if (err) { setError('Failed to delete assignment.'); return }
+    if (err) { console.error('Failed to delete task:', err.message); setError('Failed to delete assignment.'); return }
     syncTaskReminder(deleteTarget.id)
     showSuccess('Task deleted.')
     loadRecentAssignments()

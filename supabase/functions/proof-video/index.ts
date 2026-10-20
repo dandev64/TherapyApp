@@ -12,6 +12,9 @@
 //           task_assignments.proof_video, removes the video it replaces
 //   view    {task_id}                     → signed GET link (1 hour), or
 //           {expired: true} once the R2 lifecycle rule has deleted it
+//   delete_task {task_id}                 → therapist only: deletes the task,
+//           then its proof photos (Supabase Storage) and videos (R2). Storage
+//           only lets the patient delete their own photos, so this runs here.
 //
 // R2 deletes every object RETENTION_DAYS after upload (bucket lifecycle rule).
 //
@@ -133,13 +136,15 @@ type Task = {
   requires_proof: boolean;
   is_rest_day: boolean | null;
   proof_video: { key: string; size: number; uploaded_at: string; duration?: number } | null;
+  proof_url: string | null;
+  proof_urls: string[] | null;
 };
 
 async function loadTask(taskId: unknown): Promise<Task | null> {
   if (typeof taskId !== "string") return null;
   const { data } = await supabase
     .from("task_assignments")
-    .select("id, patient_id, therapist_id, requires_proof, is_rest_day, proof_video")
+    .select("id, patient_id, therapist_id, requires_proof, is_rest_day, proof_video, proof_url, proof_urls")
     .eq("id", taskId)
     .maybeSingle();
   return data as Task | null;
@@ -269,6 +274,24 @@ Deno.serve(async (req) => {
       if (!task.proof_video) return json({ error: "No video on this task" }, 404);
       if (isExpired(task.proof_video)) return json({ expired: true, retention_days: RETENTION_DAYS });
       return json({ url: await presign("GET", task.proof_video.key, 3600) });
+    }
+
+    if (body.action === "delete_task") {
+      if (task.therapist_id !== user.id) return json({ error: "Not your task" }, 403);
+      const { error } = await supabase.from("task_assignments").delete().eq("id", task.id);
+      if (error) return json({ error: error.message }, 500);
+
+      // The task is gone; its files would otherwise stay forever (photos) or
+      // until the lifecycle rule (videos). Legacy rows hold full URLs: skip those.
+      const photos = (task.proof_urls?.length ? task.proof_urls : task.proof_url ? [task.proof_url] : [])
+        .filter((p) => !p.startsWith("http"));
+      if (photos.length) {
+        const { error: rmErr } = await supabase.storage.from("task-proofs").remove(photos);
+        if (rmErr) console.error("proof-video: photo cleanup failed", rmErr.message);
+      }
+      const videos = await listTaskObjects(task);
+      await Promise.all(videos.map(deleteObject));
+      return json({ deleted: true, photos: photos.length, videos: videos.length });
     }
 
     return json({ error: "Unknown action" }, 400);

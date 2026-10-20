@@ -93,3 +93,11 @@ export async function uploadProofVideo(taskId, blob, duration, { onProgress, upl
 export function getProofVideoUrl(taskId) {
   return callProofVideo({ action: 'view', task_id: taskId })
 }
+
+/**
+ * Deletes a task (therapist only) together with its proof photos and video.
+ * Runs in the Edge Function because Storage only lets patients delete their own photos.
+ */
+export function deleteTaskWithMedia(taskId) {
+  return callProofVideo({ action: 'delete_task', task_id: taskId })
+}
