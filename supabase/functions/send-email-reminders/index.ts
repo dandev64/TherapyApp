@@ -108,14 +108,6 @@ function taskInstantUtc(date: string, time: string) {
 }
 
 // ── Prevent duplicate emails ────────────────────────────────────────────
-async function logEmail(recipientId: string, type: string, refDate: string, providerId: string | null) {
-  const { error } = await supabase.from("email_log").upsert(
-    { recipient_id: recipientId, email_type: type, reference_date: refDate, provider_id: providerId },
-    { onConflict: "recipient_id,email_type,reference_date" },
-  );
-  if (error) console.error("email_log write failed:", error.message);
-}
-
 // Reserves this email before sending it. The unique index on email_log means
 // only one of two overlapping runs gets the row, so a reminder can't be
 // queued twice. Returns false if it's already claimed or logged.
@@ -126,6 +118,20 @@ async function claimEmail(recipientId: string, type: string, refDate: string) {
   if (!error) return true;
   if (error.code !== "23505") console.error("email_log claim failed:", error.message);
   return false;
+}
+
+// Turns a claim into a logged send. If the claim was replaced or removed while
+// sending (a task sync, or another run, took over), this email is stale:
+// cancel it. A failed send just releases the claim for the next run.
+async function finishClaim(recipientId: string, type: string, refDate: string, providerId: string | null) {
+  const match = { recipient_id: recipientId, email_type: type, reference_date: refDate };
+  if (!providerId) {
+    await supabase.from("email_log").delete().match(match).eq("provider_id", PENDING);
+    return;
+  }
+  const { data: kept } = await supabase.from("email_log")
+    .update({ provider_id: providerId }).match(match).eq("provider_id", PENDING).select("id");
+  if (!kept?.length && providerId !== "sent") await cancelEmail(providerId);
 }
 
 // ── Build reminder email HTML ───────────────────────────────────────────
@@ -221,16 +227,7 @@ async function scheduleTodaysReminders() {
 
       // Claimed before sending, so a re-run today won't double-queue it
       const id = await sendEmail(patient.email, subject, html, sendAt.toISOString());
-      const match = { recipient_id: patient.id, email_type: emailType, reference_date: today };
-      if (id) {
-        const { data: kept } = await supabase.from("email_log")
-          .update({ provider_id: id }).match(match).eq("provider_id", PENDING).select("id");
-        // A task sync replaced or removed the claim while this was sending (the
-        // task changed, or it queued its own reminder): this email is stale
-        if (!kept?.length && id !== "sent") await cancelEmail(id);
-      }
-      // Not sent: release the claim so the next run can try again
-      else await supabase.from("email_log").delete().match(match).eq("provider_id", PENDING);
+      await finishClaim(patient.id, emailType, today, id);
     }
   }
 }
@@ -269,18 +266,17 @@ async function syncTaskReminder(taskId: string, callerId: string) {
     && task.status !== "completed" && !task.is_rest_day
     && task.assigned_date === today && sendAt < dueAt;
 
-  // Cancel what the delete actually removed, not the earlier read: a digest
-  // send can store its email id in between, and that email must go too
-  if (queued.length) {
-    const { data: removed } = await supabase.from("email_log")
-      .delete().eq("email_type", emailType).select("provider_id");
-    for (const log of removed || []) {
-      if (log.provider_id && log.provider_id !== "sent" && log.provider_id !== PENDING) {
-        await cancelEmail(log.provider_id);
-      }
+  // Cancel what the delete actually removes, not the earlier read: a digest
+  // send can claim or store its email in between, and that email must go too.
+  // Runs even when the read found nothing, for the same reason.
+  const { data: removed } = await supabase.from("email_log")
+    .delete().eq("email_type", emailType).select("provider_id");
+  for (const log of removed || []) {
+    if (log.provider_id && log.provider_id !== "sent" && log.provider_id !== PENDING) {
+      await cancelEmail(log.provider_id);
     }
   }
-  if (!wanted) return { status: 200, result: queued.length ? "cancelled" : "nothing to do" };
+  if (!wanted) return { status: 200, result: removed?.length ? "cancelled" : "nothing to do" };
 
   const { data: patient } = await supabase
     .from("profiles")
@@ -295,8 +291,13 @@ async function syncTaskReminder(taskId: string, callerId: string) {
   const subject = `HabitOT — Reminder: "${task!.title}" is due at ${fTime}`;
   const html = buildReminderHtml(firstName, task!.title, fDate, fTime);
 
+  // Claim first, like the digest: two syncs at once (a double save) or a
+  // digest run can't both queue this reminder
+  if (!(await claimEmail(patient.id, emailType, task!.assigned_date))) {
+    return { status: 200, result: "already queued" };
+  }
   const id = await sendEmail(patient.email, subject, html, sendAt!.toISOString());
-  if (id) await logEmail(patient.id, emailType, task!.assigned_date, id);
+  await finishClaim(patient.id, emailType, task!.assigned_date, id);
   return { status: 200, result: id ? "scheduled" : `send failed: ${lastSendError.slice(0, 200)}` };
 }
 
