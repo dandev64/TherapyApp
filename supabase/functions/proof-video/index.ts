@@ -136,15 +136,13 @@ type Task = {
   requires_proof: boolean;
   is_rest_day: boolean | null;
   proof_video: { key: string; size: number; uploaded_at: string; duration?: number } | null;
-  proof_url: string | null;
-  proof_urls: string[] | null;
 };
 
 async function loadTask(taskId: unknown): Promise<Task | null> {
   if (typeof taskId !== "string") return null;
   const { data } = await supabase
     .from("task_assignments")
-    .select("id, patient_id, therapist_id, requires_proof, is_rest_day, proof_video, proof_url, proof_urls")
+    .select("id, patient_id, therapist_id, requires_proof, is_rest_day, proof_video")
     .eq("id", taskId)
     .maybeSingle();
   return data as Task | null;
@@ -282,9 +280,17 @@ Deno.serve(async (req) => {
       if (error) return json({ error: error.message }, 500);
 
       // The task is gone; its files would otherwise stay forever (photos) or
-      // until the lifecycle rule (videos). Legacy rows hold full URLs: skip those.
-      const photos = (task.proof_urls?.length ? task.proof_urls : task.proof_url ? [task.proof_url] : [])
-        .filter((p) => !p.startsWith("http"));
+      // until the lifecycle rule (videos). Photos are found by the task's own
+      // upload prefix, never from proof_urls: patients can write that column,
+      // and the service role would delete whatever paths it held.
+      const prefix = `${task.id}-`;
+      const { data: listed, error: listErr } = await supabase.storage
+        .from("task-proofs")
+        .list(task.patient_id, { search: prefix, limit: 1000 });
+      if (listErr) console.error("proof-video: photo listing failed", listErr.message);
+      const photos = (listed || [])
+        .filter((f) => f.name.startsWith(prefix))
+        .map((f) => `${task.patient_id}/${f.name}`);
       if (photos.length) {
         const { error: rmErr } = await supabase.storage.from("task-proofs").remove(photos);
         if (rmErr) console.error("proof-video: photo cleanup failed", rmErr.message);
