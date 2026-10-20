@@ -10,6 +10,7 @@ import { isScheduled, formatPublishAt, dayStatus, DAY_STATUS_CLASS, getResourceL
 import { formatExpected } from '../../utils/time'
 import { markRestDay, clearRestDay } from '../../utils/restDay'
 import { fetchTherapistPatients } from '../../utils/patients'
+import { fetchAllRows } from '../../utils/fetchAll'
 import { Linkify } from '../../utils/linkify'
 
 const MOOD_EMOJI = {
@@ -56,23 +57,33 @@ export default function ReadOnlyCalendar({ patientId, therapistId, refreshKey, o
       const startOfMonth = toDateStr(new Date(year, month, 1))
       const endOfMonth = toDateStr(new Date(year, month + 1, 0))
 
-      let tasksQuery = supabase
-        .from('task_assignments')
-        .select('*, patient:profiles!task_assignments_patient_id_fkey(full_name)')
-        .eq('therapist_id', therapistId)
-        .gte('assigned_date', startOfMonth)
-        .lte('assigned_date', endOfMonth)
-        .order('assigned_time', { ascending: true })
-      if (patientId) {
-        tasksQuery = tasksQuery.eq('patient_id', patientId)
-      } else {
+      let patientIds = null
+      if (!patientId) {
         // All-patients view: leave archived patients out
-        const { data: links } = await fetchTherapistPatients(therapistId)
-        tasksQuery = tasksQuery.in('patient_id', links.map((l) => l.patient_id))
+        const { data: links, error: linksErr } = await fetchTherapistPatients(therapistId)
+        if (cancelled) return
+        if (linksErr) {
+          console.error('Failed to load patients:', linksErr.message)
+          setLoadError('Failed to load this month. Try again.')
+          setLoading(false)
+          return
+        }
+        patientIds = links.map((l) => l.patient_id)
+      }
+      // All patients for a month can pass 1000 rows, so page through them.
+      // Moods come embedded instead of a second query with a long id list.
+      const buildTasksQuery = () => {
+        const q = supabase
+          .from('task_assignments')
+          .select('*, patient:profiles!task_assignments_patient_id_fkey(full_name), feedback:task_feedback(mood, note, created_at)')
+          .eq('therapist_id', therapistId)
+          .gte('assigned_date', startOfMonth)
+          .lte('assigned_date', endOfMonth)
+        return patientId ? q.eq('patient_id', patientId) : q.in('patient_id', patientIds)
       }
 
       const [tasksRes, remarksRes] = await Promise.all([
-        tasksQuery,
+        fetchAllRows(buildTasksQuery),
         patientId
           ? supabase
               .from('therapist_remarks')
@@ -86,19 +97,15 @@ export default function ReadOnlyCalendar({ patientId, therapistId, refreshKey, o
       if (cancelled) return
       if (tasksRes.error) console.error('Failed to load calendar tasks:', tasksRes.error.message)
       if (remarksRes.error) console.error('Failed to load remarks:', remarksRes.error.message)
-      const monthTasks = tasksRes.data || []
+      // Paged by id, so put them back in time order (untimed tasks last)
+      const monthTasks = (tasksRes.data || []).sort((a, b) =>
+        (a.assigned_time || '99').localeCompare(b.assigned_time || '99'))
 
-      const completedIds = monthTasks.filter((t) => t.status === 'completed').map((t) => t.id)
       const fbMap = {}
-      if (completedIds.length) {
-        const { data: fbData, error: fbErr } = await supabase
-          .from('task_feedback')
-          .select('task_assignment_id, mood, note, created_at')
-          .in('task_assignment_id', completedIds)
-        ;(fbData || []).forEach((fb) => { fbMap[fb.task_assignment_id] = fb })
-        if (fbErr) console.error('Failed to load moods:', fbErr.message)
-      }
-      if (cancelled) return
+      monthTasks.forEach((t) => {
+        const latest = (t.feedback || []).reduce((a, b) => (!a || b.created_at > a.created_at ? b : a), null)
+        if (t.status === 'completed' && latest) fbMap[t.id] = latest
+      })
       // An empty month would look like "no tasks": say it failed instead
       setLoadError(tasksRes.error ? 'Failed to load this month. Try again.' : null)
 
