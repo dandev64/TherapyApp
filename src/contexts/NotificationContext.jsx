@@ -4,8 +4,10 @@ import { useAuth } from './AuthContext'
 
 const NotificationContext = createContext({})
 
-// Fallback polling interval, in case Realtime is disconnected
+// Polling while Realtime is disconnected
 const POLL_MS = 15000
+// Polling while Realtime is connected, only to cover events it silently drops
+const CONNECTED_POLL_MS = 60000
 
 export function NotificationProvider({ children }) {
   const { profile } = useAuth()
@@ -23,6 +25,7 @@ export function NotificationProvider({ children }) {
   // Notifications already handled (toasted), to avoid duplicates from realtime + polling
   const seenIdsRef = useRef(new Set())
   const lastCheckRef = useRef(null)
+  const realtimeUpRef = useRef(false)
 
   async function fetchUnreadCount() {
     const currentProfile = profileRef.current
@@ -118,7 +121,9 @@ export function NotificationProvider({ children }) {
     }
     document.addEventListener('visibilitychange', onFocus)
     const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') pollNew()
+      if (document.visibilityState !== 'visible') return
+      const sinceLast = Date.now() - new Date(lastCheckRef.current).getTime()
+      if (!realtimeUpRef.current || sinceLast >= CONNECTED_POLL_MS) pollNew()
     }, POLL_MS)
 
     // Unique channel names: reusing a name while the old channel is still
@@ -134,26 +139,18 @@ export function NotificationProvider({ children }) {
           table: 'notifications',
           filter: `recipient_id=eq.${profile.id}`,
         },
+        // Every message also creates a new_message notification
+        // (notify_new_message), so this one listener covers messages too
         (payload) => handleIncoming(payload.new)
       )
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `recipient_id=eq.${profile.id}`,
-        },
-        () => {
-          fetchUnreadMessages()
-          setMessageTick((t) => t + 1)
-        }
-      )
-      .subscribe()
+      .subscribe((status) => {
+        realtimeUpRef.current = status === 'SUBSCRIBED'
+      })
 
     return () => {
       document.removeEventListener('visibilitychange', onFocus)
       clearInterval(interval)
+      realtimeUpRef.current = false
       supabase.removeChannel(channel)
     }
   }, [profile?.id])

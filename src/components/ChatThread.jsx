@@ -10,7 +10,7 @@ import { Send, ArrowLeft, Search, X, ArrowDown } from 'lucide-react'
 const MESSAGE_PAGE_SIZE = 50
 // New messages arrive through NotificationContext's realtime listener
 // (messageTick below). This slow poll only covers a dropped connection.
-const POLL_MS = 30000
+const POLL_MS = 60000
 const MESSAGE_FIELDS = 'id, sender_id, recipient_id, content, created_at, read_at'
 const SEARCH_LIMIT = 50
 
